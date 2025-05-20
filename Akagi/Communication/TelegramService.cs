@@ -28,6 +28,7 @@ internal class TelegramService : Communicator, IHostedService
     private readonly IUserDatabase _userDatabase;
     private readonly ICharacterDatabase _characterDatabase;
     private readonly ICardDatabase _cardDatabase;
+    private readonly ISystemProcessorDatabase _systemProcessorDatabase;
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
 
 
@@ -49,6 +50,7 @@ internal class TelegramService : Communicator, IHostedService
         _characterDatabase = characterDatabase;
         _userDatabase = userDatabase;
         _cardDatabase = cardDatabase;
+        _systemProcessorDatabase = systemProcessorDatabase;
         _hostApplicationLifetime = hostApplicationLifetime;
     }
 
@@ -320,7 +322,7 @@ internal class TelegramService : Communicator, IHostedService
             string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length < 2)
             {
-                await _client.SendMessage(message.Chat.Id, "Please provide a name");
+                await _client.SendMessage(message.Chat.Id, "Please provide a id");
                 return;
             }
             string id = parts[1];
@@ -331,6 +333,8 @@ internal class TelegramService : Communicator, IHostedService
                 await _client.SendMessage(message.Chat.Id, "Card not found");
                 return;
             }
+
+            // TODO:
         }
         else if (command.StartsWith("/test"))
         {
@@ -342,7 +346,7 @@ internal class TelegramService : Communicator, IHostedService
         }
     }
 
-    private string GetListChoice(string command, string[] ids, string[] names)
+    private static string GetListChoice(string command, string[] ids, string[] names)
     {
         if (ids.Length != names.Length)
         {
@@ -419,6 +423,33 @@ internal class TelegramService : Communicator, IHostedService
             }
 
             await _client.SendMessage(message.Chat.Id, $"{successCount} file(s) processed successfully.");
+        }
+        if (command.StartsWith("/uploadSystemProcessor", StringComparison.InvariantCultureIgnoreCase))
+        {
+            if (message.Document == null)
+            {
+                await _client.SendMessage(message.Chat.Id, "Please upload a valid file.");
+                return;
+            }
+
+            TGFile file = await _client.GetFile(message.Document.FileId);
+            if (file == null || file.FilePath == null)
+            {
+                _logger.LogWarning("Failed to get file for FileId {FileId}", message.Document.FileId);
+                return;
+            }
+            using MemoryStream stream = new();
+            await _client.DownloadFile(file.FilePath, stream);
+            bool success = await _systemProcessorDatabase.SaveSystemProcessorFromFile(stream);
+            if (success)
+            {
+                await _client.SendMessage(message.Chat.Id, "System processor uploaded successfully.");
+            }
+            else
+            {
+                _logger.LogWarning("Failed to save system processor from file for FileId {FileId}", message.Document.FileId);
+                await _client.SendMessage(message.Chat.Id, "Failed to save system processor from file.");
+            }
         }
         else
         {

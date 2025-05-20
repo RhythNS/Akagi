@@ -20,4 +20,14 @@ internal class CommandFactory : ICommandFactory
         }
         return command;
     }
+
+    public Command Create(string commandType)
+    {
+        Type? type = Type.GetType(commandType);
+        if (type == null)
+        {
+            throw new InvalidOperationException($"Command of type {commandType} could not be found.");
+        }
+        return (Command)_serviceProvider.GetRequiredService(type);
+    }
 }
