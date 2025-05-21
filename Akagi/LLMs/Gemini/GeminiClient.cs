@@ -2,6 +2,7 @@
 using Akagi.Puppeteers.Commands;
 using Akagi.Puppeteers.Commands.Messages;
 using Akagi.Puppeteers.SystemProcessors;
+using Akagi.Users;
 using DnsClient.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -28,30 +29,32 @@ internal class GeminiClient : IGeminiClient
         _logger = logger;
     }
 
-    private GeminiPayload GetPayload(SystemProcessor systemProcessor, Character character)
+    private GeminiPayload GetPayload(SystemProcessor systemProcessor, Character character, User user)
     {
         List<GeminiPayload.Content> contents = [];
         foreach (Conversation? conversation in character.Conversations.OrderBy(x => x.Time))
         {
             foreach (Message message in conversation.Messages)
             {
-                if (message is TextMessage textMessage)
+                switch (message)
                 {
-                    contents.Add(new GeminiPayload.Content
-                    {
-                        Parts =
-                        [
-                            new GeminiPayload.Part
-                            {
-                                Text = textMessage.Text
-                            }
-                        ],
-                        Role = message.From == Message.Type.User ? "user" : "assistant"
-                    });
-                }
-                else
-                {
-                    _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
+                    case TextMessage textMessage:
+                        contents.Add(new GeminiPayload.Content
+                        {
+                            Parts =
+                                [
+                                    new GeminiPayload.Part
+                                    {
+                                        Text = textMessage.Text
+                                    }
+                                ],
+                            Role = message.From == Message.Type.User ? "user" : "assistant"
+                        });
+                        break;
+
+                    default:
+                        _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
+                        break;
                 }
             }
         }
@@ -64,7 +67,7 @@ internal class GeminiClient : IGeminiClient
                 [
                     new GeminiPayload.Part
                     {
-                        Text = systemProcessor.SystemInstruction
+                        Text = systemProcessor.Compile(user, character)
                     }
                 ]
             },
@@ -73,7 +76,7 @@ internal class GeminiClient : IGeminiClient
         return payload;
     }
 
-    public async Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Character character)
+    public async Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Character character, User user)
     {
         using HttpClient httpClient = new();
 
@@ -82,7 +85,7 @@ internal class GeminiClient : IGeminiClient
             $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_apiKey}"
         );
 
-        GeminiPayload payload = GetPayload(systemProcessor, character);
+        GeminiPayload payload = GetPayload(systemProcessor, character, user);
 
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 

@@ -7,6 +7,7 @@ using Akagi.Users;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using System.Text;
 using Telegram.Bot;
@@ -302,7 +303,16 @@ internal class TelegramService : Communicator, IHostedService
         }
         else if (command.StartsWith("/listCharacters"))
         {
-
+            List<Character> characters = await _characterDatabase.GetCharactersForUser(user);
+            if (characters.Count == 0)
+            {
+                await _client.SendMessage(message.Chat.Id, "No characters found");
+                return;
+            }
+            string[] ids = characters.Select(x => x.Id).ToArray();
+            string[] names = characters.Select(x => x.Card.Name).ToArray();
+            string choices = GetList(ids, names);
+            await _client.SendMessage(message.Chat.Id, $"Available characters:\n{choices}");
         }
         else if (command.StartsWith("/listCards"))
         {
@@ -314,19 +324,32 @@ internal class TelegramService : Communicator, IHostedService
             }
             string[] ids = cards.Select(x => x.Id).ToArray();
             string[] names = cards.Select(x => x.Name).ToArray();
-            string choices = GetListChoice("createCharacter", ids, names);
+            string choices = GetCommandListChoice("createCharacter", ids, names);
             await _client.SendMessage(message.Chat.Id, $"Available cards:\n{choices}");
+        }
+        else if (command.StartsWith("/listSystemProcessors"))
+        {
+            List<SystemProcessor> systemProcessors = await _systemProcessorDatabase.GetDocumentsAsync();
+            if (systemProcessors.Count == 0)
+            {
+                await _client.SendMessage(message.Chat.Id, "No system processors found");
+                return;
+            }
+            string[] ids = systemProcessors.Select(x => x.Id).ToArray();
+            string[] names = systemProcessors.Select(x => x.Name).ToArray();
+            string choices = GetList(ids, names);
+            await _client.SendMessage(message.Chat.Id, $"Available system processors:\n{choices}");
         }
         else if (command.StartsWith("/createCharacter"))
         {
             string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2)
+            if (parts.Length < 3)
             {
-                await _client.SendMessage(message.Chat.Id, "Please provide a id");
+                await _client.SendMessage(message.Chat.Id, "Please provide a card id and processor id");
                 return;
             }
-            string id = parts[1];
 
+            string id = parts[1];
             Card? card = await _cardDatabase.GetDocumentByIdAsync(id);
             if (card == null)
             {
@@ -334,7 +357,42 @@ internal class TelegramService : Communicator, IHostedService
                 return;
             }
 
-            // TODO:
+            string processorId = parts[2];
+            SystemProcessor? systemProcessor = await _systemProcessorDatabase.GetDocumentByIdAsync(processorId);
+            if (systemProcessor == null)
+            {
+                await _client.SendMessage(message.Chat.Id, "System processor not found");
+                return;
+            }
+
+            Character character = new()
+            {
+                SystemProcessorId = systemProcessor.Id,
+                CardId = card.Id,
+                UserId = user.Id,
+            };
+            await _characterDatabase.SaveDocumentAsync(character);
+
+            await _client.SendMessage(message.Chat.Id, $"Character created with card {card.Name} and system processor {systemProcessor.Name}");
+        }
+        else if (command.StartsWith("/changeCharacter"))
+        {
+            string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length < 2)
+            {
+                await _client.SendMessage(message.Chat.Id, "Please provide a character id");
+                return;
+            }
+            string id = parts[1];
+            Character? character = await _characterDatabase.GetCharacter(id);
+            if (character == null)
+            {
+                await _client.SendMessage(message.Chat.Id, "Character not found");
+                return;
+            }
+            user!.TelegramUser!.CurrentCharacter = character.Id;
+            await _userDatabase.SaveDocumentAsync(user);
+            await _client.SendMessage(message.Chat.Id, $"Current character changed to {character.Card.Name}");
         }
         else if (command.StartsWith("/test"))
         {
@@ -346,7 +404,28 @@ internal class TelegramService : Communicator, IHostedService
         }
     }
 
-    private static string GetListChoice(string command, string[] ids, string[] names)
+    private static string GetList(string[] ids, string[] names)
+    {
+        if (ids.Length != names.Length)
+        {
+            throw new ArgumentException("Commands and names must have the same length");
+        }
+        StringBuilder sb = new();
+        for (int i = 0; i < ids.Length; i++)
+        {
+            sb.Append(names[i]);
+            sb.Append(" (");
+            sb.Append(ids[i]);
+            sb.Append(")");
+            if (i < ids.Length - 1)
+            {
+                sb.Append(", ");
+            }
+        }
+        return sb.ToString();
+    }
+
+    private static string GetCommandListChoice(string command, string[] ids, string[] names)
     {
         if (ids.Length != names.Length)
         {

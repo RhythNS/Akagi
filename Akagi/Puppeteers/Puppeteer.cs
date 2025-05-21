@@ -24,6 +24,8 @@ internal class Puppeteer : IPuppeteer
 
     public async Task OnMessageRecieved(ICommunicator from, SystemProcessor processor, User user, Character character, string message)
     {
+        // TODO: block messages if another message is being processed
+
         TextMessage textMessage = new()
         {
             From = Message.Type.User,
@@ -32,14 +34,13 @@ internal class Puppeteer : IPuppeteer
         };
 
         character.GetLastConversation()!.AddMessage(textMessage);
-        await _characterDatabase.SaveDocumentAsync(character);
 
         ILLM llm = _llmFactory.Create(user);
 
         bool shouldContinue = true;
         do
         {
-            Command[] commands = await llm.GetNextSteps(processor, character);
+            Command[] commands = await llm.GetNextSteps(processor, character, user);
             foreach (Command command in commands)
             {
                 await command.Execute(new Command.Context
@@ -52,10 +53,14 @@ internal class Puppeteer : IPuppeteer
                 {
                     await from.SendMessage(user, character, response.GetMessage());
                 }
-                
+
+                character.GetLastConversation()!.AddCommand(command, DateTime.Now, Message.Type.Character);
+
                 shouldContinue &= command.ContinueAfterExecution;
             }
         } while (shouldContinue);
+
+        await _characterDatabase.SaveDocumentAsync(character);
     }
 
     public Task OnMessageIgnored(SystemProcessor processor, Character character, User user)

@@ -15,9 +15,9 @@ internal class CardDatabase : Database<Card>, ICardDatabase
         this.fileDatabase = fileDatabase;
     }
 
-    public async Task<bool> SaveCardFromImage(MemoryStream memoryStream)
+    public async Task<bool> SaveCardFromImage(MemoryStream stream)
     {
-        string? character = GetPngTextChunk(memoryStream, "chara");
+        string? character = GetPngTextChunk(stream, "chara");
         if (character == null)
         {
             return false;
@@ -33,8 +33,8 @@ internal class CardDatabase : Database<Card>, ICardDatabase
         }
 
         string fileName = Guid.NewGuid().ToString() + ".png";
-        memoryStream.Seek(0, SeekOrigin.Begin);
-        ObjectId objectId = await fileDatabase.UploadFileAsync(memoryStream, fileName, "image/png");
+        stream.Seek(0, SeekOrigin.Begin);
+        ObjectId objectId = await fileDatabase.UploadFileAsync(stream, fileName, "image/png");
 
         Card card = Card.FromRawCard(rawCard, character, objectId.ToString());
         await SaveDocumentAsync(card);

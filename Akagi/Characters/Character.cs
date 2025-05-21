@@ -17,5 +17,21 @@ internal class Character : Savable
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string SystemProcessorId { get; set; } = string.Empty;
 
-    public Conversation? GetLastConversation() => Conversations.MaxBy(c => c.Time);
+    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    public string UserId { get; set; } = string.Empty;
+
+    public Conversation? GetLastConversation()
+    {
+        if (Conversations.Count != 0)
+        {
+            return Conversations.MaxBy(c => c.Time);
+        }
+        
+        Conversations.Add(new Conversation
+        {
+            Time = DateTime.UtcNow,
+            Messages = []
+        });
+        return Conversations[0];
+    }
 }

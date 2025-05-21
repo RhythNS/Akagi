@@ -38,6 +38,7 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
 
     public async Task<bool> SaveSystemProcessorFromFile(MemoryStream stream)
     {
+        stream.Seek(0, SeekOrigin.Begin);
         using StreamReader reader = new(stream);
         string json = reader.ReadToEnd();
 

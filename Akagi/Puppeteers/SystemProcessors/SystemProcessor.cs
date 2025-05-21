@@ -1,5 +1,7 @@
-﻿using Akagi.Data;
+﻿using Akagi.Characters;
+using Akagi.Data;
 using Akagi.Puppeteers.Commands;
+using Akagi.Users;
 using System.Text.Json.Serialization;
 
 namespace Akagi.Puppeteers.SystemProcessors;
@@ -22,5 +24,16 @@ internal class SystemProcessor : Savable
         }
 
         Commands = commands;
+    }
+
+    public string Compile(User user, Character character)
+    {
+        string systemInstruction = SystemInstruction;
+
+        systemInstruction = systemInstruction.Replace("{{user}}", user.Name);
+        systemInstruction = systemInstruction.Replace("{{character}}", character.Card.Name);
+        systemInstruction = systemInstruction.Replace("{{description}}", character.Card.Description);
+
+        return systemInstruction;
     }
 }

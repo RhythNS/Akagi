@@ -1,6 +1,8 @@
 ﻿using Akagi.Characters.Cards;
 using Akagi.Data;
+using Akagi.Users;
 using Microsoft.Extensions.Options;
+using MongoDB.Driver;
 
 namespace Akagi.Characters;
 
@@ -27,12 +29,31 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
         {
             throw new Exception($"Character with ID {id} not found.");
         }
+        await InitCharacter(character);
+        return character;
+    }
+
+    public async Task<List<Character>> GetCharactersForUser(User user)
+    {
+        FilterDefinitionBuilder<Character> builder = Builders<Character>.Filter;
+        FilterDefinition<Character> definition = builder.Eq(nameof(Character.UserId), user.Id);
+        List<Character> characters = await GetDocumentsByPredicateAsync(definition);
+
+        foreach (Character character in characters)
+        {
+            await InitCharacter(character);
+        }
+
+        return characters;
+    }
+
+    private async Task InitCharacter(Character character)
+    {
         Card? card = await _cardDatabase.GetDocumentByIdAsync(character.CardId);
         if (card == null)
         {
             throw new Exception($"Card with ID {character.CardId} not found.");
         }
         character.Card = card;
-        return character;
     }
 }

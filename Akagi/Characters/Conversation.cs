@@ -1,4 +1,7 @@
-﻿namespace Akagi.Characters;
+﻿using Akagi.Puppeteers.Commands;
+using Akagi.Puppeteers.Commands.Messages;
+
+namespace Akagi.Characters;
 
 internal class Conversation
 {
@@ -22,6 +25,18 @@ internal class Conversation
         Messages.Add(message);
 
         return message;
+    }
+
+    public Message AddCommand(Command command, DateTime time, Message.Type from)
+    {
+        if (command is MessageCommand messageCommand)
+        {
+            Message message = messageCommand.GetMessage();
+            Messages.Add(message);
+            return message;
+        }
+     
+        throw new NotImplementedException();
     }
 
     public IReadOnlyList<Message> GetLastMessages(int count)
