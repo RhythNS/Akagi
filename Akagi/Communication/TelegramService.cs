@@ -1,5 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Cards;
+using Akagi.Characters.Conversations;
 using Akagi.Puppeteers;
 using Akagi.Puppeteers.Commands;
 using Akagi.Puppeteers.SystemProcessors;
@@ -197,7 +198,7 @@ internal class TelegramService : Communicator, IHostedService
         }
     }
 
-    public override Task SendMessage(Users.User user, Character character, Characters.Message message)
+    public override Task SendMessage(Users.User user, Character character, Characters.Conversations.Message message)
     {
         if (message is TextMessage textMessage)
         {

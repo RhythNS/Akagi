@@ -1,4 +1,4 @@
-﻿namespace Akagi.Characters;
+﻿namespace Akagi.Characters.Conversations;
 
 internal class TextMessage : Message
 {

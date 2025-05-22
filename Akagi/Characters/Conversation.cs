@@ -1,4 +1,5 @@
-﻿using Akagi.Puppeteers.Commands;
+﻿using Akagi.Characters.Conversations;
+using Akagi.Puppeteers.Commands;
 using Akagi.Puppeteers.Commands.Messages;
 
 namespace Akagi.Characters;

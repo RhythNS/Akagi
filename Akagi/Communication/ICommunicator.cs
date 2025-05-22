@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Conversations;
 using Akagi.Users;
 
 namespace Akagi.Communication;

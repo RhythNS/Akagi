@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Conversations;
 using Akagi.Puppeteers.Commands;
 using Akagi.Puppeteers.Commands.Messages;
 using Akagi.Puppeteers.SystemProcessors;
@@ -59,6 +60,56 @@ internal class GeminiClient : IGeminiClient
             }
         }
 
+        List<GeminiPayload.FunctionDecleration> declerations = [];
+        foreach (Command command in systemProcessor.Commands)
+        {
+            var properties = new Dictionary<string, object>();
+            var required = new List<string>();
+
+            foreach (Argument argument in command.Arguments)
+            {
+                var propertySchema = new Dictionary<string, object>
+                {
+                    ["type"] = argument.ArgumentType.ToString().ToLowerInvariant(),
+                    ["description"] = argument.Description
+                };
+
+                // If the argument is an array, set type and items accordingly  
+                if (argument.ArgumentType == Argument.Type.String)
+                {
+                    propertySchema["type"] = "array";
+                    propertySchema["items"] = new Dictionary<string, object> { ["type"] = "string" };
+                }
+                else if (argument.ArgumentType == Argument.Type.Float || argument.ArgumentType == Argument.Type.Int)
+                {
+                    propertySchema["type"] = "array";
+                    propertySchema["items"] = new Dictionary<string, object> { ["type"] = "number" };
+                }
+
+                properties[argument.Name] = propertySchema;
+
+                if (argument.IsRequired)
+                {
+                    required.Add(argument.Name);
+                }
+            }
+
+            var parameters = new Dictionary<string, object>
+            {
+                ["type"] = "object",
+                ["properties"] = properties,
+                ["required"] = required
+            };
+
+            GeminiPayload.FunctionDecleration decleration = new()
+            {
+                Name = command.Name,
+                Description = command.Description,
+                Parameters = parameters
+            };
+            declerations.Add(decleration);
+        }
+
         GeminiPayload payload = new()
         {
             Instruction = new GeminiPayload.SystemInstruction
@@ -71,7 +122,14 @@ internal class GeminiClient : IGeminiClient
                     }
                 ]
             },
-            Contents = [.. contents]
+            Contents = [.. contents],
+            Tools =
+            [
+                new GeminiPayload.Tool
+                {
+                    FunctionDeclerations = declerations.ToArray()
+                }
+            ]
         };
         return payload;
     }

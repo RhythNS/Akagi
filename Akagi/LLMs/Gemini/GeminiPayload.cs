@@ -44,18 +44,8 @@ internal class GeminiPayload
         [JsonPropertyName("description")]
         public string Description { get; set; } = string.Empty;
         [JsonPropertyName("parameters")]
-        public Parameter parameters { get; set; } = new();
+        public Dictionary<string, object> Parameters { get; set; } = [];
         [JsonPropertyName("required")]
         public string[] Required = [];
-    }
-
-    internal class Parameter
-    {
-        [JsonPropertyName("type")]
-        public string Type { get; set; } = string.Empty;
-        [JsonPropertyName("items")]
-        public string[] Items { get; set; } = [];
-        [JsonPropertyName("description")]
-        public string Description { get; set; } = string.Empty;
     }
 }

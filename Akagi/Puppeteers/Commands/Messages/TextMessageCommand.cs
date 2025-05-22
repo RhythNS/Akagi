@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Conversations;
 
 namespace Akagi.Puppeteers.Commands.Messages;
 
@@ -8,7 +9,8 @@ internal class TextMessageCommand : MessageCommand
 
     public override string Description => "Command to save a text message.";
 
-    public override Argument[] Arguments =>
+    public override Argument[] Arguments => _arguments;
+    private readonly Argument[] _arguments =
     [
         new Argument
         {

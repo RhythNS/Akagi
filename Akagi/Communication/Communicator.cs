@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Conversations;
 using Akagi.Puppeteers;
 using Akagi.Puppeteers.SystemProcessors;
 using Akagi.Users;
