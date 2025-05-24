@@ -1,22 +1,21 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Cards;
 using Akagi.Characters.Conversations;
+using Akagi.Communication.Commands;
 using Akagi.Puppeteers;
-using Akagi.Puppeteers.Commands;
 using Akagi.Puppeteers.SystemProcessors;
 using Akagi.Users;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MongoDB.Bson;
 using MongoDB.Driver;
-using System.Text;
+using System.Collections.Generic;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
 
-namespace Akagi.Communication;
+namespace Akagi.Communication.TelegramComs;
 
 internal class TelegramService : Communicator, IHostedService
 {
@@ -32,7 +31,8 @@ internal class TelegramService : Communicator, IHostedService
     private readonly ICardDatabase _cardDatabase;
     private readonly ISystemProcessorDatabase _systemProcessorDatabase;
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
-
+    private readonly TextCommand[] _textCommands = [];
+    private readonly DocumentCommand[] _documentCommands = [];
 
     private TelegramBotClient? _client;
     private Telegram.Bot.Types.User? _me;
@@ -44,6 +44,7 @@ internal class TelegramService : Communicator, IHostedService
                            IUserDatabase userDatabase,
                            ICharacterDatabase characterDatabase,
                            ICardDatabase cardDatabase,
+                           IEnumerable<Command> _commands,
                            ILogger<TelegramService> logger,
                            IHostApplicationLifetime hostApplicationLifetime) : base(puppeteer, systemProcessorDatabase)
     {
@@ -54,6 +55,9 @@ internal class TelegramService : Communicator, IHostedService
         _cardDatabase = cardDatabase;
         _systemProcessorDatabase = systemProcessorDatabase;
         _hostApplicationLifetime = hostApplicationLifetime;
+
+        _textCommands = _commands.OfType<TextCommand>().ToArray();
+        _documentCommands = _commands.OfType<DocumentCommand>().ToArray();
     }
 
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -104,6 +108,73 @@ internal class TelegramService : Communicator, IHostedService
 
         _logger.LogCritical("Max restart attempts reached. Stopping application.");
         _hostApplicationLifetime.StopApplication();
+    }
+
+    public async Task<MemoryStream?> LoadFile(FileBase fileBase)
+    {
+        if (_client == null)
+        {
+            _logger.LogWarning("Telegram client is not initialized");
+            return null;
+        }
+
+        TGFile file = await _client.GetFile(fileBase.FileId);
+        if (file == null || file.FilePath == null)
+        {
+            _logger.LogWarning("Failed to get file for FileId {FileId}", fileBase.FileId);
+            return null;
+        }
+
+        using MemoryStream stream = new();
+        await _client.DownloadFile(file.FilePath, stream);
+        return stream;
+    }
+
+    public override Task SendMessage(Users.User user, Character character, Characters.Conversations.Message message)
+    {
+        if (message is TextMessage textMessage)
+        {
+            return SendMessage(user, character, textMessage.Text);
+        }
+        else
+        {
+            _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
+            return Task.CompletedTask;
+        }
+    }
+
+    public override Task SendMessage(Users.User user, Character _, string message)
+    {
+        return SendMessage(user, message);
+    }
+
+    public override async Task SendMessage(Users.User user, string message)
+    {
+        if (user.TelegramUser == null)
+        {
+            _logger.LogWarning("User {UserId} does not have a Telegram user", user.Id);
+            return;
+        }
+        if (_client == null)
+        {
+            _logger.LogWarning("Telegram client is not initialized");
+            return;
+        }
+
+        await _client.SendMessage(user.TelegramUser.Id, message);
+    }
+
+    public override Task SendMessage(Users.User user, Characters.Conversations.Message message)
+    {
+        if (message is TextMessage textMessage)
+        {
+            return SendMessage(user, textMessage.Text);
+        }
+        else
+        {
+            _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
+            return Task.CompletedTask;
+        }
     }
 
     private async Task HandleUpdate(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -198,34 +269,6 @@ internal class TelegramService : Communicator, IHostedService
         }
     }
 
-    public override Task SendMessage(Users.User user, Character character, Characters.Conversations.Message message)
-    {
-        if (message is TextMessage textMessage)
-        {
-            return SendMessage(user, character, textMessage.Text);
-        }
-        else
-        {
-            _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
-            return Task.CompletedTask;
-        }
-    }
-
-    public override async Task SendMessage(Users.User user, Character _, string message)
-    {
-        if (user.TelegramUser == null)
-        {
-            _logger.LogWarning("User {UserId} does not have a Telegram user", user.Id);
-            return;
-        }
-        if (_client == null)
-        {
-            _logger.LogWarning("Telegram client is not initialized");
-            return;
-        }
-        await _client.SendMessage(user.TelegramUser.Id, message);
-    }
-
     private async Task HandleCommand(Telegram.Bot.Types.Message message, Users.User user)
     {
         try
@@ -263,35 +306,13 @@ internal class TelegramService : Communicator, IHostedService
 
         string command = message.Text;
 
-        if (command.StartsWith("/username", StringComparison.InvariantCultureIgnoreCase))
+        TextCommand? textCommand = _textCommands.FirstOrDefault(c => c.Name.Equals(command, StringComparison.InvariantCultureIgnoreCase));
+        if (textCommand != null)
         {
-            string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2)
-            {
-                await _client.SendMessage(message.Chat.Id, "Please provide a username");
-                return;
-            }
-            string username = parts[1];
-            user.Username = username;
-            await _userDatabase.SaveDocumentAsync(user);
-            await _client.SendMessage(message.Chat.Id, $"Username set to {username}");
-        }
-        else if (command.StartsWith("/name", StringComparison.InvariantCultureIgnoreCase))
-        {
-            string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2)
-            {
-                await _client.SendMessage(message.Chat.Id, "Please provide a name");
-                return;
-            }
-            string name = parts[1];
-            user.Name = name;
-            await _userDatabase.SaveDocumentAsync(user);
-            await _client.SendMessage(message.Chat.Id, $"Name set to {name}");
-        }
-        else if (command.StartsWith("/ping"))
-        {
-            await _client.SendMessage(message.Chat.Id, "Pong!");
+            string[] args = command.Substring(textCommand.Name.Length)
+                                   .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            await textCommand.ExecuteAsync(user, args);
+            return;
         }
         else if (command.StartsWith("/redo"))
         {
@@ -301,80 +322,6 @@ internal class TelegramService : Communicator, IHostedService
                 return;
             }
             await HandleCommand(message.ReplyToMessage, user);
-        }
-        else if (command.StartsWith("/listCharacters"))
-        {
-            List<Character> characters = await _characterDatabase.GetCharactersForUser(user);
-            if (characters.Count == 0)
-            {
-                await _client.SendMessage(message.Chat.Id, "No characters found");
-                return;
-            }
-            string[] ids = characters.Select(x => x.Id).ToArray();
-            string[] names = characters.Select(x => x.Card.Name).ToArray();
-            string choices = GetList(ids, names);
-            await _client.SendMessage(message.Chat.Id, $"Available characters:\n{choices}");
-        }
-        else if (command.StartsWith("/listCards"))
-        {
-            List<Card> cards = await _cardDatabase.GetDocumentsAsync();
-            if (cards.Count == 0)
-            {
-                await _client.SendMessage(message.Chat.Id, "No cards found");
-                return;
-            }
-            string[] ids = cards.Select(x => x.Id).ToArray();
-            string[] names = cards.Select(x => x.Name).ToArray();
-            string choices = GetCommandListChoice("createCharacter", ids, names);
-            await _client.SendMessage(message.Chat.Id, $"Available cards:\n{choices}");
-        }
-        else if (command.StartsWith("/listSystemProcessors"))
-        {
-            List<SystemProcessor> systemProcessors = await _systemProcessorDatabase.GetDocumentsAsync();
-            if (systemProcessors.Count == 0)
-            {
-                await _client.SendMessage(message.Chat.Id, "No system processors found");
-                return;
-            }
-            string[] ids = systemProcessors.Select(x => x.Id).ToArray();
-            string[] names = systemProcessors.Select(x => x.Name).ToArray();
-            string choices = GetList(ids, names);
-            await _client.SendMessage(message.Chat.Id, $"Available system processors:\n{choices}");
-        }
-        else if (command.StartsWith("/createCharacter"))
-        {
-            string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 3)
-            {
-                await _client.SendMessage(message.Chat.Id, "Please provide a card id and processor id");
-                return;
-            }
-
-            string id = parts[1];
-            Card? card = await _cardDatabase.GetDocumentByIdAsync(id);
-            if (card == null)
-            {
-                await _client.SendMessage(message.Chat.Id, "Card not found");
-                return;
-            }
-
-            string processorId = parts[2];
-            SystemProcessor? systemProcessor = await _systemProcessorDatabase.GetDocumentByIdAsync(processorId);
-            if (systemProcessor == null)
-            {
-                await _client.SendMessage(message.Chat.Id, "System processor not found");
-                return;
-            }
-
-            Character character = new()
-            {
-                SystemProcessorId = systemProcessor.Id,
-                CardId = card.Id,
-                UserId = user.Id,
-            };
-            await _characterDatabase.SaveDocumentAsync(character);
-
-            await _client.SendMessage(message.Chat.Id, $"Character created with card {card.Name} and system processor {systemProcessor.Name}");
         }
         else if (command.StartsWith("/changeCharacter"))
         {
@@ -395,59 +342,10 @@ internal class TelegramService : Communicator, IHostedService
             await _userDatabase.SaveDocumentAsync(user);
             await _client.SendMessage(message.Chat.Id, $"Current character changed to {character.Card.Name}");
         }
-        else if (command.StartsWith("/test"))
-        {
-            await _client.SendMessage(message.Chat.Id, "/test\n\\test");
-        }
         else
         {
             await _client.SendMessage(message.Chat.Id, "Unknown command");
         }
-    }
-
-    private static string GetList(string[] ids, string[] names)
-    {
-        if (ids.Length != names.Length)
-        {
-            throw new ArgumentException("Commands and names must have the same length");
-        }
-        StringBuilder sb = new();
-        for (int i = 0; i < ids.Length; i++)
-        {
-            sb.Append(names[i]);
-            sb.Append(" (");
-            sb.Append(ids[i]);
-            sb.Append(")");
-            if (i < ids.Length - 1)
-            {
-                sb.Append(", ");
-            }
-        }
-        return sb.ToString();
-    }
-
-    private static string GetCommandListChoice(string command, string[] ids, string[] names)
-    {
-        if (ids.Length != names.Length)
-        {
-            throw new ArgumentException("Commands and names must have the same length");
-        }
-
-        StringBuilder sb = new();
-        for (int i = 0; i < ids.Length; i++)
-        {
-            sb.Append(names[i]);
-            sb.Append(":\n/");
-            sb.Append(command);
-            sb.Append(" ");
-            sb.Append(ids[i]);
-            if (i < ids.Length - 1)
-            {
-                sb.Append("\n");
-            }
-        }
-
-        return sb.ToString();
     }
 
     private async Task HandleDocumentCommand(Telegram.Bot.Types.Message message, Users.User user)
@@ -459,77 +357,23 @@ internal class TelegramService : Communicator, IHostedService
 
         string command = message.Caption;
 
-        if (command.StartsWith("/uploadCard", StringComparison.InvariantCultureIgnoreCase))
+        DocumentCommand? documentCommand = _documentCommands.FirstOrDefault(c => c.Name.Equals(command, StringComparison.InvariantCultureIgnoreCase));
+        if (documentCommand != null)
         {
-            List<FileBase> validFiles = [];
-
+            string[] args = command.Substring(documentCommand.Name.Length)
+                                   .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            List<TelegramDocument> validFiles = [];
             if (message.Document != null)
             {
-                validFiles.Add(message.Document);
+                validFiles.Add(new TelegramDocument(message.Document));
             }
             else if (message.Photo != null && message.Photo.Length > 0)
             {
-                validFiles.AddRange(message.Photo);
+                validFiles.AddRange(message.Photo.Select(x => new TelegramDocument(x)));
             }
 
-            if (validFiles.Count == 0)
-            {
-                await _client.SendMessage(message.Chat.Id, "Please upload valid files or images.");
-                return;
-            }
-
-            int successCount = 0;
-
-            foreach (var fileBase in validFiles)
-            {
-                TGFile file = await _client.GetFile(fileBase.FileId);
-                if (file == null || file.FilePath == null)
-                {
-                    _logger.LogWarning("Failed to get file for FileId {FileId}", fileBase.FileId);
-                    continue;
-                }
-
-                using MemoryStream stream = new();
-                await _client.DownloadFile(file.FilePath, stream);
-                bool success = await _cardDatabase.SaveCardFromImage(stream);
-                if (success)
-                {
-                    successCount++;
-                }
-                else
-                {
-                    _logger.LogWarning("Failed to save card from image for FileId {FileId}", fileBase.FileId);
-                }
-            }
-
-            await _client.SendMessage(message.Chat.Id, $"{successCount} file(s) processed successfully.");
-        }
-        if (command.StartsWith("/uploadSystemProcessor", StringComparison.InvariantCultureIgnoreCase))
-        {
-            if (message.Document == null)
-            {
-                await _client.SendMessage(message.Chat.Id, "Please upload a valid file.");
-                return;
-            }
-
-            TGFile file = await _client.GetFile(message.Document.FileId);
-            if (file == null || file.FilePath == null)
-            {
-                _logger.LogWarning("Failed to get file for FileId {FileId}", message.Document.FileId);
-                return;
-            }
-            using MemoryStream stream = new();
-            await _client.DownloadFile(file.FilePath, stream);
-            bool success = await _systemProcessorDatabase.SaveSystemProcessorFromFile(stream);
-            if (success)
-            {
-                await _client.SendMessage(message.Chat.Id, "System processor uploaded successfully.");
-            }
-            else
-            {
-                _logger.LogWarning("Failed to save system processor from file for FileId {FileId}", message.Document.FileId);
-                await _client.SendMessage(message.Chat.Id, "Failed to save system processor from file.");
-            }
+            await documentCommand.ExecuteAsync(user, validFiles.ToArray(), args);
+            return;
         }
         else
         {

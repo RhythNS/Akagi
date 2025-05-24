@@ -14,17 +14,28 @@ internal class UserDatabase : Database<User>, IUserDatabase
         _logger = logger;
     }
 
+    public Task<User?> GetByUsername(string username)
+    {
+        if (string.IsNullOrWhiteSpace(username))
+        {
+            _logger.LogInformation("Attempted to get user by an empty or null username.");
+            return Task.FromResult<User?>(null);
+        }
+        FilterDefinition<User> filter = Builders<User>.Filter.Eq(u => u.Username, username);
+        return GetUser(filter);
+    }
+
     public async Task<User?> GetUser(FilterDefinition<User> user)
     {
         List<User> users = await GetDocumentsByPredicateAsync(user);
         if (users.Count == 0)
         {
-            _logger.LogWarning("User not found with the provided filter: {Filter}", user);
+            _logger.LogInformation("User not found with the provided filter: {Filter}", user);
             return null;
         }
         else if (users.Count > 1)
         {
-            _logger.LogWarning("Multiple users found with the provided filter: {Filter}", user);
+            _logger.LogInformation("Multiple users found with the provided filter: {Filter}", user);
             return null;
         }
         else
@@ -32,4 +43,5 @@ internal class UserDatabase : Database<User>, IUserDatabase
             return users[0];
         }
     }
+
 }

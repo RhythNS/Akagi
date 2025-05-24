@@ -19,6 +19,8 @@ internal abstract class Communicator : ICommunicator
 
     public abstract Task SendMessage(User user, Character character, string message);
     public abstract Task SendMessage(User user, Character character, Message message);
+    public abstract Task SendMessage(User user, string message);
+    public abstract Task SendMessage(User user, Message message);
 
     protected async Task RecieveMessage(User user, Character character, string message)
     {
