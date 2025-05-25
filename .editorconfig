@@ -1,0 +1,7 @@
+﻿[*.cs]
+
+# IDE0290: Use primary constructor
+csharp_style_prefer_primary_constructors = false
+
+# IDE0270: Use coalesce expression
+dotnet_style_coalesce_expression = false

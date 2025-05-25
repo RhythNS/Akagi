@@ -1,6 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Cards;
-using Akagi.Puppeteers.SystemProcessors;
+using Akagi.Receivers.Puppeteers;
 using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
@@ -10,15 +10,15 @@ internal class CreateCharacterCommand : TextCommand
     public override string Name => "/createCharacter";
 
     private readonly ICardDatabase _cardDatabase;
-    private readonly ISystemProcessorDatabase _systemProcessorDatabase;
+    private readonly IPuppeteerDatabase _puppeteerDatabase;
     private readonly ICharacterDatabase _characterDatabase;
 
     public CreateCharacterCommand(ICardDatabase cardDatabase,
-                                  ISystemProcessorDatabase systemProcessorDatabase,
+                                  IPuppeteerDatabase systemProcessorDatabase,
                                   ICharacterDatabase characterDatabase)
     {
         _cardDatabase = cardDatabase;
-        _systemProcessorDatabase = systemProcessorDatabase;
+        _puppeteerDatabase = systemProcessorDatabase;
         _characterDatabase = characterDatabase;
     }
 
@@ -30,17 +30,17 @@ internal class CreateCharacterCommand : TextCommand
             return;
         }
 
-        string id = args[0];
-        Card? card = await _cardDatabase.GetDocumentByIdAsync(id);
-        if (card == null)
+        string cardId = args[0];
+        bool cardExists = await _cardDatabase.DocumentExistsAsync(cardId);
+        if (cardExists == false)
         {
             await Communicator.SendMessage(user, "Card not found");
             return;
         }
 
-        string processorId = args[1];
-        SystemProcessor? systemProcessor = await _systemProcessorDatabase.GetDocumentByIdAsync(processorId);
-        if (systemProcessor == null)
+        string puppeteerId = args[1];
+        bool puppeteerExists = await _puppeteerDatabase.DocumentExistsAsync(puppeteerId);
+        if (puppeteerExists == false)
         {
             await Communicator.SendMessage(user, "System processor not found");
             return;
@@ -48,12 +48,12 @@ internal class CreateCharacterCommand : TextCommand
 
         Character character = new()
         {
-            SystemProcessorId = systemProcessor.Id,
-            CardId = card.Id,
-            UserId = user.Id,
+            MessagePuppeteerId = puppeteerId,
+            CardId = cardId,
+            UserId = user.Id!,
         };
         await _characterDatabase.SaveDocumentAsync(character);
 
-        await Communicator.SendMessage(user, $"Character created with card {card.Name} and system processor {systemProcessor.Name}");
+        await Communicator.SendMessage(user, $"Character created with card {cardId} and puppeteer {puppeteerId}");
     }
 }

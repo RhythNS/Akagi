@@ -2,7 +2,7 @@
 using Akagi.Communication;
 using Akagi.Data;
 using Akagi.LLMs;
-using Akagi.Puppeteers;
+using Akagi.Receivers;
 using Akagi.Users;
 using Microsoft.Extensions.Hosting;
 

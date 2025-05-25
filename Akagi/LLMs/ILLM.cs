@@ -1,6 +1,6 @@
 ﻿using Akagi.Characters;
-using Akagi.Puppeteers.Commands;
-using Akagi.Puppeteers.SystemProcessors;
+using Akagi.Receivers.Commands;
+using Akagi.Receivers.SystemProcessors;
 using Akagi.Users;
 
 namespace Akagi.LLMs;

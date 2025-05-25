@@ -16,7 +16,7 @@ internal abstract class ListCommand : TextCommand
             sb.Append(names[i]);
             sb.Append(" (");
             sb.Append(ids[i]);
-            sb.Append(")");
+            sb.Append(')');
             if (i < ids.Length - 1)
             {
                 sb.Append(", ");
@@ -38,11 +38,11 @@ internal abstract class ListCommand : TextCommand
             sb.Append(names[i]);
             sb.Append(":\n/");
             sb.Append(command);
-            sb.Append(" ");
+            sb.Append(' ');
             sb.Append(ids[i]);
             if (i < ids.Length - 1)
             {
-                sb.Append("\n");
+                sb.Append('\n');
             }
         }
 

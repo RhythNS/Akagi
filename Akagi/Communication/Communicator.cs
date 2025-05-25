@@ -1,20 +1,17 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
-using Akagi.Puppeteers;
-using Akagi.Puppeteers.SystemProcessors;
+using Akagi.Receivers;
 using Akagi.Users;
 
 namespace Akagi.Communication;
 
 internal abstract class Communicator : ICommunicator
 {
-    private readonly IPuppeteer _puppeteer;
-    private readonly ISystemProcessorDatabase _systemProcessorDatabase;
+    private readonly IReceiver _receiver;
 
-    protected Communicator(IPuppeteer puppeteer, ISystemProcessorDatabase systemProcessorDatabase)
+    protected Communicator(IReceiver receiver)
     {
-        _puppeteer = puppeteer;
-        _systemProcessorDatabase = systemProcessorDatabase;
+        _receiver = receiver;
     }
 
     public abstract Task SendMessage(User user, Character character, string message);
@@ -22,10 +19,19 @@ internal abstract class Communicator : ICommunicator
     public abstract Task SendMessage(User user, string message);
     public abstract Task SendMessage(User user, Message message);
 
-    protected async Task RecieveMessage(User user, Character character, string message)
+    protected Task RecieveMessage(User user, Character character, string message)
     {
-        SystemProcessor systemProcessor = await _systemProcessorDatabase.GetSystemProcessor(user, character);
+        TextMessage textMessage = new()
+        {
+            From = Message.Type.User,
+            Text = message,
+            Time = DateTime.UtcNow,
+        };
+        return RecieveMessage(user, character, textMessage);
+    }
 
-        await _puppeteer.OnMessageRecieved(this, systemProcessor, user, character, message);
+    protected async Task RecieveMessage(User user, Character character, Message message)
+    {
+        await _receiver.OnMessageRecieved(this, user, character, message);
     }
 }

@@ -1,4 +1,4 @@
-﻿using Akagi.Puppeteers.SystemProcessors;
+﻿using Akagi.Receivers.SystemProcessors;
 using Akagi.Users;
 
 namespace Akagi.Communication.Commands;

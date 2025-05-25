@@ -1,4 +1,4 @@
-﻿namespace Akagi.Puppeteers.Commands;
+﻿namespace Akagi.Receivers.Commands;
 
 internal class Argument
 {
@@ -10,8 +10,8 @@ internal class Argument
         Bool
     }
 
-    public string Name { init; get; }
-    public string Description { init; get; }
+    public required string Name { init; get; }
+    public required string Description { init; get; }
     public bool IsRequired { init; get; }
     public Type ArgumentType { init; get; }
     public string Value { get; set; } = string.Empty;

@@ -11,4 +11,6 @@ internal interface IDatabase<T> where T : ISavable
     public Task BulkInsertAsync(IEnumerable<T> documents);
     public Task UpdateDocumentAsync(string id, UpdateDefinition<T> updateDefinition);
     public Task<List<T>> GetDocumentsByPredicateAsync(FilterDefinition<T> predicate);
+    public Task<bool> DocumentExistsAsync(string id);
+    public Task<bool> DocumentExistsByPredicateAsync(FilterDefinition<T> predicate);
 }

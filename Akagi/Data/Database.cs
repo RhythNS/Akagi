@@ -11,14 +11,14 @@ internal class DatabaseOptions
 
 internal abstract class Database<T> : IDatabase<T> where T : ISavable
 {
-    private string _connectionString;
-    private string _databaseName;
-    private string _collectionName;
-    private IMongoDatabase _mongoDatabase;
+    private string _connectionString = string.Empty;
+    private string _databaseName = string.Empty;
+    private string _collectionName = string.Empty;
+    private IMongoDatabase _mongoDatabase = default!;
 
     public Database(IOptionsMonitor<DatabaseOptions> options, string collectionName)
     {
-        options.OnChange(OnOptionsChange);
+        options.OnChange((options, _) => OnOptionsChange(options, collectionName));  
         OnOptionsChange(options.CurrentValue, collectionName);
     }
 
@@ -105,5 +105,20 @@ internal abstract class Database<T> : IDatabase<T> where T : ISavable
     {
         IMongoCollection<T> collection = GetCollection();
         return await collection.Find(predicate).ToListAsync();
+    }
+
+    public async Task<bool> DocumentExistsAsync(string id)
+    {
+        IMongoCollection<T> collection = GetCollection();
+        FilterDefinition<T> filter = Builders<T>.Filter.Eq(y => y.Id, id);
+        long count = await collection.CountDocumentsAsync(filter, new CountOptions { Limit = 1 });
+        return count > 0;
+    }
+
+    public async Task<bool> DocumentExistsByPredicateAsync(FilterDefinition<T> predicate)
+    {
+        IMongoCollection<T> collection = GetCollection();
+        long count = await collection.CountDocumentsAsync(predicate, new CountOptions { Limit = 1 });
+        return count > 0;
     }
 }

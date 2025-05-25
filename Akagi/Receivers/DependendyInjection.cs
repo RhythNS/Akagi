@@ -1,15 +1,15 @@
-﻿using Akagi.Puppeteers.Commands;
-using Akagi.Puppeteers.Commands.Messages;
-using Akagi.Puppeteers.SystemProcessors;
+﻿using Akagi.Receivers.Commands;
+using Akagi.Receivers.Commands.Messages;
+using Akagi.Receivers.SystemProcessors;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace Akagi.Puppeteers;
+namespace Akagi.Receivers;
 
 static class DependendyInjection
 {
     public static void AddPuppeteers(this IServiceCollection services)
     {
-        services.AddScoped<IPuppeteer, Puppeteer>();
+        services.AddScoped<IReceiver, Receiver>();
         services.AddScoped<ICommandFactory, CommandFactory>();
         services.AddScoped<TextMessageCommand>();
         services.AddSingleton<ISystemProcessorDatabase, SystemProcessorDatabase>();

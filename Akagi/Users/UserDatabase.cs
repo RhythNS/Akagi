@@ -7,7 +7,7 @@ namespace Akagi.Users;
 
 internal class UserDatabase : Database<User>, IUserDatabase
 {
-    private ILogger<UserDatabase> _logger;
+    private readonly ILogger<UserDatabase> _logger;
 
     public UserDatabase(IOptionsMonitor<DatabaseOptions> options, ILogger<UserDatabase> logger) : base(options, "User")
     {

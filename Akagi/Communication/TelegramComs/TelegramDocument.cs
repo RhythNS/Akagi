@@ -4,7 +4,7 @@ namespace Akagi.Communication.TelegramComs;
 
 internal class TelegramDocument : Document
 {
-    private FileBase fileBase;
+    private readonly FileBase fileBase;
     private MemoryStream? _stream;
 
     public TelegramDocument(FileBase fileBase)

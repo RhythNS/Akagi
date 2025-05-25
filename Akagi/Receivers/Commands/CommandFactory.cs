@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace Akagi.Puppeteers.Commands;
+namespace Akagi.Receivers.Commands;
 
 internal class CommandFactory : ICommandFactory
 {

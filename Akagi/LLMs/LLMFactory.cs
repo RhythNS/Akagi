@@ -1,23 +1,16 @@
 ﻿using Akagi.LLMs.Gemini;
 using Akagi.Users;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Options;
 
 namespace Akagi.LLMs;
 
 internal class LLMFactory : ILLMFactory
 {
-    internal class Options
-    {
-    }
-
-    private readonly Options _config;
     private readonly IServiceProvider _serviceProvider;
 
-    public LLMFactory(IServiceProvider serviceProvider, IOptions<Options> config)
+    public LLMFactory(IServiceProvider serviceProvider)
     {
         _serviceProvider = serviceProvider;
-        _config = config.Value;
     }
 
     public ILLM Create(User user)
@@ -26,13 +19,9 @@ internal class LLMFactory : ILLMFactory
         {
             ILLM.LLMType.Gemini => (ILLM?)_serviceProvider.GetRequiredService(typeof(IGeminiClient)),
             ILLM.LLMType.OpenAI => throw new NotImplementedException("OpenAI LLM is not implemented yet."),
-            _ => throw new ArgumentOutOfRangeException(nameof(user.LLMType), user.LLMType, null),
-        };
-        if (lLM == null)
-        {
-            throw new InvalidOperationException($"LLM of type {user.LLMType} could not be created.");
-        }
-
+            _ => throw new ArgumentOutOfRangeException(nameof(user), user, null),
+        } ?? throw new InvalidOperationException($"LLM of type {user.LLMType} could not be created.");
+        
         return lLM;
     }
 }

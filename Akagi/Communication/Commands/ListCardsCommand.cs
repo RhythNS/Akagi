@@ -22,7 +22,7 @@ internal class ListCardsCommand : ListCommand
             await Communicator.SendMessage(user, "No cards found");
             return;
         }
-        string[] ids = cards.Select(x => x.Id).ToArray();
+        string[] ids = cards.Select(x => x.Id!).ToArray();
         string[] names = cards.Select(x => x.Name).ToArray();
         string choices = GetCommandListChoice("createCharacter", ids, names);
         await Communicator.SendMessage(user, $"Available cards:\n{choices}");

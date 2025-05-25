@@ -1,8 +1,8 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
-using Akagi.Puppeteers.Commands;
-using Akagi.Puppeteers.Commands.Messages;
-using Akagi.Puppeteers.SystemProcessors;
+using Akagi.Receivers.Commands;
+using Akagi.Receivers.Commands.Messages;
+using Akagi.Receivers.SystemProcessors;
 using Akagi.Users;
 using DnsClient.Internal;
 using Microsoft.Extensions.Logging;
@@ -19,9 +19,9 @@ internal class GeminiClient : IGeminiClient
         public string ApiKey { get; set; } = string.Empty;
     }
 
-    private string _apiKey;
-    private ICommandFactory _commandFactory;
-    private ILogger<GeminiClient> _logger;
+    private readonly string _apiKey;
+    private readonly ICommandFactory _commandFactory;
+    private readonly ILogger<GeminiClient> _logger;
 
     public GeminiClient(ICommandFactory commandFactory, IOptionsMonitor<Options> options, ILogger<GeminiClient> logger)
     {
@@ -127,7 +127,7 @@ internal class GeminiClient : IGeminiClient
             [
                 new GeminiPayload.Tool
                 {
-                    FunctionDeclerations = declerations.ToArray()
+                    FunctionDeclerations = [.. declerations]
                 }
             ]
         };

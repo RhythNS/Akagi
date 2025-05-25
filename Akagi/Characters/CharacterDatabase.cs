@@ -24,11 +24,7 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
 
     public async Task<Character> GetCharacter(string id)
     {
-        Character? character = await GetDocumentByIdAsync(id);
-        if (character == null)
-        {
-            throw new Exception($"Character with ID {id} not found.");
-        }
+        Character? character = await GetDocumentByIdAsync(id) ?? throw new Exception($"Character with ID {id} not found.");
         await InitCharacter(character);
         return character;
     }
@@ -49,11 +45,7 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
 
     private async Task InitCharacter(Character character)
     {
-        Card? card = await _cardDatabase.GetDocumentByIdAsync(character.CardId);
-        if (card == null)
-        {
-            throw new Exception($"Card with ID {character.CardId} not found.");
-        }
-        character.Card = card;
+        Card? card = await _cardDatabase.GetDocumentByIdAsync(character.CardId) ?? throw new Exception($"Card with ID {character.CardId} not found.");
+        character.Init(card);
     }
 }

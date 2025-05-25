@@ -1,4 +1,4 @@
-﻿namespace Akagi.Puppeteers.Commands;
+﻿namespace Akagi.Receivers.Commands;
 
 internal interface ICommandFactory
 {

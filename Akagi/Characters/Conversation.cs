@@ -1,6 +1,6 @@
 ﻿using Akagi.Characters.Conversations;
-using Akagi.Puppeteers.Commands;
-using Akagi.Puppeteers.Commands.Messages;
+using Akagi.Receivers.Commands;
+using Akagi.Receivers.Commands.Messages;
 
 namespace Akagi.Characters;
 
@@ -8,6 +8,7 @@ internal class Conversation
 {
     public DateTime Time { get; set; }
     public List<Message> Messages { get; set; } = [];
+    public bool IsCompleted { get; set; } = false;
 
     public void AddMessage(Message message)
     {
@@ -28,7 +29,9 @@ internal class Conversation
         return message;
     }
 
+#pragma warning disable IDE0060 // Remove unused parameter
     public Message AddCommand(Command command, DateTime time, Message.Type from)
+#pragma warning restore IDE0060 // Remove unused parameter
     {
         if (command is MessageCommand messageCommand)
         {

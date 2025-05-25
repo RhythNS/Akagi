@@ -1,10 +1,10 @@
 ﻿using Akagi.Characters;
 using Akagi.Data;
-using Akagi.Puppeteers.Commands;
+using Akagi.Receivers.Commands;
 using Akagi.Users;
 using System.Text.Json.Serialization;
 
-namespace Akagi.Puppeteers.SystemProcessors;
+namespace Akagi.Receivers.SystemProcessors;
 
 internal class SystemProcessor : Savable
 {

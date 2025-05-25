@@ -1,4 +1,4 @@
-﻿using Akagi.Puppeteers.SystemProcessors;
+﻿using Akagi.Receivers.SystemProcessors;
 using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
@@ -22,7 +22,7 @@ internal class ListSystemProcessorsCommand : ListCommand
             await Communicator.SendMessage(user, "No system processors found");
             return;
         }
-        string[] ids = systemProcessors.Select(x => x.Id).ToArray();
+        string[] ids = systemProcessors.Select(x => x.Id!).ToArray();
         string[] names = systemProcessors.Select(x => x.Name).ToArray();
         string choices = GetList(ids, names);
         await Communicator.SendMessage(user, $"Available system processors:\n{choices}");

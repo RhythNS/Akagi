@@ -1,6 +1,5 @@
 ﻿using Akagi.Characters.Cards;
 using Akagi.Users;
-using Microsoft.Extensions.Logging;
 
 namespace Akagi.Communication.Commands;
 
@@ -9,12 +8,10 @@ internal class UploadCardCommand : DocumentCommand
     public override string Name => "/uploadCard";
 
     private readonly ICardDatabase _cardDatabase;
-    private readonly ILogger<UploadCardCommand> _logger;
 
-    public UploadCardCommand(ICardDatabase cardDatabase, ILogger<UploadCardCommand> logger)
+    public UploadCardCommand(ICardDatabase cardDatabase)
     {
         _cardDatabase = cardDatabase;
-        _logger = logger;
     }
 
     public override async Task ExecuteAsync(User user, Document[] documents, string[] args)

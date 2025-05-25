@@ -1,6 +1,6 @@
 ﻿using Akagi.Characters.Conversations;
 
-namespace Akagi.Puppeteers.Commands.Messages;
+namespace Akagi.Receivers.Commands.Messages;
 
 internal abstract class MessageCommand : Command
 {
