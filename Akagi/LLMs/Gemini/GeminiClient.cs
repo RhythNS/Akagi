@@ -32,43 +32,41 @@ internal class GeminiClient : IGeminiClient
 
     private GeminiPayload GetPayload(SystemProcessor systemProcessor, Character character, User user)
     {
+        Message[] messages = systemProcessor.CompileMessages(user, character);
         List<GeminiPayload.Content> contents = [];
-        foreach (Conversation? conversation in character.Conversations.OrderBy(x => x.Time))
+        foreach (Message message in messages)
         {
-            foreach (Message message in conversation.Messages)
+            switch (message)
             {
-                switch (message)
-                {
-                    case TextMessage textMessage:
-                        contents.Add(new GeminiPayload.Content
-                        {
-                            Parts =
-                                [
-                                    new GeminiPayload.Part
+                case TextMessage textMessage:
+                    contents.Add(new GeminiPayload.Content
+                    {
+                        Parts =
+                            [
+                                new GeminiPayload.Part
                                     {
                                         Text = textMessage.Text
                                     }
-                                ],
-                            Role = message.From == Message.Type.User ? "user" : "assistant"
-                        });
-                        break;
+                            ],
+                        Role = message.From == Message.Type.User ? "user" : "assistant"
+                    });
+                    break;
 
-                    default:
-                        _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
-                        break;
-                }
+                default:
+                    _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
+                    break;
             }
         }
 
         List<GeminiPayload.FunctionDecleration> declerations = [];
         foreach (Command command in systemProcessor.Commands)
         {
-            var properties = new Dictionary<string, object>();
-            var required = new List<string>();
+            Dictionary<string, object> properties = [];
+            List<string> required = [];
 
             foreach (Argument argument in command.Arguments)
             {
-                var propertySchema = new Dictionary<string, object>
+                Dictionary<string, object> propertySchema = new()
                 {
                     ["type"] = argument.ArgumentType.ToString().ToLowerInvariant(),
                     ["description"] = argument.Description
@@ -94,7 +92,7 @@ internal class GeminiClient : IGeminiClient
                 }
             }
 
-            var parameters = new Dictionary<string, object>
+            Dictionary<string, object> parameters = new()
             {
                 ["type"] = "object",
                 ["properties"] = properties,
@@ -118,7 +116,7 @@ internal class GeminiClient : IGeminiClient
                 [
                     new GeminiPayload.Part
                     {
-                        Text = systemProcessor.Compile(user, character)
+                        Text = systemProcessor.CompileSystemPrompt(user, character)
                     }
                 ]
             },

@@ -1,8 +1,6 @@
 ﻿using Akagi.Characters;
-using Akagi.Characters.Cards;
 using Akagi.Communication.Commands;
 using Akagi.Receivers;
-using Akagi.Receivers.SystemProcessors;
 using Akagi.Users;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

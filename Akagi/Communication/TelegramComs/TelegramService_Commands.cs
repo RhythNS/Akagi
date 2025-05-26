@@ -110,8 +110,9 @@ internal partial class TelegramService : Communicator, IHostedService
             {
                 validFiles.AddRange(message.Photo.Select(x => new TelegramDocument(x)));
             }
+            validFiles.ForEach(x => x.Init(this));
 
-            await documentCommand.ExecuteAsync(user, validFiles.ToArray(), args);
+            await documentCommand.ExecuteAsync(user, [.. validFiles], args);
             return;
         }
         else

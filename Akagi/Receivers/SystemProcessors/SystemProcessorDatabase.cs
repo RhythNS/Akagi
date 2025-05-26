@@ -1,7 +1,5 @@
-﻿using Akagi.Characters;
-using Akagi.Data;
+﻿using Akagi.Data;
 using Akagi.Receivers.Commands;
-using Akagi.Users;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using System.Text.Json;
@@ -13,7 +11,7 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
     private readonly ICommandFactory _commandFactory;
 
     public SystemProcessorDatabase(IOptionsMonitor<DatabaseOptions> options,
-        ICommandFactory commandFactory) : base(options, "SystemProcessor")
+                                   ICommandFactory commandFactory) : base(options, "SystemProcessor")
     {
         _commandFactory = commandFactory;
     }
@@ -89,56 +87,3 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
         return true;
     }
 }
-
-/*
-using Akagi.Characters;
-using Akagi.Data;
-using Akagi.Puppeteers.Commands;
-using Akagi.Users;
-using Microsoft.Extensions.Options;
-using System.Text.Json;
-
-namespace Akagi.Puppeteers.SystemProcessors;
-
-internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProcessorDatabase
-{
-    private readonly ICommandFactory _commandFactory;
-
-    public SystemProcessorDatabase(IOptionsMonitor<DatabaseOptions> options,
-        ICommandFactory commandFactory) : base(options, "SystemProcessor")
-    {
-        _commandFactory = commandFactory;
-    }
-
-    public async Task<bool> SaveSystemProcessorFromFile(MemoryStream stream)
-    {
-        stream.Seek(0, SeekOrigin.Begin);
-        using StreamReader reader = new(stream);
-        string json = reader.ReadToEnd();
-
-        SystemProcessor? systemProcessor = null;
-        try
-        {
-            systemProcessor = JsonSerializer.Deserialize<SystemProcessor>(json);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-        if (systemProcessor == null)
-        {
-            return false;
-        }
-        try
-        {
-            await SaveDocumentAsync(systemProcessor);
-        }
-        catch (Exception)
-        {
-            return false;
-        }
-        return true;
-    }
-}
-
- */

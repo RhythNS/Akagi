@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Conversations;
 using Akagi.Data;
 using Akagi.Receivers.Commands;
 using Akagi.Users;
@@ -26,7 +27,7 @@ internal class SystemProcessor : Savable
         Commands = commands;
     }
 
-    public string Compile(User user, Character character)
+    public virtual string CompileSystemPrompt(User user, Character character)
     {
         string systemInstruction = SystemInstruction;
 
@@ -35,5 +36,20 @@ internal class SystemProcessor : Savable
         systemInstruction = systemInstruction.Replace("{{description}}", character.Card.Description);
 
         return systemInstruction;
+    }
+
+    public virtual Message[] CompileMessages(User user, Character character)
+    {
+        List<Message> messages = [];
+
+        IEnumerable<Conversation> conversations = character.Conversations.OrderBy(x => x.Time);
+        foreach (Conversation conversation in conversations)
+        {
+            foreach (Message message in conversation.Messages.OrderBy(x => x.Time))
+            {
+                messages.Add(message);
+            }
+        }
+        return [.. messages];
     }
 }
