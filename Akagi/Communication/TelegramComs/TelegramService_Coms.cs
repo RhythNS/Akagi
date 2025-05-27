@@ -140,7 +140,7 @@ internal partial class TelegramService : Communicator, IHostedService
 
         _logger.LogInformation("Received text '{Text}' in chat {ChatId}", message.Text, message.Chat.Id);
 
-        Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacter!);
+        Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
 
         try
         {

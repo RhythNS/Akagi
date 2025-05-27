@@ -7,6 +7,7 @@ using Akagi.Users;
 using DnsClient.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 
@@ -44,9 +45,9 @@ internal class GeminiClient : IGeminiClient
                         Parts =
                             [
                                 new GeminiPayload.Part
-                                    {
-                                        Text = textMessage.Text
-                                    }
+                                {
+                                    Text = textMessage.Text
+                                }
                             ],
                         Role = message.From == Message.Type.User ? "user" : "assistant"
                     });
@@ -108,27 +109,49 @@ internal class GeminiClient : IGeminiClient
             declerations.Add(decleration);
         }
 
-        GeminiPayload payload = new()
+        GeminiPayload payload;
+
+        if (declerations.Count == 0)
         {
-            Instruction = new GeminiPayload.SystemInstruction
+            payload = new()
             {
-                Parts =
-                [
-                    new GeminiPayload.Part
+                Instruction = new GeminiPayload.SystemInstruction
+                {
+                    Parts =
+                    [
+                        new GeminiPayload.Part
                     {
                         Text = systemProcessor.CompileSystemPrompt(user, character)
                     }
-                ]
-            },
-            Contents = [.. contents],
-            Tools =
-            [
-                new GeminiPayload.Tool
+                    ]
+                },
+                Contents = [.. contents]
+            };
+        }
+        else
+        {
+            payload = new()
+            {
+                Instruction = new GeminiPayload.SystemInstruction
+                {
+                    Parts =
+                    [
+                        new GeminiPayload.Part
+                    {
+                        Text = systemProcessor.CompileSystemPrompt(user, character)
+                    }
+                    ]
+                },
+                Contents = [.. contents],
+                Tools =
+                [
+                    new GeminiPayload.Tool
                 {
                     FunctionDeclerations = [.. declerations]
                 }
-            ]
-        };
+                ]
+            };
+        }
         return payload;
     }
 
@@ -145,10 +168,18 @@ internal class GeminiClient : IGeminiClient
 
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
+        int retries = 2;
+    retry:
         HttpResponseMessage response = await httpClient.SendAsync(request);
 
         if (!response.IsSuccessStatusCode)
         {
+            if (retries-- > 0 && response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(5));
+                goto retry;
+            }
+
             throw new Exception($"Request failed with status code {response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         }
         string content = await response.Content.ReadAsStringAsync();

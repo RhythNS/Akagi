@@ -5,4 +5,6 @@ internal class TextMessage : Message
     public string Text { get; set; } = string.Empty;
 
     public override bool IsVisible => true;
+
+    public override string ToString() => $"{Time} {From}: {Text}";
 }

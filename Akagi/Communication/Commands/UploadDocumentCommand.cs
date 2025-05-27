@@ -1,18 +1,18 @@
-﻿using Akagi.Characters.Cards;
+﻿using Akagi.Data;
 using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 
-internal class UploadCardCommand : DocumentCommand
+internal abstract class UploadDocumentCommand<T> : DocumentCommand where T : Savable
 {
-    public override string Name => "/uploadCard";
-
-    private readonly ICardDatabase _cardDatabase;
-
-    public UploadCardCommand(ICardDatabase cardDatabase)
+    public enum SaveType
     {
-        _cardDatabase = cardDatabase;
+        File,
+        BSON
     }
+
+    protected abstract IDatabase<T> Database { get; }
+    protected virtual SaveType SaveMethod => SaveType.File;
 
     public override async Task ExecuteAsync(Context context, Document[] documents, string[] args)
     {
@@ -21,18 +21,21 @@ internal class UploadCardCommand : DocumentCommand
             await Communicator.SendMessage(context.User, "Please upload valid files or images.");
             return;
         }
-
         List<string> successNames = [];
         foreach (Document document in documents)
         {
             MemoryStream? stream = await document.GetStream();
-
             if (stream == null)
             {
                 continue;
             }
-
-            bool success = await _cardDatabase.SaveCardFromImage(stream);
+            bool success = false;
+            success = SaveMethod switch
+            {
+                SaveType.File => await Database.SaveFromFile(stream),
+                SaveType.BSON => await Database.SaveFromBSON(stream),
+                _ => throw new Exception($"Invalid save method: {SaveMethod}"),
+            };
             if (success)
             {
                 successNames.Add(document.Name);
@@ -40,10 +43,10 @@ internal class UploadCardCommand : DocumentCommand
         }
         if (successNames.Count == 0)
         {
-            await Communicator.SendMessage(context.User, "No valid cards were uploaded.");
+            await Communicator.SendMessage(context.User, "No valid files found.");
             return;
         }
-        string successMessage = $"Successfully uploaded cards: {string.Join(", ", successNames)}";
+        string successMessage = $"Successfully uploaded: {string.Join(", ", successNames)}";
         await Communicator.SendMessage(context.User, successMessage);
     }
 }

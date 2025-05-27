@@ -9,7 +9,7 @@ internal class UserDatabase : Database<User>, IUserDatabase
 {
     private readonly ILogger<UserDatabase> _logger;
 
-    public UserDatabase(IOptionsMonitor<DatabaseOptions> options, ILogger<UserDatabase> logger) : base(options, "User")
+    public UserDatabase(IOptionsMonitor<DatabaseOptions> options, ILogger<UserDatabase> logger) : base(options, "user")
     {
         _logger = logger;
     }
@@ -43,5 +43,4 @@ internal class UserDatabase : Database<User>, IUserDatabase
             return users[0];
         }
     }
-
 }

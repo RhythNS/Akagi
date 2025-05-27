@@ -1,7 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Cards;
 using Akagi.Receivers.Puppeteers;
-using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 
@@ -22,11 +21,11 @@ internal class CreateCharacterCommand : TextCommand
         _characterDatabase = characterDatabase;
     }
 
-    public override async Task ExecuteAsync(User user, string[] args)
+    public override async Task ExecuteAsync(Context context, string[] args)
     {
         if (args.Length < 2)
         {
-            await Communicator.SendMessage(user, "Please provide a card id and processor id");
+            await Communicator.SendMessage(context.User, "Please provide a card id and processor id");
             return;
         }
 
@@ -34,7 +33,7 @@ internal class CreateCharacterCommand : TextCommand
         bool cardExists = await _cardDatabase.DocumentExistsAsync(cardId);
         if (cardExists == false)
         {
-            await Communicator.SendMessage(user, "Card not found");
+            await Communicator.SendMessage(context.User, "Card not found");
             return;
         }
 
@@ -42,18 +41,18 @@ internal class CreateCharacterCommand : TextCommand
         bool puppeteerExists = await _puppeteerDatabase.DocumentExistsAsync(puppeteerId);
         if (puppeteerExists == false)
         {
-            await Communicator.SendMessage(user, "System processor not found");
+            await Communicator.SendMessage(context.User, "System processor not found");
             return;
         }
 
         Character character = new()
         {
-            MessagePuppeteerId = puppeteerId,
+            PuppeteerId = puppeteerId,
             CardId = cardId,
-            UserId = user.Id!,
+            UserId = context.User.Id!,
         };
         await _characterDatabase.SaveDocumentAsync(character);
 
-        await Communicator.SendMessage(user, $"Character created with card {cardId} and puppeteer {puppeteerId}");
+        await Communicator.SendMessage(context.User, $"Character created with card {cardId} and puppeteer {puppeteerId}");
     }
 }

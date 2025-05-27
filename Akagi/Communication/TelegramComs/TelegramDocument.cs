@@ -2,7 +2,7 @@
 
 namespace Akagi.Communication.TelegramComs;
 
-internal class TelegramDocument : Document
+internal class TelegramDocument : Document, IDisposable
 {
     private readonly FileBase fileBase;
     private MemoryStream? _stream;
@@ -13,6 +13,12 @@ internal class TelegramDocument : Document
     }
 
     public override string Name => fileBase.FileId;
+
+    public void Dispose()
+    {
+        _stream?.Dispose();
+        _stream = null;
+    }
 
     public override async Task<MemoryStream?> GetStream()
     {

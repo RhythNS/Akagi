@@ -22,7 +22,7 @@ internal partial class TelegramService : Communicator, IHostedService
             return null;
         }
 
-        using MemoryStream stream = new();
+        MemoryStream stream = new();
         await _client.DownloadFile(file.FilePath, stream);
         return stream;
     }

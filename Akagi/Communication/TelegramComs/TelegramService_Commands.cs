@@ -1,5 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Communication.Commands;
+using Akagi.Receivers;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
@@ -50,7 +51,13 @@ internal partial class TelegramService : Communicator, IHostedService
         {
             string[] args = command.Substring(textCommand.Name.Length)
                                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            await textCommand.ExecuteAsync(user, args);
+            Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+            Command.Context context = new()
+            {
+                Character = character,
+                User = user,
+            };
+            await textCommand.ExecuteAsync(context, args);
             return;
         }
         else if (command.StartsWith("/redo"))
@@ -77,7 +84,7 @@ internal partial class TelegramService : Communicator, IHostedService
                 await _client.SendMessage(message.Chat.Id, "Character not found");
                 return;
             }
-            user!.TelegramUser!.CurrentCharacter = character.Id;
+            user!.TelegramUser!.CurrentCharacterId = character.Id;
             await _userDatabase.SaveDocumentAsync(user);
             await _client.SendMessage(message.Chat.Id, $"Current character changed to {character.Card.Name}");
         }
@@ -112,7 +119,16 @@ internal partial class TelegramService : Communicator, IHostedService
             }
             validFiles.ForEach(x => x.Init(this));
 
-            await documentCommand.ExecuteAsync(user, [.. validFiles], args);
+            Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+            Command.Context context = new()
+            {
+                Character = character,
+                User = user,
+            };
+            await documentCommand.ExecuteAsync(context, [.. validFiles], args);
+
+            validFiles.ForEach(x => x.Dispose());
+
             return;
         }
         else

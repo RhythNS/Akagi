@@ -9,15 +9,11 @@ static class DependencyInjection
 {
     public static void AddCommunications(this IServiceCollection services, IConfiguration configuration)
     {
-        services.AddTransient<Command, ChangeNameCommand>();
-        services.AddTransient<Command, ChangeUsernameCommand>();
-        services.AddTransient<Command, CreateCharacterCommand>();
-        services.AddTransient<Command, ListCardsCommand>();
-        services.AddTransient<Command, ListCharactersCommand>();
-        services.AddTransient<Command, ListSystemProcessorsCommand>();
-        services.AddTransient<Command, PingCommand>();
-        services.AddTransient<Command, UploadCardCommand>();
-        services.AddTransient<Command, UploadSystemProcessorCommand>();
+        AppDomain.CurrentDomain.GetAssemblies()
+            .SelectMany(assembly => assembly.GetTypes())
+            .Where(type => typeof(Command).IsAssignableFrom(type) && !type.IsAbstract)
+            .ToList()
+            .ForEach(commandType => services.AddTransient(typeof(Command), commandType));
 
         services.Configure<TelegramService.Options>(configuration.GetSection("Telegram"));
         services.AddHostedService<TelegramService>();

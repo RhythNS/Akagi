@@ -9,6 +9,8 @@ namespace Akagi.Receivers.Puppeteers;
 
 internal abstract class Puppeteer : Savable
 {
+    public required string Name { get; set; }
+
     protected Context Context
     {
         get

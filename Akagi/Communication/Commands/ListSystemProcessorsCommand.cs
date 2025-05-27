@@ -14,17 +14,17 @@ internal class ListSystemProcessorsCommand : ListCommand
         _systemProcessorDatabase = systemProcessorDatabase;
     }
 
-    public override async Task ExecuteAsync(User user, string[] _)
+    public override async Task ExecuteAsync(Context context, string[] _)
     {
         List<SystemProcessor> systemProcessors = await _systemProcessorDatabase.GetDocumentsAsync();
         if (systemProcessors.Count == 0)
         {
-            await Communicator.SendMessage(user, "No system processors found");
+            await Communicator.SendMessage(context.User, "No system processors found");
             return;
         }
         string[] ids = systemProcessors.Select(x => x.Id!).ToArray();
         string[] names = systemProcessors.Select(x => x.Name).ToArray();
         string choices = GetList(ids, names);
-        await Communicator.SendMessage(user, $"Available system processors:\n{choices}");
+        await Communicator.SendMessage(context.User, $"Available system processors:\n{choices}");
     }
 }

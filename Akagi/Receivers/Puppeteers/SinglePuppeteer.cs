@@ -25,7 +25,6 @@ internal class SinglePuppeteer : Puppeteer
             throw new InvalidOperationException($"System processor with ID {SystemProcessorId} not found.");
         }
 
-
         bool shouldContinue = true;
         do
         {

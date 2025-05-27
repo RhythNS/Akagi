@@ -13,16 +13,6 @@ internal class Program
     static async Task Main(string[] args)
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
-        /*
-        builder.Services.AddLogging(loggingBuilder =>
-        {
-            loggingBuilder
-                .AddFilter("Microsoft", LogLevel.Warning)
-                .AddFilter("System", LogLevel.Warning)
-                .AddFilter("Akagi", LogLevel.Debug)
-                .AddConsole();
-        });
-         */
 
         builder.Services.AddData(builder.Configuration);
         builder.Services.AddPuppeteers();

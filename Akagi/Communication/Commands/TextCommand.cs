@@ -4,5 +4,5 @@ namespace Akagi.Communication.Commands;
 
 internal abstract class TextCommand : Command
 {
-    public abstract Task ExecuteAsync(User user, string[] args);
+    public abstract Task ExecuteAsync(Context context, string[] args);
 }

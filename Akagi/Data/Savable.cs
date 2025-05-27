@@ -3,7 +3,7 @@ using MongoDB.Bson;
 
 namespace Akagi.Data;
 
-internal abstract class Savable : ISavable
+internal abstract class Savable
 {
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]

@@ -1,8 +1,6 @@
-﻿using Akagi.Users;
-
-namespace Akagi.Communication.Commands;
+﻿namespace Akagi.Communication.Commands;
 
 internal abstract class DocumentCommand : Command
 {
-    public abstract Task ExecuteAsync(User user, Document[] documents, string[] args);
+    public abstract Task ExecuteAsync(Context context, Document[] documents, string[] args);
 }

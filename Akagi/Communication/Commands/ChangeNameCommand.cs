@@ -13,30 +13,30 @@ namespace Akagi.Communication.Commands
             _userDatabase = userDatabase;
         }
 
-        public override async Task ExecuteAsync(User user, string[] args)
+        public override async Task ExecuteAsync(Context context, string[] args)
         {
             if (args.Length < 1)
             {
-                await Communicator.SendMessage(user, "Please provide a new name.");
+                await Communicator.SendMessage(context.User, "Please provide a new name.");
                 return;
             }
             string newName = string.Join(" ", args);
             if (newName.Length < 3 || newName.Length > 20)
             {
-                await Communicator.SendMessage(user, "Name must be between 3 and 20 characters long.");
+                await Communicator.SendMessage(context.User, "Name must be between 3 and 20 characters long.");
                 return;
             }
-            user.Name = newName;
+            context.User.Name = newName;
             try
             {
-                await _userDatabase.SaveDocumentAsync(user);
+                await _userDatabase.SaveDocumentAsync(context.User);
             }
             catch (Exception)
             {
-                await Communicator.SendMessage(user, "Failed to change your name. Please try again later.");
+                await Communicator.SendMessage(context.User, "Failed to change your name. Please try again later.");
                 return;
             }
-            await Communicator.SendMessage(user, $"Your name has been changed to {newName}.");
+            await Communicator.SendMessage(context.User, $"Your name has been changed to {newName}.");
         }
     }
 }

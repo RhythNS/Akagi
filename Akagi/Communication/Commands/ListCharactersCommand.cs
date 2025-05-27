@@ -14,17 +14,17 @@ internal class ListCharactersCommand : ListCommand
         _characterDatabase = characterDatabase;
     }
 
-    public override async Task ExecuteAsync(User user, string[] _)
+    public override async Task ExecuteAsync(Context context, string[] _)
     {
-        List<Character> characters = await _characterDatabase.GetCharactersForUser(user);
+        List<Character> characters = await _characterDatabase.GetCharactersForUser(context.User);
         if (characters.Count == 0)
         {
-            await Communicator.SendMessage(user, "No characters found");
+            await Communicator.SendMessage(context.User, "No characters found");
             return;
         }
         string[] ids = characters.Select(x => x.Id!).ToArray();
         string[] names = characters.Select(x => x.Card.Name).ToArray();
         string choices = GetList(ids, names);
-        await Communicator.SendMessage(user, $"Available characters:\n{choices}");
+        await Communicator.SendMessage(context.User, $"Available characters:\n{choices}");
     }
 }

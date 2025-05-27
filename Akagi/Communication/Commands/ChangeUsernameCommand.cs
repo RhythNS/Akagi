@@ -13,40 +13,40 @@ namespace Akagi.Communication.Commands
             _userDatabase = userDatabase;
         }
 
-        public override async Task ExecuteAsync(User user, string[] args)
+        public override async Task ExecuteAsync(Context context, string[] args)
         {
             if (args.Length < 1)
             {
-                await Communicator.SendMessage(user, "Please provide a new username.");
+                await Communicator.SendMessage(context.User, "Please provide a new username.");
                 return;
             }
             string newUsername = string.Join(" ", args);
             if (newUsername.Length < 3 || newUsername.Length > 20)
             {
-                await Communicator.SendMessage(user, "Username must be between 3 and 20 characters long.");
+                await Communicator.SendMessage(context.User, "Username must be between 3 and 20 characters long.");
                 return;
             }
             if (!newUsername.All(char.IsLetterOrDigit))
             {
-                await Communicator.SendMessage(user, "Username can only contain letters and digits.");
+                await Communicator.SendMessage(context.User, "Username can only contain letters and digits.");
                 return;
             }
             if (await _userDatabase.GetByUsername(newUsername) != null)
             {
-                await Communicator.SendMessage(user, "This username is already taken. Please choose another one.");
+                await Communicator.SendMessage(context.User, "This username is already taken. Please choose another one.");
                 return;
             }
-            user.Username = newUsername;
+            context.User.Username = newUsername;
             try
             {
-                await _userDatabase.SaveDocumentAsync(user);
+                await _userDatabase.SaveDocumentAsync(context.User);
             }
             catch (Exception)
             {
-                await Communicator.SendMessage(user, "Failed to change your username. Please try again later.");
+                await Communicator.SendMessage( context.User, "Failed to change your username. Please try again later.");
                 return;
             }
-            await Communicator.SendMessage(user, $"Your username has been changed to {newUsername}.");
+            await Communicator.SendMessage(context.User, $"Your username has been changed to {newUsername}.");
         }
     }
 }

@@ -1,5 +1,7 @@
 ﻿using Microsoft.Extensions.Options;
+using MongoDB.Bson;
 using MongoDB.Driver;
+using System.Text.Json;
 
 namespace Akagi.Data;
 
@@ -9,7 +11,7 @@ internal class DatabaseOptions
     public string DatabaseName { get; set; } = string.Empty;
 }
 
-internal abstract class Database<T> : IDatabase<T> where T : ISavable
+internal abstract class Database<T> : IDatabase<T> where T : Savable
 {
     private string _connectionString = string.Empty;
     private string _databaseName = string.Empty;
@@ -79,6 +81,66 @@ internal abstract class Database<T> : IDatabase<T> where T : ISavable
             ReplaceOptions options = new() { IsUpsert = true };
             await collection.ReplaceOneAsync(filter, document, options);
         }
+    }
+
+    public async Task<bool> SaveFromFile(MemoryStream stream)
+    {
+        stream.Seek(0, SeekOrigin.Begin);
+        using StreamReader reader = new(stream);
+        string json = reader.ReadToEnd();
+
+        T? t = default;
+        try
+        {
+            t = JsonSerializer.Deserialize<T>(json);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        if (t == null)
+        {
+            return false;
+        }
+        try
+        {
+            await SaveDocumentAsync(t);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        return true;
+    }
+
+    public async Task<bool> SaveFromBSON(MemoryStream stream)
+    {
+        stream.Seek(0, SeekOrigin.Begin);
+        using StreamReader reader = new(stream);
+        string json = reader.ReadToEnd();
+
+        try
+        {
+            BsonDocument bsonDoc = MongoDB.Bson.Serialization.BsonSerializer.Deserialize<BsonDocument>(json);
+            IMongoCollection<T> collection = GetCollection();
+            IMongoCollection<BsonDocument> bsonCollection = _mongoDatabase.GetCollection<BsonDocument>(_collectionName);
+
+            if (bsonDoc.Contains("Id") && bsonDoc["Id"].IsString)
+            {
+                FilterDefinition<BsonDocument> filter = Builders<BsonDocument>.Filter.Eq("Id", bsonDoc["Id"].AsString);
+                ReplaceOptions options = new() { IsUpsert = true };
+                await bsonCollection.ReplaceOneAsync(filter, bsonDoc, options);
+            }
+            else
+            {
+                await bsonCollection.InsertOneAsync(bsonDoc);
+            }
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+        return true;
     }
 
     public async Task DeleteDocumentByIdAsync(string id)

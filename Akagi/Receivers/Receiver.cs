@@ -57,8 +57,8 @@ internal class Receiver : IReceiver
 
             character.GetCurrentConversation()!.AddMessage(message);
 
-            Puppeteer? puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(character.MessagePuppeteerId)
-                ?? throw new Exception($"Puppeteer with ID {character.MessagePuppeteerId} not found for character {character.Id}");
+            Puppeteer? puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(character.PuppeteerId)
+                ?? throw new Exception($"Puppeteer with ID {character.PuppeteerId} not found for character {character.Id}");
 
             await puppeteer.Init(context, _systemProcessorDatabase);
             await puppeteer.ProcessAsync();

@@ -20,7 +20,7 @@ internal class Character : Savable
     }
 
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
-    public required string MessagePuppeteerId { get; set; }
+    public required string PuppeteerId { get; set; }
 
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public required string UserId { get; set; }

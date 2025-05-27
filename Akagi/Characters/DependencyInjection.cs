@@ -13,6 +13,7 @@ static class DependencyInjection
         services.AddSingleton<ICardDatabase, CardDatabase>();
         RegisterDBClasses();
     }
+
     private static void RegisterDBClasses()
     {
         BsonClassMap.RegisterClassMap<TextMessage>();
