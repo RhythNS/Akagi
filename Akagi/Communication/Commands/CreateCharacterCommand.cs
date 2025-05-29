@@ -8,6 +8,8 @@ internal class CreateCharacterCommand : TextCommand
 {
     public override string Name => "/createCharacter";
 
+    public override string Description => "Creates a new character with the specified card and system processor. Usage: /createCharacter <cardId> <puppeteerId>";
+
     private readonly ICardDatabase _cardDatabase;
     private readonly IPuppeteerDatabase _puppeteerDatabase;
     private readonly ICharacterDatabase _characterDatabase;

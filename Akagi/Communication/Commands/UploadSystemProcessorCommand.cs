@@ -9,6 +9,8 @@ internal class UploadSystemProcessorCommand : UploadDocumentCommand<SystemProces
 
     protected override IDatabase<SystemProcessor> Database => _systemProcessorDatabase;
 
+    public override string Description => "Uploads a system processor document. Usage: /uploadSystemProcessor <file>";
+
     private readonly ISystemProcessorDatabase _systemProcessorDatabase;
 
     public UploadSystemProcessorCommand(ISystemProcessorDatabase systemProcessorDatabase)

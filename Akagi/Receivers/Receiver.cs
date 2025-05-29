@@ -35,10 +35,7 @@ internal class Receiver : IReceiver
 
     public async Task OnMessageRecieved(ICommunicator from, User user, Character character, Message message)
     {
-        (string, string) key = (user.Id!, character.Id!);
-        SemaphoreSlim semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-
-        if (!semaphore.Wait(0))
+        if (!TryLockCharacter(character, user))
         {
             await from.SendMessage(user, character, "Character is busy processing another message. Please try again later.");
             return;
@@ -56,12 +53,7 @@ internal class Receiver : IReceiver
             };
 
             character.GetCurrentConversation()!.AddMessage(message);
-
-            Puppeteer? puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(character.PuppeteerId)
-                ?? throw new Exception($"Puppeteer with ID {character.PuppeteerId} not found for character {character.Id}");
-
-            await puppeteer.Init(context, _systemProcessorDatabase);
-            await puppeteer.ProcessAsync();
+            await ProcessCharacterMessage(character, context);
 
             await _characterDatabase.SaveDocumentAsync(character);
         }
@@ -72,17 +64,107 @@ internal class Receiver : IReceiver
         }
         finally
         {
-            semaphore.Release();
+            ReleaseLock(character, user);
         }
     }
 
-    public Task OnMessageIgnored(Character character, User user)
+    public async Task OnPromptContinue(ICommunicator? from, Character character, User user)
     {
-        throw new NotImplementedException();
+        if (!TryLockCharacter(character, user))
+        {
+            if (from != null)
+            {
+                await from.SendMessage(user, character, "Character is busy processing another message. Please try again later.");
+            }
+            return;
+        }
+
+        try
+        {
+            if (from == null)
+            {
+                _logger.LogWarning("No communicator found for user {UserId}", user.Id);
+                return;
+            }
+
+            Context context = new()
+            {
+                Character = character,
+                Conversation = character.GetCurrentConversation()!,
+                User = user,
+                Communicator = from,
+                LLM = _llmFactory.Create(user),
+            };
+
+            await ProcessCharacterMessage(character, context);
+
+            await _characterDatabase.SaveDocumentAsync(character);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing message for user {UserId} and character {CharacterId}", user.Id, character.Id);
+            if (from != null)
+            {
+                await from.SendMessage(user, character, "An error occurred while processing your message. Please try again later.");
+            }
+        }
+        finally
+        {
+            ReleaseLock(character, user);
+        }
     }
 
     public Task Reflect(Character character, User user)
     {
         throw new NotImplementedException();
+    }
+
+    private async Task ProcessCharacterMessage(Character character, Context context)
+    {
+        Puppeteer? puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(character.PuppeteerId)
+                        ?? throw new Exception($"Puppeteer with ID {character.PuppeteerId} not found for character {character.Id}");
+
+        await puppeteer.Init(context, _systemProcessorDatabase);
+        await puppeteer.ProcessAsync();
+    }
+
+    public static void CleanupUnusedLocks()
+    {
+        foreach (KeyValuePair<(string userId, string characterId), SemaphoreSlim> kvp in _locks)
+        {
+            (string userId, string characterId) key = kvp.Key;
+            SemaphoreSlim semaphore = kvp.Value;
+            if (semaphore.Wait(0))
+            {
+                if (_locks.TryRemove(key, out _))
+                {
+                    semaphore.Dispose();
+                }
+                else
+                {
+                    semaphore.Release();
+                }
+            }
+        }
+    }
+
+    private static bool TryLockCharacter(Character character, User user)
+    {
+        (string, string) key = (user.Id!, character.Id!);
+        SemaphoreSlim semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        if (!semaphore.Wait(0))
+        {
+            return false;
+        }
+        return true;
+    }
+
+    private static void ReleaseLock(Character character, User user)
+    {
+        (string, string) key = (user.Id!, character.Id!);
+        if (_locks.TryGetValue(key, out SemaphoreSlim? semaphore))
+        {
+            semaphore.Release();
+        }
     }
 }

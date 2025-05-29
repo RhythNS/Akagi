@@ -5,7 +5,9 @@ namespace Akagi.Communication.Commands;
 
 internal class LastMessagesCommand : TextCommand
 {
-    public override string Name => "/LastMessage";
+    public override string Name => "/lastMessage";
+
+    public override string Description => "Retrieves the last messages from the current conversation. Usage: /lastMessage <count>";
 
     public override Task ExecuteAsync(Context context, string[] args)
     {

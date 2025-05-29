@@ -1,11 +1,12 @@
 ﻿using Akagi.Receivers.SystemProcessors;
-using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 
 internal class ListSystemProcessorsCommand : ListCommand
 {
     public override string Name => "/listSystemProcessors";
+
+    public override string Description => "Lists all system processors. Usage: /listSystemProcessors";
 
     private readonly ISystemProcessorDatabase _systemProcessorDatabase;
 
@@ -24,7 +25,7 @@ internal class ListSystemProcessorsCommand : ListCommand
         }
         string[] ids = systemProcessors.Select(x => x.Id!).ToArray();
         string[] names = systemProcessors.Select(x => x.Name).ToArray();
-        string choices = GetList(ids, names);
+        string choices = GetIdList(ids, names);
         await Communicator.SendMessage(context.User, $"Available system processors:\n{choices}");
     }
 }

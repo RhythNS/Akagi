@@ -7,6 +7,8 @@ internal class ListCardsCommand : ListCommand
 {
     public override string Name => "/listCards";
 
+    public override string Description => "Lists all available cards. Usage: /listCards";
+
     private readonly ICardDatabase _cardDatabase;
 
     public ListCardsCommand(ICardDatabase cardDatabase)

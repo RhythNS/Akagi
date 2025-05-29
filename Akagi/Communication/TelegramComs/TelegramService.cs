@@ -16,6 +16,10 @@ internal partial class TelegramService : Communicator, IHostedService
         public string Token { get; set; } = string.Empty;
     }
 
+    public override string Name => "Telegram";
+
+    public override Command[] AvailableCommands => _textCommands.Cast<Command>().Concat(_documentCommands.Cast<Command>()).ToArray();
+
     private readonly string _token;
     private readonly ILogger<TelegramService> _logger;
     private readonly IUserDatabase _userDatabase;

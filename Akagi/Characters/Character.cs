@@ -50,4 +50,32 @@ internal class Character : Savable
         });
         return Conversations[0];
     }
+
+    public Conversation StartNewConversation()
+    {
+        Conversation? conv = Conversations.MaxBy(c => c.Time);
+        if (conv != null)
+        {
+            conv.IsCompleted = true;
+        }
+
+        Conversation newConversation = new()
+        {
+            Time = DateTime.UtcNow,
+            Messages = []
+        };
+        Conversations.Add(newConversation);
+        return newConversation;
+    }
+
+    public void ClearCurrentConversation()
+    {
+        Conversation? conv = Conversations.MaxBy(c => c.Time);
+        if (conv == null)
+        {
+            return;
+        }
+
+        Conversations.Remove(conv);
+    }
 }

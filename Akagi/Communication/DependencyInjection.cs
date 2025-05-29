@@ -17,5 +17,8 @@ static class DependencyInjection
 
         services.Configure<TelegramService.Options>(configuration.GetSection("Telegram"));
         services.AddHostedService<TelegramService>();
+
+        services.AddSingleton<ICommunicator, TelegramService>();
+        services.AddSingleton<ICommunicatorFactory, CommunicatorFactory>();
     }
 }

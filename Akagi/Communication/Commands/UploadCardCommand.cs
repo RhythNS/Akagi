@@ -7,6 +7,8 @@ internal class UploadCardCommand : DocumentCommand
 {
     public override string Name => "/uploadCard";
 
+    public override string Description => "Uploads a card image to create or update a character's card. Usage: /uploadCard <image files>";
+
     private readonly ICardDatabase _cardDatabase;
 
     public UploadCardCommand(ICardDatabase cardDatabase)

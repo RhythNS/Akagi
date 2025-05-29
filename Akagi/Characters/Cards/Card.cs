@@ -46,4 +46,42 @@ internal class Card : Savable
             RawCardBase64 = rawCardBase64
         };
     }
+
+    public string[] GetGreetings()
+    {
+        if (AlternateGreetings.Length == 0)
+        {
+            return [FirstMes];
+        }
+        string[] greetings = new string[AlternateGreetings.Length + 1];
+        greetings[0] = FirstMes;
+        for (int i = 0; i < AlternateGreetings.Length; i++)
+        {
+            greetings[i + 1] = AlternateGreetings[i];
+        }
+        return greetings;
+    }
+
+    public bool TryGetGreeting(out string greeting, int index)
+    {
+        greeting = string.Empty;
+        if (index < 0)
+        {
+            return false;
+        }
+        else if (index == 0)
+        {
+            greeting = FirstMes;
+            return true;
+        }
+        else if (index <= AlternateGreetings.Length)
+        {
+            greeting = AlternateGreetings[index - 1];
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
 }

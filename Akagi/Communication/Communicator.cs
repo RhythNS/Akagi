@@ -1,5 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
+using Akagi.Communication.Commands;
 using Akagi.Receivers;
 using Akagi.Users;
 
@@ -7,6 +8,9 @@ namespace Akagi.Communication;
 
 internal abstract class Communicator : ICommunicator
 {
+    public abstract string Name { get; }
+    public abstract Command[] AvailableCommands { get; }
+
     private readonly IReceiver _receiver;
 
     protected Communicator(IReceiver receiver)

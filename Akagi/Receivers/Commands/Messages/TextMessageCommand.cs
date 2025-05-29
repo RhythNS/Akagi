@@ -21,19 +21,13 @@ internal class TextMessageCommand : MessageCommand
         }
     ];
 
-    private readonly ICharacterDatabase _characterDatabase;
     private Message? _message;
-
-    public TextMessageCommand(ICharacterDatabase characterDatabase)
-    {
-        _characterDatabase = characterDatabase;
-    }
 
     public override Task Execute(Context context)
     {
         string text = Arguments[0].Value;
-        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, Message.Type.User);
-        return _characterDatabase.SaveDocumentAsync(context.Character);
+        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, Message.Type.Character);
+        return Task.CompletedTask;
     }
 
     public void SetMessage(string message)

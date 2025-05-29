@@ -43,7 +43,37 @@ internal partial class TelegramService : Communicator, IHostedService
             return;
         }
 
-        await _client.SendMessage(user.TelegramUser.Id, message);
+        int maxMessageLength = 4096;
+        if (message.Length <= maxMessageLength)
+        {
+            await _client.SendMessage(user.TelegramUser.Id, message);
+            return;
+        }
+
+        string[] chunks = message.Split(["\n\n"], StringSplitOptions.None);
+        List<string> toSend = [];
+        for (int i = 0; i < chunks.Length; i++)
+        {
+            string chunk = chunks[i];
+            if (chunk.Length < maxMessageLength)
+            {
+                toSend.Add(chunk);
+                continue;
+            }
+
+            for (int j = 0; j < chunk.Length; j += maxMessageLength)
+            {
+                string part = chunk.Substring(j, Math.Min(maxMessageLength, chunk.Length - j));
+                toSend.Add(part);
+            }
+        }
+        foreach (string chunk in toSend)
+        {
+            await _client.SendMessage(user.TelegramUser.Id, chunk);
+            await Task.Delay(1000);
+        }
+
+        return;
     }
 
     public override Task SendMessage(Users.User user, Characters.Conversations.Message message)
@@ -97,6 +127,7 @@ internal partial class TelegramService : Communicator, IHostedService
                 {
                     Username = message.From.Username!,
                     Name = message.From.FirstName!,
+                    LastUsedCommunicator = Name,
                     TelegramUser = new TelegramUser
                     {
                         Id = message.From.Id
@@ -119,9 +150,20 @@ internal partial class TelegramService : Communicator, IHostedService
         }
 
         await _client!.SendChatAction(message.Chat.Id, ChatAction.Typing, cancellationToken: cancellationToken);
+
+        bool needsSave = false;
         if (user.Username != null && message?.From != null && message.From.Username != user.TelegramUser!.UserName)
         {
             user.TelegramUser.UserName = message!.From!.Username!;
+            needsSave = true;
+        }
+        if (user.LastUsedCommunicator != Name)
+        {
+            user.LastUsedCommunicator = Name;
+            needsSave = true;
+        }
+        if (needsSave == true)
+        {
             await _userDatabase.SaveDocumentAsync(user);
         }
 

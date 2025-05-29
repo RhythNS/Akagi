@@ -4,7 +4,7 @@ namespace Akagi.Communication.Commands;
 
 internal abstract class ListCommand : TextCommand
 {
-    protected static string GetList(string[] ids, string[] names)
+    protected static string GetIdList(string[] ids, string[] names)
     {
         if (ids.Length != names.Length)
         {

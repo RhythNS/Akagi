@@ -12,6 +12,8 @@ internal class UploadPuppeteerCommand : UploadDocumentCommand<Puppeteer>
 
     protected override SaveType SaveMethod => SaveType.BSON;
 
+    public override string Description => "Uploads a puppeteer document. Usage: /uploadPuppeteer <file>";
+
     public UploadPuppeteerCommand(IPuppeteerDatabase puppeteerDatabase)
     {
         _puppeteerDatabase = puppeteerDatabase;

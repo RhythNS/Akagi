@@ -9,8 +9,8 @@ internal abstract class Message
         System
     }
 
-    public DateTime Time { get; set; }
-    public Type From { get; set; } = Type.User;
+    public required DateTime Time { get; set; }
+    public required Type From { get; set; }
 
     public abstract bool IsVisible { get; }
 }

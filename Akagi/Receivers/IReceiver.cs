@@ -8,6 +8,6 @@ namespace Akagi.Receivers;
 internal interface IReceiver
 {
     public Task OnMessageRecieved(ICommunicator from, User user, Character character, Message message);
-    public Task OnMessageIgnored(Character character, User user);
+    public Task OnPromptContinue(ICommunicator? from, Character character, User user);
     public Task Reflect(Character character, User user);
 }

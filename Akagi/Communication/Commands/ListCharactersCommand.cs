@@ -1,11 +1,12 @@
 ﻿using Akagi.Characters;
-using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 
 internal class ListCharactersCommand : ListCommand
 {
     public override string Name => "/listCharacters";
+
+    public override string Description => "Lists all characters for the current user. Usage: /listCharacters";
 
     private readonly ICharacterDatabase _characterDatabase;
 
@@ -24,7 +25,7 @@ internal class ListCharactersCommand : ListCommand
         }
         string[] ids = characters.Select(x => x.Id!).ToArray();
         string[] names = characters.Select(x => x.Card.Name).ToArray();
-        string choices = GetList(ids, names);
+        string choices = GetIdList(ids, names);
         await Communicator.SendMessage(context.User, $"Available characters:\n{choices}");
     }
 }

@@ -38,8 +38,6 @@ internal class SinglePuppeteer : Puppeteer
                     await Communicator.SendMessage(User, Character, response.GetMessage());
                 }
 
-                Conversation.AddCommand(command, DateTime.Now, Message.Type.Character);
-
                 shouldContinue &= command.ContinueAfterExecution;
             }
         } while (shouldContinue);

@@ -1,6 +1,5 @@
 ﻿using Akagi.Characters;
 using Akagi.Communication.Commands;
-using Akagi.Receivers;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
@@ -46,7 +45,7 @@ internal partial class TelegramService : Communicator, IHostedService
 
         string command = message.Text;
 
-        TextCommand? textCommand = _textCommands.FirstOrDefault(c => c.Name.StartsWith(command, StringComparison.InvariantCultureIgnoreCase));
+        TextCommand? textCommand = _textCommands.FirstOrDefault(c => command.StartsWith(c.Name, StringComparison.InvariantCultureIgnoreCase));
         if (textCommand != null)
         {
             string[] args = command.Substring(textCommand.Name.Length)
@@ -60,6 +59,7 @@ internal partial class TelegramService : Communicator, IHostedService
             await textCommand.ExecuteAsync(context, args);
             return;
         }
+        // TODO: Fix this so these messages also show up in the help command
         else if (command.StartsWith("/redo"))
         {
             if (message.ReplyToMessage == null)
@@ -103,7 +103,8 @@ internal partial class TelegramService : Communicator, IHostedService
 
         string command = message.Caption;
 
-        DocumentCommand? documentCommand = _documentCommands.FirstOrDefault(c => c.Name.StartsWith(command, StringComparison.InvariantCultureIgnoreCase));
+        DocumentCommand? documentCommand = _documentCommands.FirstOrDefault(c => command.StartsWith(c.Name, StringComparison.InvariantCultureIgnoreCase));
+        // TODO: Fix this so these messages also show up in the help command
         if (documentCommand != null)
         {
             string[] args = command.Substring(documentCommand.Name.Length)
