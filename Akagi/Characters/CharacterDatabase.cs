@@ -22,6 +22,10 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
         // Handle any changes to the options if necessary
     }
 
+    public override bool CanSave(Savable savable) => savable is Character;
+
+    public override Task SaveAsync(Savable savable) => SaveDocumentAsync((Character)savable);
+
     public async Task<Character> GetCharacter(string id)
     {
         Character? character = await GetDocumentByIdAsync(id) ?? throw new Exception($"Character with ID {id} not found.");

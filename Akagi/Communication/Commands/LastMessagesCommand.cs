@@ -21,7 +21,7 @@ internal class LastMessagesCommand : TextCommand
             return Communicator.SendMessage(context.User, "No messages found in the current conversation.");
         }
         int lastMessagesCount = args.Length > 0 && int.TryParse(args[0], out int count) ? (int)MathF.Min(count, 7) : 5;
-        Message[] lastMessages = conversation.Messages.TakeLast(lastMessagesCount).ToArray();
+        Message[] lastMessages = [.. conversation.Messages.TakeLast(lastMessagesCount)];
         lastMessagesCount = (int)MathF.Min(lastMessagesCount, lastMessages.Length);
         string response = $"Last {lastMessagesCount} messages in the conversation:\n" +
                           string.Join("\n", lastMessages.Select(m => m));

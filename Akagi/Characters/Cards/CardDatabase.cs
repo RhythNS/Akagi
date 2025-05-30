@@ -15,6 +15,10 @@ internal class CardDatabase : Database<Card>, ICardDatabase
         this.fileDatabase = fileDatabase;
     }
 
+    public override bool CanSave(Savable savable) => savable is Card;
+
+    public override Task SaveAsync(Savable savable) => SaveDocumentAsync((Card)savable);
+
     public async Task<bool> SaveCardFromImage(MemoryStream stream)
     {
         string? character = GetPngTextChunk(stream, "chara");
@@ -56,7 +60,7 @@ internal class CardDatabase : Database<Card>, ICardDatabase
             {
                 break;
             }
-            int length = BitConverter.ToInt32(lengthBytes.Reverse().ToArray(), 0);
+            int length = BitConverter.ToInt32([.. lengthBytes.Reverse()], 0);
 
             byte[] typeBytes = new byte[4];
             if (stream.Read(typeBytes, 0, 4) != 4)

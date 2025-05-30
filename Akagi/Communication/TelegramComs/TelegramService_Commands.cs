@@ -51,10 +51,11 @@ internal partial class TelegramService : Communicator, IHostedService
             string[] args = command.Substring(textCommand.Name.Length)
                                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
             Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
-            Command.Context context = new()
+            await using Command.Context context = new()
             {
                 Character = character,
                 User = user,
+                DatabaseFactory = _databaseFactory
             };
             await textCommand.ExecuteAsync(context, args);
             return;
@@ -121,10 +122,11 @@ internal partial class TelegramService : Communicator, IHostedService
             validFiles.ForEach(x => x.Init(this));
 
             Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
-            Command.Context context = new()
+            await using Command.Context context = new()
             {
                 Character = character,
                 User = user,
+                DatabaseFactory = _databaseFactory
             };
             await documentCommand.ExecuteAsync(context, [.. validFiles], args);
 

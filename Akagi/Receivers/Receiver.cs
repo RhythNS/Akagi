@@ -1,6 +1,7 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
 using Akagi.Communication;
+using Akagi.Data;
 using Akagi.LLMs;
 using Akagi.Receivers.Puppeteers;
 using Akagi.Receivers.SystemProcessors;
@@ -14,22 +15,22 @@ internal class Receiver : IReceiver
 {
     private static readonly ConcurrentDictionary<(string userId, string characterId), SemaphoreSlim> _locks = new();
 
-    private readonly ICharacterDatabase _characterDatabase;
     private readonly IPuppeteerDatabase _puppeteerDatabase;
     private readonly ISystemProcessorDatabase _systemProcessorDatabase;
     private readonly ILLMFactory _llmFactory;
+    private readonly IDatabaseFactory _databaseFactory;
     private readonly ILogger<Receiver> _logger;
 
-    public Receiver(ICharacterDatabase characterDatabase,
-                    IPuppeteerDatabase puppeteerDatabase,
+    public Receiver(IPuppeteerDatabase puppeteerDatabase,
                     ISystemProcessorDatabase systemProcessorDatabase,
                     ILLMFactory llmFactory,
+                    IDatabaseFactory databaseFactory,
                     ILogger<Receiver> logger)
     {
-        _characterDatabase = characterDatabase;
         _puppeteerDatabase = puppeteerDatabase;
         _systemProcessorDatabase = systemProcessorDatabase;
         _llmFactory = llmFactory;
+        _databaseFactory = databaseFactory;
         _logger = logger;
     }
 
@@ -43,19 +44,18 @@ internal class Receiver : IReceiver
 
         try
         {
-            Context context = new()
+            await using Context context = new()
             {
                 Character = character,
                 Conversation = character.GetCurrentConversation()!,
                 User = user,
                 Communicator = from,
                 LLM = _llmFactory.Create(user),
+                DatabaseFactory = _databaseFactory,
             };
 
-            character.GetCurrentConversation()!.AddMessage(message);
+            context.Conversation.AddMessage(message);
             await ProcessCharacterMessage(character, context);
-
-            await _characterDatabase.SaveDocumentAsync(character);
         }
         catch (Exception ex)
         {
@@ -87,18 +87,17 @@ internal class Receiver : IReceiver
                 return;
             }
 
-            Context context = new()
+            await using Context context = new()
             {
                 Character = character,
                 Conversation = character.GetCurrentConversation()!,
                 User = user,
                 Communicator = from,
                 LLM = _llmFactory.Create(user),
+                DatabaseFactory = _databaseFactory
             };
 
             await ProcessCharacterMessage(character, context);
-
-            await _characterDatabase.SaveDocumentAsync(character);
         }
         catch (Exception ex)
         {

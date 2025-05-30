@@ -1,5 +1,4 @@
 ﻿using Akagi.Data;
-using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 

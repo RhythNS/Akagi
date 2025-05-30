@@ -1,5 +1,4 @@
-﻿using Akagi.Characters;
-using Akagi.Characters.Conversations;
+﻿using Akagi.Characters.Conversations;
 
 namespace Akagi.Receivers.Commands.Messages;
 

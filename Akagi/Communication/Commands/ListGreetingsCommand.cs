@@ -13,8 +13,8 @@ internal class ListGreetingsCommand : ListCommand
         {
             return Communicator.SendMessage(context.User, "No greetings found for this character.");
         }
-        string[] ids = greetings.Select((_, index) => index.ToString()).ToArray();
-        string[] names = greetings.Select((g, index) => $"Greeting {index + 1}: {g}\n\n------------------------------\n").ToArray();
+        string[] ids = [.. greetings.Select((_, index) => index.ToString())];
+        string[] names = [.. greetings.Select((g, index) => $"Greeting {index + 1}: {g}\n\n------------------------------\n")];
         string choices = GetIdList(ids, names);
         return Communicator.SendMessage(context.User, $"Available greetings for {context.Character.Card.Name}:\n{choices}");
     }

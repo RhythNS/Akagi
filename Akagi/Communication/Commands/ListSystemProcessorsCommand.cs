@@ -23,8 +23,8 @@ internal class ListSystemProcessorsCommand : ListCommand
             await Communicator.SendMessage(context.User, "No system processors found");
             return;
         }
-        string[] ids = systemProcessors.Select(x => x.Id!).ToArray();
-        string[] names = systemProcessors.Select(x => x.Name).ToArray();
+        string[] ids = [.. systemProcessors.Select(x => x.Id!)];
+        string[] names = [.. systemProcessors.Select(x => x.Name)];
         string choices = GetIdList(ids, names);
         await Communicator.SendMessage(context.User, $"Available system processors:\n{choices}");
     }

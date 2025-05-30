@@ -1,14 +1,17 @@
 ﻿using Akagi.Characters;
+using Akagi.Data;
 using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 
 internal abstract class Command
 {
-    public class Context
+    public class Context : ContextBase
     {
         public required Character Character { get; init; }
         public required User User { get; init; }
+
+        protected override Savable[] ToTrack => [Character, User];
     }
 
     public abstract string Name { get; }

@@ -1,5 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Communication.Commands;
+using Akagi.Data;
 using Akagi.Receivers;
 using Akagi.Users;
 using Microsoft.Extensions.Hosting;
@@ -18,13 +19,14 @@ internal partial class TelegramService : Communicator, IHostedService
 
     public override string Name => "Telegram";
 
-    public override Command[] AvailableCommands => _textCommands.Cast<Command>().Concat(_documentCommands.Cast<Command>()).ToArray();
+    public override Command[] AvailableCommands => [.. _textCommands.Cast<Command>(), .. _documentCommands.Cast<Command>()];
 
     private readonly string _token;
     private readonly ILogger<TelegramService> _logger;
     private readonly IUserDatabase _userDatabase;
     private readonly ICharacterDatabase _characterDatabase;
     private readonly IHostApplicationLifetime _hostApplicationLifetime;
+    private readonly IDatabaseFactory _databaseFactory;
     private readonly TextCommand[] _textCommands = [];
     private readonly DocumentCommand[] _documentCommands = [];
 
@@ -36,6 +38,7 @@ internal partial class TelegramService : Communicator, IHostedService
                            IOptionsMonitor<Options> options,
                            IUserDatabase userDatabase,
                            ICharacterDatabase characterDatabase,
+                           IDatabaseFactory databaseFactory,
                            IEnumerable<Command> _commands,
                            ILogger<TelegramService> logger,
                            IHostApplicationLifetime hostApplicationLifetime) : base(receiver)
@@ -43,13 +46,14 @@ internal partial class TelegramService : Communicator, IHostedService
         _token = options.CurrentValue.Token;
         _logger = logger;
         _characterDatabase = characterDatabase;
+        _databaseFactory = databaseFactory;
         _userDatabase = userDatabase;
         _hostApplicationLifetime = hostApplicationLifetime;
 
-        _textCommands = _commands.OfType<TextCommand>().ToArray();
+        _textCommands = [.. _commands.OfType<TextCommand>()];
         Array.ForEach(_textCommands, x => x.Init(this));
 
-        _documentCommands = _commands.OfType<DocumentCommand>().ToArray();
+        _documentCommands = [.. _commands.OfType<DocumentCommand>()];
         Array.ForEach(_documentCommands, x => x.Init(this));
     }
 }

@@ -15,6 +15,10 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
         _commandFactory = commandFactory;
     }
 
+    public override bool CanSave(Savable savable) => savable is SystemProcessor;
+
+    public override Task SaveAsync(Savable savable) => SaveDocumentAsync((SystemProcessor)savable);
+
     public async Task<SystemProcessor> GetSystemProcessor(string id)
     {
         SystemProcessor? systemProcessor = await GetDocumentByIdAsync(id);

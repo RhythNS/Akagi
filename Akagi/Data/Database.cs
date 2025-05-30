@@ -54,6 +54,9 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
         return _mongoDatabase.GetCollection<T>(_collectionName);
     }
 
+    public abstract bool CanSave(Savable savable);
+    public abstract Task SaveAsync(Savable savable);
+
     public async Task<List<T>> GetDocumentsAsync()
     {
         IMongoCollection<T> collection = GetCollection();

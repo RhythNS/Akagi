@@ -9,5 +9,13 @@ static class DependencyInjection
     {
         services.Configure<DatabaseOptions>(configuration.GetSection("MongoDB"));
         services.AddSingleton<IFileDatabase, FileDatabase>();
+        services.AddTransient<IDatabaseFactory, DatabaseFactory>();
+
+        IEnumerable<Type> databaseTypes = typeof(IDatabase).Assembly.GetTypes()
+            .Where(t => t.IsClass && !t.IsAbstract && typeof(IDatabase).IsAssignableFrom(t));
+        foreach (Type? type in databaseTypes)
+        {
+            services.AddSingleton(typeof(IDatabase), type);
+        }
     }
 }

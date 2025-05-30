@@ -1,5 +1,4 @@
 ﻿using Akagi.Characters.Cards;
-using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 
@@ -24,8 +23,8 @@ internal class ListCardsCommand : ListCommand
             await Communicator.SendMessage(context.User, "No cards found");
             return;
         }
-        string[] ids = cards.Select(x => x.Id!).ToArray();
-        string[] names = cards.Select(x => x.Name).ToArray();
+        string[] ids = [.. cards.Select(x => x.Id!)];
+        string[] names = [.. cards.Select(x => x.Name)];
         string choices = GetCommandListChoice("createCharacter", ids, names);
         await Communicator.SendMessage(context.User, $"Available cards:\n{choices}");
     }

@@ -39,15 +39,7 @@ internal class ChangeUsernameCommand : TextCommand
             return;
         }
         context.User.Username = newUsername;
-        try
-        {
-            await _userDatabase.SaveDocumentAsync(context.User);
-        }
-        catch (Exception)
-        {
-            await Communicator.SendMessage( context.User, "Failed to change your username. Please try again later.");
-            return;
-        }
+
         await Communicator.SendMessage(context.User, $"Your username has been changed to {newUsername}.");
     }
 }

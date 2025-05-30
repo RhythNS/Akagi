@@ -9,13 +9,6 @@ internal class DeleteLastMessagesCommand : TextCommand
 
     public override string Description => "Deletes the last messages from the current conversation. Usage: /deleteLastMessages <count>";
 
-    private readonly ICharacterDatabase _characterDatabase;
-
-    public DeleteLastMessagesCommand(ICharacterDatabase characterDatabase)
-    {
-        _characterDatabase = characterDatabase;
-    }
-
     public override async Task ExecuteAsync(Context context, string[] args)
     {
         int count = 0;
@@ -44,8 +37,6 @@ internal class DeleteLastMessagesCommand : TextCommand
         {
             context.Character.ClearCurrentConversation();
         }
-
-        await _characterDatabase.SaveDocumentAsync(context.Character);
 
         string toReturn;
         if (conversation.Messages.Count == 0)

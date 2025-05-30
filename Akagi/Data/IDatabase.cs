@@ -2,7 +2,13 @@ using MongoDB.Driver;
 
 namespace Akagi.Data;
 
-internal interface IDatabase<T> where T : Savable
+internal interface IDatabase
+{
+    public bool CanSave(Savable savable);
+    public Task SaveAsync(Savable savable);
+}
+
+internal interface IDatabase<T> : IDatabase where T : Savable
 {
     public Task<List<T>> GetDocumentsAsync();
     public Task<T?> GetDocumentByIdAsync(string id);

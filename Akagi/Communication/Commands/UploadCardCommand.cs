@@ -1,5 +1,4 @@
 ﻿using Akagi.Characters.Cards;
-using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 

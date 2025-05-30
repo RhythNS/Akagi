@@ -1,19 +1,10 @@
-﻿using Akagi.Users;
-
-namespace Akagi.Communication.Commands;
+﻿namespace Akagi.Communication.Commands;
 
 internal class ChangeNameCommand : TextCommand
 {
     public override string Name => "/changeName";
 
     public override string Description => "Changes your name. Usage: /changeName <new name>";
-
-    private readonly IUserDatabase _userDatabase;
-
-    public ChangeNameCommand(IUserDatabase userDatabase)
-    {
-        _userDatabase = userDatabase;
-    }
 
     public override async Task ExecuteAsync(Context context, string[] args)
     {
@@ -29,15 +20,7 @@ internal class ChangeNameCommand : TextCommand
             return;
         }
         context.User.Name = newName;
-        try
-        {
-            await _userDatabase.SaveDocumentAsync(context.User);
-        }
-        catch (Exception)
-        {
-            await Communicator.SendMessage(context.User, "Failed to change your name. Please try again later.");
-            return;
-        }
+
         await Communicator.SendMessage(context.User, $"Your name has been changed to {newName}.");
     }
 }

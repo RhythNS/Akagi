@@ -9,10 +9,15 @@ internal class UserDatabase : Database<User>, IUserDatabase
 {
     private readonly ILogger<UserDatabase> _logger;
 
-    public UserDatabase(IOptionsMonitor<DatabaseOptions> options, ILogger<UserDatabase> logger) : base(options, "user")
+    public UserDatabase(IOptionsMonitor<DatabaseOptions> options,
+                        ILogger<UserDatabase> logger) : base(options, "user")
     {
         _logger = logger;
     }
+
+    public override bool CanSave(Savable savable) => savable is User;
+
+    public override Task SaveAsync(Savable savable) => SaveDocumentAsync((User)savable);
 
     public Task<User?> GetByUsername(string username)
     {
