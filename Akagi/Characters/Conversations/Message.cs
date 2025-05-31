@@ -2,15 +2,15 @@
 
 internal abstract class Message
 {
+    [Flags]
     public enum Type
     {
-        User,
-        Character,
-        System
+        User = 1,
+        Character = 2,
+        System = 4
     }
 
     public required DateTime Time { get; set; }
     public required Type From { get; set; }
-
-    public abstract bool IsVisible { get; }
+    public required Type VisibleTo { get; set; }
 }

@@ -13,4 +13,15 @@ internal abstract class Savable
     public bool Dirty { get; set; } = false;
 
     public bool New => string.IsNullOrEmpty(Id) || Id == ObjectId.Empty.ToString();
+
+    protected bool SetProperty<T>(ref T field, T value)
+    {
+        if (!EqualityComparer<T>.Default.Equals(field, value))
+        {
+            field = value;
+            Dirty = true;
+            return true;
+        }
+        return false;
+    }
 }

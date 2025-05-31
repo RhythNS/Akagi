@@ -84,6 +84,7 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
             ReplaceOptions options = new() { IsUpsert = true };
             await collection.ReplaceOneAsync(filter, document, options);
         }
+        document.Dirty = false;
     }
 
     public async Task<bool> SaveFromFile(MemoryStream stream)
@@ -157,6 +158,10 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
     {
         IMongoCollection<T> collection = GetCollection();
         await collection.InsertManyAsync(documents);
+        foreach (T document in documents)
+        {
+            document.Dirty = false;
+        }
     }
 
     public async Task UpdateDocumentAsync(string id, UpdateDefinition<T> updateDefinition)

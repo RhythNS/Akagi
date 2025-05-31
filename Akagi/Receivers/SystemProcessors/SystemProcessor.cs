@@ -9,10 +9,31 @@ namespace Akagi.Receivers.SystemProcessors;
 
 internal class SystemProcessor : Savable
 {
-    public string Name { get; set; } = string.Empty;
-    public string Description { get; set; } = string.Empty;
-    public string SystemInstruction { get; set; } = string.Empty;
-    public string[] CommandNames { get; set; } = [];
+    private string _name = string.Empty;
+    private string _description = string.Empty;
+    private string _systemInstruction = string.Empty;
+    private string[] _commandNames = [];
+
+    public string Name
+    {
+        get => _name;
+        set => SetProperty(ref _name, value);
+    }
+    public string Description
+    {
+        get => _description;
+        set => SetProperty(ref _description, value);
+    }
+    public string SystemInstruction
+    {
+        get => _systemInstruction;
+        set => SetProperty(ref _systemInstruction, value);
+    }
+    public string[] CommandNames
+    {
+        get => _commandNames;
+        set => SetProperty(ref _commandNames, value);
+    }
 
     [JsonIgnore]
     public Command[] Commands { get; set; } = [];

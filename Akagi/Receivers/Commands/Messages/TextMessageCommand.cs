@@ -25,7 +25,7 @@ internal class TextMessageCommand : MessageCommand
     public override Task Execute(Context context)
     {
         string text = Arguments[0].Value;
-        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, Message.Type.Character);
+        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, Message.Type.Character, context.Puppeteer.CurrentMessageVisibility);
         return Task.CompletedTask;
     }
 

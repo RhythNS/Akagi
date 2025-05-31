@@ -7,8 +7,14 @@ namespace Akagi.Receivers.Puppeteers;
 
 internal class SinglePuppeteer : Puppeteer
 {
+    private string _systemProcessorId = string.Empty;
+
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
-    public string SystemProcessorId { get; set; } = string.Empty;
+    public string SystemProcessorId
+    {
+        get => _systemProcessorId;
+        set => SetProperty(ref _systemProcessorId, value);
+    }
 
     private SystemProcessor? _systemProcessor;
 

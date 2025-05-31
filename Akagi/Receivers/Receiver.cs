@@ -44,18 +44,10 @@ internal class Receiver : IReceiver
 
         try
         {
-            await using Context context = new()
-            {
-                Character = character,
-                Conversation = character.GetCurrentConversation()!,
-                User = user,
-                Communicator = from,
-                LLM = _llmFactory.Create(user),
-                DatabaseFactory = _databaseFactory,
-            };
+            await using Context context = await GetContextAsync(character, user, from);
 
             context.Conversation.AddMessage(message);
-            await ProcessCharacterMessage(character, context);
+            await ProcessCharacterMessageAsync(context);
         }
         catch (Exception ex)
         {
@@ -72,10 +64,6 @@ internal class Receiver : IReceiver
     {
         if (!TryLockCharacter(character, user))
         {
-            if (from != null)
-            {
-                await from.SendMessage(user, character, "Character is busy processing another message. Please try again later.");
-            }
             return;
         }
 
@@ -87,17 +75,9 @@ internal class Receiver : IReceiver
                 return;
             }
 
-            await using Context context = new()
-            {
-                Character = character,
-                Conversation = character.GetCurrentConversation()!,
-                User = user,
-                Communicator = from,
-                LLM = _llmFactory.Create(user),
-                DatabaseFactory = _databaseFactory
-            };
+            await using Context context = await GetContextAsync(character, user, from);
 
-            await ProcessCharacterMessage(character, context);
+            await ProcessCharacterMessageAsync(context);
         }
         catch (Exception ex)
         {
@@ -118,13 +98,25 @@ internal class Receiver : IReceiver
         throw new NotImplementedException();
     }
 
-    private async Task ProcessCharacterMessage(Character character, Context context)
+    private async Task ProcessCharacterMessageAsync(Context context)
     {
-        Puppeteer? puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(character.PuppeteerId)
-                        ?? throw new Exception($"Puppeteer with ID {character.PuppeteerId} not found for character {character.Id}");
+        await context.Puppeteer.Init(context, _systemProcessorDatabase);
+        await context.Puppeteer.ProcessAsync();
+    }
 
-        await puppeteer.Init(context, _systemProcessorDatabase);
-        await puppeteer.ProcessAsync();
+    private async Task<Context> GetContextAsync(Character character, User user, ICommunicator communicator)
+    {
+        return new Context()
+        {
+            Character = character,
+            Conversation = character.GetCurrentConversation()!,
+            User = user,
+            Communicator = communicator,
+            LLM = _llmFactory.Create(user),
+            DatabaseFactory = _databaseFactory,
+            Puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(character.PuppeteerId)
+                        ?? throw new Exception($"Puppeteer with ID {character.PuppeteerId} not found for character {character.Id}"),
+        };
     }
 
     public static void CleanupUnusedLocks()

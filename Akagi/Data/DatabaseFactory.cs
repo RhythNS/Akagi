@@ -19,6 +19,16 @@ internal class DatabaseFactory : IDatabaseFactory
         return database;
     }
 
+    public Task<bool> SaveIsDirty(Savable savable)
+    {
+        if (savable.Dirty)
+        {
+            return TrySave(savable);
+        }
+
+        return Task.FromResult(false);
+    }
+
     public async Task<bool> TrySave(Savable savable)
     {
         IDatabase? database = _databases.FirstOrDefault(db => db.CanSave(savable));

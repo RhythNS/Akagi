@@ -15,13 +15,14 @@ internal class Conversation
         Messages.Add(message);
     }
 
-    public Message AddMessage(string text, DateTime time, Message.Type from)
+    public Message AddMessage(string text, DateTime time, Message.Type from, Message.Type visibleTo)
     {
         TextMessage message = new()
         {
             Text = text,
             From = from,
-            Time = time
+            Time = time,
+            VisibleTo = visibleTo
         };
 
         Messages.Add(message);
@@ -45,6 +46,6 @@ internal class Conversation
 
     public IReadOnlyList<Message> GetLastMessages(int count)
     {
-        return Messages.Skip(Math.Max(0, Messages.Count - count)).ToList();
+        return [.. Messages.Skip(Math.Max(0, Messages.Count - count))];
     }
 }

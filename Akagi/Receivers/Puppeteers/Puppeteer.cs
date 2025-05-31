@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Conversations;
 using Akagi.Communication;
 using Akagi.Data;
 using Akagi.LLMs;
@@ -9,7 +10,13 @@ namespace Akagi.Receivers.Puppeteers;
 
 internal abstract class Puppeteer : Savable
 {
-    public required string Name { get; set; }
+    private string _name = string.Empty;
+
+    public string Name
+    {
+        get => _name;
+        set => SetProperty(ref _name, value);
+    }
 
     protected Context Context
     {
@@ -68,4 +75,6 @@ internal abstract class Puppeteer : Savable
     }
 
     public abstract Task ProcessAsync();
+
+    public virtual Message.Type CurrentMessageVisibility => Message.Type.System | Message.Type.Character | Message.Type.User;
 }

@@ -6,26 +6,36 @@ namespace Akagi.Characters;
 
 internal class Character : Savable
 {
-    public List<Conversation> Conversations { get; set; } = [];
-
-    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
-    public required string CardId { get; set; }
-
-    public Card Card
-    {
-        get
-        {
-            return _card ?? throw new InvalidOperationException("Card is not set. Ensure to set the Card property after retrieving the Character from the database.");
-        }
-    }
-
-    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
-    public required string PuppeteerId { get; set; }
-
-    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
-    public required string UserId { get; set; }
-
+    private List<Conversation> _conversations = [];
+    private string _cardId = string.Empty;
     private Card? _card;
+    private string _puppeteerId = string.Empty;
+    private string _userId = string.Empty;
+
+    public List<Conversation> Conversations
+    {
+        get => _conversations;
+        set => SetProperty(ref _conversations, value);
+    }
+    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    public string CardId
+    {
+        get => _cardId;
+        set => SetProperty(ref _cardId, value);
+    }
+    public Card Card => _card ?? throw new InvalidOperationException("Card is not set. Ensure to set the Card property after retrieving the Character from the database.");
+    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    public string PuppeteerId
+    {
+        get => _puppeteerId;
+        set => SetProperty(ref _puppeteerId, value);
+    }
+    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    public string UserId
+    {
+        get => _userId;
+        set => SetProperty(ref _userId, value);
+    }
 
     public void Init(Card card)
     {
