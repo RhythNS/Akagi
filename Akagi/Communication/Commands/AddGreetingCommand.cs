@@ -23,6 +23,11 @@ internal class AddGreetingCommand : TextCommand
             await Communicator.SendMessage(context.User, "Please provide the index of the greeting.");
             return;
         }
+        if (context.Character == null)
+        {
+            await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
+            return;
+        }
         if (int.TryParse(args[0], out int index) == false || context.Character.Card.TryGetGreeting(out string greeting, index) == false)
         {
             await Communicator.SendMessage(context.User, "Please provide a valid index.");

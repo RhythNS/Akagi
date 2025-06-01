@@ -8,6 +8,10 @@ internal class ListGreetingsCommand : ListCommand
 
     public override Task ExecuteAsync(Context context, string[] args)
     {
+        if (context.Character == null)
+        {
+            return Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
+        }
         string[] greetings = context.Character.Card.GetGreetings();
         if (greetings.Length == 0)
         {

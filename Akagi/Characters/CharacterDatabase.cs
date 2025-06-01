@@ -26,9 +26,14 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
 
     public override Task SaveAsync(Savable savable) => SaveDocumentAsync((Character)savable);
 
-    public async Task<Character> GetCharacter(string id)
+    public async Task<Character?> GetCharacter(string id)
     {
-        Character? character = await GetDocumentByIdAsync(id) ?? throw new Exception($"Character with ID {id} not found.");
+        Character? character = await GetDocumentByIdAsync(id);
+        if (character == null)
+        {
+            return null;
+        }
+
         await InitCharacter(character);
         return character;
     }

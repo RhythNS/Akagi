@@ -50,7 +50,7 @@ internal partial class TelegramService : Communicator, IHostedService
         {
             string[] args = command.Substring(textCommand.Name.Length)
                                    .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+            Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
             await using Command.Context context = new()
             {
                 Character = character,
@@ -121,7 +121,7 @@ internal partial class TelegramService : Communicator, IHostedService
             }
             validFiles.ForEach(x => x.Init(this));
 
-            Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+            Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
             await using Command.Context context = new()
             {
                 Character = character,

@@ -2,13 +2,13 @@
 
 internal abstract class ContextBase : IAsyncDisposable
 {
-    protected abstract Savable[] ToTrack { get; }
+    protected abstract Savable?[] ToTrack { get; }
 
     public required IDatabaseFactory DatabaseFactory { get; init; }
 
     public async ValueTask DisposeAsync()
     {
-        foreach (Savable savable in ToTrack)
+        foreach (Savable savable in ToTrack.OfType<Savable>())
         {
             if (savable.Dirty)
             {

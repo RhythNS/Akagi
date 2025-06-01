@@ -4,6 +4,7 @@ using Akagi.Data;
 using Akagi.LLMs;
 using Akagi.Receivers;
 using Akagi.Users;
+using Akagi.Utils;
 using Microsoft.Extensions.Hosting;
 
 namespace Akagi;
@@ -14,6 +15,7 @@ internal class Program
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
+        builder.Services.AddUtils();
         builder.Services.AddData(builder.Configuration);
         builder.Services.AddPuppeteers();
         builder.Services.AddCharacter();

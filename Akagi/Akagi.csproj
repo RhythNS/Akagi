@@ -22,4 +22,17 @@
     </None>
   </ItemGroup>
 
+  <Target Name="InjectBuildTimestamp" BeforeTargets="CoreCompile">
+	<PropertyGroup>
+	  <CurrentTimestamp>$([System.DateTime]::UtcNow.ToString("o"))</CurrentTimestamp>
+	  <AssemblyTimestampAttribute>[assembly: System.Reflection.AssemblyMetadata("BuildTimestampUtc", "$(CurrentTimestamp)")]</AssemblyTimestampAttribute>
+	  <BuildTimestampFile>$(IntermediateOutputPath)BuildTimestamp.g.cs</BuildTimestampFile>
+	</PropertyGroup>
+	<WriteLinesToFile File="$(BuildTimestampFile)" Lines="$(AssemblyTimestampAttribute)" Overwrite="true" Encoding="UTF-8" />
+	<ItemGroup>
+	  <Compile Include="$(BuildTimestampFile)" />
+	</ItemGroup>
+	<Message Text="Generated BuildTimestampUtc: $(CurrentTimestamp)" Importance="high" />
+  </Target>
+
 </Project>

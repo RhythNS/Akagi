@@ -130,7 +130,8 @@ internal partial class TelegramService : Communicator, IHostedService
                     LastUsedCommunicator = Name,
                     TelegramUser = new TelegramUser
                     {
-                        Id = message.From.Id
+                        Id = message.From.Id,
+                        UserName = message!.From!.Username!
                     }
                 };
                 await _userDatabase.SaveDocumentAsync(user);
@@ -182,7 +183,12 @@ internal partial class TelegramService : Communicator, IHostedService
 
         _logger.LogInformation("Received text '{Text}' in chat {ChatId}", message.Text, message.Chat.Id);
 
-        Character character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+        Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+        if (character == null)
+        {
+            await _client!.SendMessage(message.Chat.Id, "You do not have a current character. Please select one first!", cancellationToken: cancellationToken);
+            return;
+        }
 
         try
         {

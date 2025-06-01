@@ -8,9 +8,9 @@ internal abstract class Command
 {
     public class Context : ContextBase
     {
-        public required Character Character { get; init; }
+        public Character? Character { get; init; }
         public required User User { get; init; }
-        protected override Savable[] ToTrack => [Character, User];
+        protected override Savable?[] ToTrack => [Character, User];
     }
 
     public abstract string Name { get; }

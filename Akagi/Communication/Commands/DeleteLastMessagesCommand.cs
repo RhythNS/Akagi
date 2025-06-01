@@ -21,6 +21,11 @@ internal class DeleteLastMessagesCommand : TextCommand
             await Communicator.SendMessage(context.User, "Please provide a positive number of messages to delete.");
             return;
         }
+        if (context.Character == null)
+        {
+            await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
+            return;
+        }
         Conversation conversation = context.Character.GetCurrentConversation();
         for (int i = conversation.Messages.Count - 1; i >= 0; i--)
         {
