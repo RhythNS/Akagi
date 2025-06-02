@@ -17,7 +17,6 @@ internal abstract class Command
 
     public abstract string Description { get; }
 
-    // TODO: implement this properly
     public virtual Type[] CompatibleFor => [typeof(ICommunicator)];
 
     private ICommunicator? _communicator;

@@ -39,7 +39,7 @@ internal partial class TelegramService : Communicator, IHostedService
                            IUserDatabase userDatabase,
                            ICharacterDatabase characterDatabase,
                            IDatabaseFactory databaseFactory,
-                           IEnumerable<Command> _commands,
+                           IEnumerable<Command> commands,
                            ILogger<TelegramService> logger,
                            IHostApplicationLifetime hostApplicationLifetime) : base(receiver)
     {
@@ -50,10 +50,16 @@ internal partial class TelegramService : Communicator, IHostedService
         _userDatabase = userDatabase;
         _hostApplicationLifetime = hostApplicationLifetime;
 
-        _textCommands = [.. _commands.OfType<TextCommand>()];
+        Command[] validCommands = [..commands.Where(x => x.CompatibleFor
+                                             .All(y => typeof(TelegramService).IsAssignableTo(y)))];
+
+        _textCommands = [.. validCommands.OfType<TextCommand>()];
         Array.ForEach(_textCommands, x => x.Init(this));
 
-        _documentCommands = [.. _commands.OfType<DocumentCommand>()];
+        _documentCommands = [.. validCommands.OfType<DocumentCommand>()];
         Array.ForEach(_documentCommands, x => x.Init(this));
+
+        string validCommandsList = string.Join(", ", validCommands.OrderBy(x => x.Name).Select(x => x.Name));
+        _logger.LogInformation("TelegramService initialized with commands: {Commands}", validCommandsList);
     }
 }

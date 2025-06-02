@@ -1,5 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Communication.Commands;
+using Akagi.Communication.TelegramComs.Commands;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Telegram.Bot;
@@ -8,7 +9,7 @@ namespace Akagi.Communication.TelegramComs;
 
 internal partial class TelegramService : Communicator, IHostedService
 {
-    private async Task HandleCommand(Telegram.Bot.Types.Message message, Users.User user)
+    public async Task HandleCommand(Telegram.Bot.Types.Message message, Users.User user)
     {
         try
         {
@@ -46,53 +47,34 @@ internal partial class TelegramService : Communicator, IHostedService
         string command = message.Text;
 
         TextCommand? textCommand = _textCommands.FirstOrDefault(c => command.StartsWith(c.Name, StringComparison.InvariantCultureIgnoreCase));
-        if (textCommand != null)
-        {
-            string[] args = command.Substring(textCommand.Name.Length)
-                                   .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
-            await using Command.Context context = new()
-            {
-                Character = character,
-                User = user,
-                DatabaseFactory = _databaseFactory
-            };
-            await textCommand.ExecuteAsync(context, args);
-            return;
-        }
-        // TODO: Fix this so these messages also show up in the help command
-        else if (command.StartsWith("/redo"))
-        {
-            if (message.ReplyToMessage == null)
-            {
-                await _client.SendMessage(message.Chat.Id, "Please reply to a message to redo it");
-                return;
-            }
-            await HandleCommand(message.ReplyToMessage, user);
-        }
-        else if (command.StartsWith("/changeCharacter"))
-        {
-            string[] parts = command.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2)
-            {
-                await _client.SendMessage(message.Chat.Id, "Please provide a character id");
-                return;
-            }
-            string id = parts[1];
-            Character? character = await _characterDatabase.GetCharacter(id);
-            if (character == null)
-            {
-                await _client.SendMessage(message.Chat.Id, "Character not found");
-                return;
-            }
-            user!.TelegramUser!.CurrentCharacterId = character.Id;
-            await _userDatabase.SaveDocumentAsync(user);
-            await _client.SendMessage(message.Chat.Id, $"Current character changed to {character.Card.Name}");
-        }
-        else
+        if (textCommand == null)
         {
             await _client.SendMessage(message.Chat.Id, "Unknown command");
+            return;
         }
+
+        string[] args = command.Substring(textCommand.Name.Length)
+                               .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        
+        Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+        await using Command.Context context = new()
+        {
+            Character = character,
+            User = user,
+            DatabaseFactory = _databaseFactory
+        };
+
+        await using ITelegramCommand.Context telegramContext = new()
+        {
+            Message = message,
+            DatabaseFactory = _databaseFactory
+        };
+        if (textCommand is ITelegramCommand telegramCommand)
+        {
+            telegramCommand.Init(telegramContext);
+        }
+
+        await textCommand.ExecuteAsync(context, args);
     }
 
     private async Task HandleDocumentCommand(Telegram.Bot.Types.Message message, Users.User user)
@@ -105,38 +87,45 @@ internal partial class TelegramService : Communicator, IHostedService
         string command = message.Caption;
 
         DocumentCommand? documentCommand = _documentCommands.FirstOrDefault(c => command.StartsWith(c.Name, StringComparison.InvariantCultureIgnoreCase));
-        // TODO: Fix this so these messages also show up in the help command
-        if (documentCommand != null)
-        {
-            string[] args = command.Substring(documentCommand.Name.Length)
-                                   .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            List<TelegramDocument> validFiles = [];
-            if (message.Document != null)
-            {
-                validFiles.Add(new TelegramDocument(message.Document));
-            }
-            else if (message.Photo != null && message.Photo.Length > 0)
-            {
-                validFiles.AddRange(message.Photo.Select(x => new TelegramDocument(x)));
-            }
-            validFiles.ForEach(x => x.Init(this));
-
-            Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
-            await using Command.Context context = new()
-            {
-                Character = character,
-                User = user,
-                DatabaseFactory = _databaseFactory
-            };
-            await documentCommand.ExecuteAsync(context, [.. validFiles], args);
-
-            validFiles.ForEach(x => x.Dispose());
-
-            return;
-        }
-        else
+        if (documentCommand == null)
         {
             await _client.SendMessage(message.Chat.Id, "Unknown command");
+            return;
         }
+
+        string[] args = command.Substring(documentCommand.Name.Length)
+                               .Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        List<TelegramDocument> validFiles = [];
+        if (message.Document != null)
+        {
+            validFiles.Add(new TelegramDocument(message.Document));
+        }
+        else if (message.Photo != null && message.Photo.Length > 0)
+        {
+            validFiles.AddRange(message.Photo.Select(x => new TelegramDocument(x)));
+        }
+        validFiles.ForEach(x => x.Init(this));
+
+        Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+        await using Command.Context context = new()
+        {
+            Character = character,
+            User = user,
+            DatabaseFactory = _databaseFactory
+        };
+
+        await using ITelegramCommand.Context telegramContext = new()
+        {
+            Message = message,
+            DatabaseFactory = _databaseFactory
+        };
+        if (documentCommand is ITelegramCommand telegramCommand)
+        {
+            telegramCommand.Init(telegramContext);
+        }
+        
+        await documentCommand.ExecuteAsync(context, [.. validFiles], args);
+
+        validFiles.ForEach(x => x.Dispose());
     }
 }
