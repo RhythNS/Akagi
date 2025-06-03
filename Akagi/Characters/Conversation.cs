@@ -1,18 +1,36 @@
 ﻿using Akagi.Characters.Conversations;
+using Akagi.Data;
 using Akagi.Receivers.Commands;
 using Akagi.Receivers.Commands.Messages;
 
 namespace Akagi.Characters;
 
-internal class Conversation
+internal class Conversation : DirtyTrackable
 {
-    public DateTime Time { get; set; }
-    public List<Message> Messages { get; set; } = [];
-    public bool IsCompleted { get; set; } = false;
+    private DateTime _time = DateTime.MinValue;
+    private List<Message> _messages = [];
+    private bool _isCompleted = false;
+
+    public DateTime Time
+    {
+        get => _time;
+        set => SetProperty(ref _time, value);
+    }
+    public IReadOnlyList<Message> Messages
+    {
+        get => _messages;
+        set => SetProperty(ref _messages, [.. value]);
+    }
+    public bool IsCompleted
+    {
+        get => _isCompleted;
+        set => SetProperty(ref _isCompleted, value);
+    }
 
     public void AddMessage(Message message)
     {
-        Messages.Add(message);
+        Dirty = true;
+        _messages.Add(message);
     }
 
     public Message AddMessage(string text, DateTime time, Message.Type from, Message.Type visibleTo)
@@ -25,7 +43,8 @@ internal class Conversation
             VisibleTo = visibleTo
         };
 
-        Messages.Add(message);
+        Dirty = true;
+        _messages.Add(message);
 
         return message;
     }
@@ -37,15 +56,39 @@ internal class Conversation
         if (command is MessageCommand messageCommand)
         {
             Message message = messageCommand.GetMessage();
-            Messages.Add(message);
+            Dirty = true;
+            _messages.Add(message);
             return message;
         }
-     
+
         throw new NotImplementedException();
     }
 
     public IReadOnlyList<Message> GetLastMessages(int count)
     {
         return [.. Messages.Skip(Math.Max(0, Messages.Count - count))];
+    }
+
+    public void ClearMessages()
+    {
+        Dirty = true;
+        _messages.Clear();
+    }
+
+    public void RemoveMessage(Message message)
+    {
+        if (_messages.Remove(message))
+        {
+            Dirty = true;
+        }
+    }
+
+    public void RemoveMessageAt(int index)
+    {
+        if (index >= 0 && index < _messages.Count)
+        {
+            Dirty = true;
+            _messages.RemoveAt(index);
+        }
     }
 }

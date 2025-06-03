@@ -4,7 +4,7 @@ namespace Akagi.Receivers.Commands.Messages;
 
 internal class TextMessageCommand : MessageCommand
 {
-    public override string Name => "TextMessageCommand";
+    public override string Name => "TextMessage";
 
     public override string Description => "Command to save a text message.";
 

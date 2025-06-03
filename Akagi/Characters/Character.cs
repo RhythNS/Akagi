@@ -7,15 +7,35 @@ namespace Akagi.Characters;
 internal class Character : Savable
 {
     private List<Conversation> _conversations = [];
+    private Memory _memory = new();
     private string _cardId = string.Empty;
     private Card? _card;
     private string _puppeteerId = string.Empty;
     private string _userId = string.Empty;
 
-    public List<Conversation> Conversations
+    public override bool Dirty
+    {
+        get => base.Dirty || _memory.Dirty || _conversations.Any(c => c.Dirty);
+        set
+        {
+            base.Dirty = value;
+            if (value == false)
+            {
+                _memory.Dirty = false;
+                _conversations.ForEach(c => c.Dirty = false);
+            }
+        }
+    }
+
+    public IReadOnlyList<Conversation> Conversations
     {
         get => _conversations;
-        set => SetProperty(ref _conversations, value);
+        set => SetProperty(ref _conversations, [.. value]);
+    }
+    public Memory Memory
+    {
+        get => _memory;
+        set => SetProperty(ref _memory, value);
     }
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string CardId
@@ -53,7 +73,8 @@ internal class Character : Savable
             }
         }
 
-        Conversations.Add(new Conversation
+        Dirty = true;
+        _conversations.Add(new Conversation
         {
             Time = DateTime.UtcNow,
             Messages = []
@@ -74,7 +95,9 @@ internal class Character : Savable
             Time = DateTime.UtcNow,
             Messages = []
         };
-        Conversations.Add(newConversation);
+
+        Dirty = true;
+        _conversations.Add(newConversation);
         return newConversation;
     }
 
@@ -86,6 +109,7 @@ internal class Character : Savable
             return;
         }
 
-        Conversations.Remove(conv);
+        Dirty = true;
+        _conversations.Remove(conv);
     }
 }

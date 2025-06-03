@@ -8,7 +8,7 @@ internal class ChangeCharacterCommand : TelegramTextCommand
 
     public override string Description => "Changes the current character.";
 
-    private ICharacterDatabase _characterDatabase;
+    private readonly ICharacterDatabase _characterDatabase;
 
     public ChangeCharacterCommand(ICharacterDatabase characterDatabase)
     {

@@ -36,7 +36,7 @@ internal class DeleteLastMessagesCommand : TextCommand
                 break;
             }
 
-            conversation.Messages.RemoveAt(i);
+            conversation.RemoveMessageAt(i);
         }
         if (conversation.Messages.Count == 0)
         {
@@ -50,7 +50,7 @@ internal class DeleteLastMessagesCommand : TextCommand
         }
         else
         {
-            toReturn = $"Deleted the messages from the current conversation. The last message is now: {conversation.Messages.Last()}";
+            toReturn = $"Deleted the messages from the current conversation. The last message is now: {conversation.Messages[conversation.Messages.Count - 1]}";
         }
 
         await Communicator.SendMessage(context.User, context.Character, toReturn);
