@@ -17,6 +17,13 @@ internal class TextMessageCommand : MessageCommand
             Description = "The message to save.",
             IsRequired = true,
             ArgumentType = Argument.Type.String
+        },
+        new Argument
+        {
+            Name = "From",
+            Description = "Wheter the message was from the system or the character.",
+            IsRequired = true,
+            ArgumentType = Argument.Type.String,
         }
     ];
 
@@ -25,13 +32,15 @@ internal class TextMessageCommand : MessageCommand
     public override Task Execute(Context context)
     {
         string text = Arguments[0].Value;
-        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, Message.Type.Character, context.Puppeteer.CurrentMessageVisibility);
+        Message.Type type = Enum.TryParse(Arguments[1].Value, true, out Message.Type parsedType) ? parsedType : Message.Type.Character;
+        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, Message.Type.Character, type);
         return Task.CompletedTask;
     }
 
-    public void SetMessage(string message)
+    public void SetMessage(string message, Message.Type type)
     {
         Arguments[0].Value = message;
+        Arguments[1].Value = type.ToString();
     }
 
     public override Message GetMessage()

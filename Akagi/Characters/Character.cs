@@ -12,6 +12,7 @@ internal class Character : Savable
     private Card? _card;
     private string _puppeteerId = string.Empty;
     private string _userId = string.Empty;
+    private string _name = string.Empty;
 
     public override bool Dirty
     {
@@ -55,6 +56,11 @@ internal class Character : Savable
     {
         get => _userId;
         set => SetProperty(ref _userId, value);
+    }
+    public string Name
+    {
+        get => _name;
+        set => SetProperty(ref _name, value);
     }
 
     public void Init(Card card)

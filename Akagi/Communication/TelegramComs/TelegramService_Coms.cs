@@ -186,6 +186,12 @@ internal partial class TelegramService : Communicator, IHostedService
         Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
         if (character == null)
         {
+            if (string.IsNullOrEmpty(user.TelegramUser!.CurrentCharacterId) == false)
+            {
+                user.TelegramUser.CurrentCharacterId = string.Empty;
+                await _userDatabase.SaveDocumentAsync(user);
+            }
+
             await _client!.SendMessage(message.Chat.Id, "You do not have a current character. Please select one first!", cancellationToken: cancellationToken);
             return;
         }

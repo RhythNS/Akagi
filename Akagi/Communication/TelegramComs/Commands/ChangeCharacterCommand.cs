@@ -17,13 +17,14 @@ internal class ChangeCharacterCommand : TelegramTextCommand
 
     public override async Task ExecuteAsync(Context context, string[] args)
     {
-        if (args.Length < 2)
+        if (args.Length < 1)
         {
             await Communicator.SendMessage(context.User, "Please provide a character id");
             return;
         }
-        string id = args[1];
-        Character? character = await _characterDatabase.GetCharacter(id);
+        string name = args[0];
+        List<Character> characters = await _characterDatabase.GetCharactersForUser(context.User);
+        Character? character = characters.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (character == null)
         {
             await Communicator.SendMessage(context.User, "Character not found");

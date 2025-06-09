@@ -1,5 +1,4 @@
-﻿using Akagi.Characters.Conversations;
-using Akagi.Receivers.Commands;
+﻿using Akagi.Receivers.Commands;
 using Akagi.Receivers.Commands.Messages;
 using Akagi.Receivers.SystemProcessors;
 using MongoDB.Bson.Serialization.Attributes;
@@ -10,7 +9,6 @@ internal class LinePuppeteer : Puppeteer
 {
     public class Definition
     {
-        public required Message.Type VisibleTo { get; set; }
         [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
         public required string SystemProcessorId { get; set; }
         [BsonIgnore]
@@ -23,9 +21,6 @@ internal class LinePuppeteer : Puppeteer
         get => _definitions;
         set => SetProperty(ref _definitions, value);
     }
-
-    private Message.Type _currentMessageVisibility = Message.Type.Character | Message.Type.User | Message.Type.System;
-    public override Message.Type CurrentMessageVisibility => _currentMessageVisibility;
 
     protected override async Task InnerInit()
     {
@@ -40,7 +35,6 @@ internal class LinePuppeteer : Puppeteer
     {
         foreach (Definition definition in Definitions)
         {
-            _currentMessageVisibility = definition.VisibleTo;
             bool shouldContinue = true;
             do
             {

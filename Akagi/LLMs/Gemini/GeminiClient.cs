@@ -198,7 +198,7 @@ internal class GeminiClient : IGeminiClient
         }
 
         TextMessageCommand command = _commandFactory.Create<TextMessageCommand>();
-        command.SetMessage(geminiResponse.Candidates[0].Content.Parts[0].Text);
+        command.SetMessage(geminiResponse.Candidates[0].Content.Parts[0].Text, systemProcessor.Output);
         return [command];
     }
 }

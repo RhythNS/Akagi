@@ -75,6 +75,4 @@ internal abstract class Puppeteer : Savable
     }
 
     public abstract Task ProcessAsync();
-
-    public virtual Message.Type CurrentMessageVisibility => Message.Type.System | Message.Type.Character | Message.Type.User;
 }

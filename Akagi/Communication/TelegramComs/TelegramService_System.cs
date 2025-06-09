@@ -31,29 +31,9 @@ internal partial class TelegramService : Communicator, IHostedService
         return Task.CompletedTask;
     }
 
-    private async Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
+    private Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, CancellationToken cancellationToken)
     {
         _logger.LogError(exception, "An error occurred in the bot client.");
-
-        for (int restartAttempts = 0; restartAttempts < MaxRestartAttempts; restartAttempts++)
-        {
-            int delay = (int)Math.Pow(2, restartAttempts);
-            _logger.LogInformation("Attempting to restart Telegram bot in {Delay} seconds (attempt {Attempt}/{Max})", delay, restartAttempts, MaxRestartAttempts);
-            await Task.Delay(TimeSpan.FromSeconds(delay), cancellationToken);
-
-            try
-            {
-                await StopAsync(cancellationToken);
-                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken);
-                await StartAsync(cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to restart Telegram bot.");
-            }
-        }
-
-        _logger.LogCritical("Max restart attempts reached. Stopping application.");
-        _hostApplicationLifetime.StopApplication();
+        return Task.CompletedTask;
     }
 }

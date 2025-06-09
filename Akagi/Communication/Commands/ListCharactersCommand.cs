@@ -24,7 +24,7 @@ internal class ListCharactersCommand : ListCommand
             return;
         }
         string[] ids = [.. characters.Select(x => x.Id!)];
-        string[] names = [.. characters.Select(x => x.Card.Name)];
+        string[] names = [.. characters.Select(x => x.Name)];
         string choices = GetIdList(ids, names);
         await Communicator.SendMessage(context.User, $"Available characters:\n{choices}");
     }

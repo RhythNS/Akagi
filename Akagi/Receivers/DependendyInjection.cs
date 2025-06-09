@@ -22,5 +22,6 @@ static class DependendyInjection
     private static void RegisterDBClasses()
     {
         BsonClassMap.RegisterClassMap<SinglePuppeteer>();
+        BsonClassMap.RegisterClassMap<LinePuppeteer>();
     }
 }

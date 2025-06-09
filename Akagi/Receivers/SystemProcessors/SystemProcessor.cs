@@ -12,6 +12,8 @@ internal class SystemProcessor : Savable
     private string _name = string.Empty;
     private string _description = string.Empty;
     private string _systemInstruction = string.Empty;
+    private Message.Type _readableMessages = Message.Type.Character | Message.Type.User | Message.Type.System;
+    private Message.Type _output = Message.Type.Character | Message.Type.User | Message.Type.System;
     private string[] _commandNames = [];
 
     public string Name
@@ -28,6 +30,16 @@ internal class SystemProcessor : Savable
     {
         get => _systemInstruction;
         set => SetProperty(ref _systemInstruction, value);
+    }
+    public Message.Type ReadableMessages
+    {
+        get => _readableMessages;
+        set => SetProperty(ref _readableMessages, value);
+    }
+    public Message.Type Output
+    {
+        get => _output;
+        set => SetProperty(ref _output, value);
     }
     public string[] CommandNames
     {
@@ -66,7 +78,9 @@ internal class SystemProcessor : Savable
         IEnumerable<Conversation> conversations = character.Conversations.OrderBy(x => x.Time);
         foreach (Conversation conversation in conversations)
         {
-            foreach (Message message in conversation.Messages.OrderBy(x => x.Time))
+            foreach (Message message in conversation.Messages
+                                                    .Where(x => (x.VisibleTo & ReadableMessages) != 0)
+                                                    .OrderBy(x => x.Time))
             {
                 messages.Add(message);
             }

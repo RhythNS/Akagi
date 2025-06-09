@@ -25,14 +25,12 @@ internal partial class TelegramService : Communicator, IHostedService
     private readonly ILogger<TelegramService> _logger;
     private readonly IUserDatabase _userDatabase;
     private readonly ICharacterDatabase _characterDatabase;
-    private readonly IHostApplicationLifetime _hostApplicationLifetime;
     private readonly IDatabaseFactory _databaseFactory;
     private readonly TextCommand[] _textCommands = [];
     private readonly DocumentCommand[] _documentCommands = [];
 
     private TelegramBotClient? _client;
     private Telegram.Bot.Types.User? _me;
-    private const int MaxRestartAttempts = 5;
 
     public TelegramService(IReceiver receiver,
                            IOptionsMonitor<Options> options,
@@ -40,15 +38,13 @@ internal partial class TelegramService : Communicator, IHostedService
                            ICharacterDatabase characterDatabase,
                            IDatabaseFactory databaseFactory,
                            IEnumerable<Command> commands,
-                           ILogger<TelegramService> logger,
-                           IHostApplicationLifetime hostApplicationLifetime) : base(receiver)
+                           ILogger<TelegramService> logger) : base(receiver)
     {
         _token = options.CurrentValue.Token;
         _logger = logger;
         _characterDatabase = characterDatabase;
         _databaseFactory = databaseFactory;
         _userDatabase = userDatabase;
-        _hostApplicationLifetime = hostApplicationLifetime;
 
         Command[] validCommands = [..commands.Where(x => x.CompatibleFor
                                              .All(y => typeof(TelegramService).IsAssignableTo(y)))];
