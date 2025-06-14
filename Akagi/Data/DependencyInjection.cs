@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using Akagi.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.Data;
@@ -11,8 +12,7 @@ static class DependencyInjection
         services.AddSingleton<IFileDatabase, FileDatabase>();
         services.AddTransient<IDatabaseFactory, DatabaseFactory>();
 
-        IEnumerable<Type> databaseTypes = typeof(IDatabase).Assembly.GetTypes()
-            .Where(t => t.IsClass && !t.IsAbstract && typeof(IDatabase).IsAssignableFrom(t));
+        Type[] databaseTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<IDatabase>();
         foreach (Type? type in databaseTypes)
         {
             services.AddSingleton(typeof(IDatabase), type);

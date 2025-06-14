@@ -56,5 +56,6 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
     {
         Card? card = await _cardDatabase.GetDocumentByIdAsync(character.CardId) ?? throw new Exception($"Card with ID {character.CardId} not found.");
         character.Init(card);
+        await character.AfterLoad();
     }
 }

@@ -3,8 +3,10 @@ using Akagi.Communication;
 using Akagi.Data;
 using Akagi.LLMs;
 using Akagi.Receivers;
+using Akagi.Scheduling;
 using Akagi.Users;
 using Akagi.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 
 namespace Akagi;
@@ -22,8 +24,13 @@ internal class Program
         builder.Services.AddUsers();
         builder.Services.AddLLMs();
         builder.Services.AddCommunications(builder.Configuration);
+        builder.Services.AddScheduling();
 
         using IHost host = builder.Build();
+
+        Globals globals = host.Services.GetRequiredService<Globals>();
+        await globals.Initialize();
+
         await host.RunAsync();
     }
 }

@@ -1,5 +1,4 @@
 ﻿using Akagi.Characters;
-using Akagi.Characters.Conversations;
 using Akagi.Communication;
 using Akagi.Data;
 using Akagi.LLMs;
@@ -47,6 +46,8 @@ internal abstract class Puppeteer : Savable
         return InnerInit();
     }
 
+    public abstract Task ProcessAsync();
+
     protected virtual Task InnerInit() => Task.CompletedTask;
 
     protected async Task<SystemProcessor> GetSingle(string id)
@@ -73,6 +74,4 @@ internal abstract class Puppeteer : Savable
         SystemProcessor[] systemProcessors = await _systemProcessorDatabase.GetSystemProcessor(ids);
         return systemProcessors;
     }
-
-    public abstract Task ProcessAsync();
 }

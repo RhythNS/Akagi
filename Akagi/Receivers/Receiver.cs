@@ -5,13 +5,14 @@ using Akagi.Data;
 using Akagi.LLMs;
 using Akagi.Receivers.Puppeteers;
 using Akagi.Receivers.SystemProcessors;
+using Akagi.Scheduling.Tasks;
 using Akagi.Users;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
 namespace Akagi.Receivers;
 
-internal class Receiver : IReceiver
+internal class Receiver : IReceiver, ICleanable
 {
     private static readonly ConcurrentDictionary<(string userId, string characterId), SemaphoreSlim> _locks = new();
 
@@ -119,7 +120,13 @@ internal class Receiver : IReceiver
         };
     }
 
-    public static void CleanupUnusedLocks()
+    public Task CleanUpAsync()
+    {
+        CleanupUnusedLocks();
+        return Task.CompletedTask;
+    }
+
+    private static void CleanupUnusedLocks()
     {
         foreach (KeyValuePair<(string userId, string characterId), SemaphoreSlim> kvp in _locks)
         {

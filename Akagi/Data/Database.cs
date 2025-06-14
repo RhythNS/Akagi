@@ -20,7 +20,7 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
 
     public Database(IOptionsMonitor<DatabaseOptions> options, string collectionName)
     {
-        options.OnChange((options, _) => OnOptionsChange(options, collectionName));  
+        options.OnChange((options, _) => OnOptionsChange(options, collectionName));
         OnOptionsChange(options.CurrentValue, collectionName);
     }
 
@@ -60,14 +60,18 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
     public async Task<List<T>> GetDocumentsAsync()
     {
         IMongoCollection<T> collection = GetCollection();
-        return await collection.Find(_ => true).ToListAsync();
+        List<T> documents = await collection.Find(_ => true).ToListAsync();
+        await Task.WhenAll(documents.Select(doc => doc.AfterLoad()));
+        return documents;
     }
 
     public async Task<T?> GetDocumentByIdAsync(string id)
     {
         IMongoCollection<T> collection = GetCollection();
         FilterDefinition<T> filter = Builders<T>.Filter.Eq(y => y.Id, id);
-        return await collection.Find(filter).FirstOrDefaultAsync();
+        T document = await collection.Find(filter).FirstOrDefaultAsync();
+        await document.AfterLoad();
+        return document;
     }
 
     public async Task SaveDocumentAsync(T document)

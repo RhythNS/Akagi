@@ -45,6 +45,7 @@ internal class UserDatabase : Database<User>, IUserDatabase
         }
         else
         {
+            await users[0].AfterLoad();
             return users[0];
         }
     }

@@ -35,6 +35,8 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
         }
         systemProcessor.InitCommands([.. commands]);
 
+        await systemProcessor.AfterLoad();
+
         return systemProcessor;
     }
 
@@ -57,6 +59,9 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
             }
             systemProcessor.InitCommands([.. commands]);
         }
+
+        await Task.WhenAll(systemProcessors.Select(sp => sp.AfterLoad()));
+
         return [.. systemProcessors];
     }
 }
