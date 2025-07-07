@@ -10,14 +10,7 @@ internal abstract class OneShotTask : BaseTask
     public DateTime Time
     {
         get => _time;
-        set
-        {
-            if (value < DateTime.UtcNow)
-            {
-                throw new ArgumentOutOfRangeException(nameof(value), "Time must be in the future.");
-            }
-            SetProperty(ref _time, value);
-        }
+        set => SetProperty(ref _time, value);
     }
     public bool Finished
     {
@@ -27,7 +20,7 @@ internal abstract class OneShotTask : BaseTask
 
     public override DateTime ExecuteAt => _time;
 
-    public override bool CanBeDeleted => !Finished;
+    public override bool CanBeDeleted => Finished;
 
     public override Task ExecuteAsync()
     {

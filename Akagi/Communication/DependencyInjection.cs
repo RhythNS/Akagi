@@ -14,9 +14,10 @@ static class DependencyInjection
         Array.ForEach(types, commandType => services.AddTransient(typeof(Command), commandType));
 
         services.Configure<TelegramService.Options>(configuration.GetSection("Telegram"));
-        services.AddHostedService<TelegramService>();
+        services.AddSingleton<TelegramService>();
+        services.AddHostedService(provider => provider.GetRequiredService<TelegramService>());
 
-        services.AddSingleton<ICommunicator, TelegramService>();
+        services.AddSingleton<ICommunicator>(provider => provider.GetRequiredService<TelegramService>());
         services.AddSingleton<ICommunicatorFactory, CommunicatorFactory>();
     }
 }

@@ -33,11 +33,11 @@ internal class GeminiPayload
 
     internal class Tool
     {
-        [JsonPropertyName("functionDeclerations")]
-        public FunctionDecleration[] FunctionDeclerations { get; set; } = [];
+        [JsonPropertyName("function_declarations")]
+        public FunctionDeclaration[] FunctionDeclarations { get; set; } = [];
     }
 
-    internal class FunctionDecleration
+    internal class FunctionDeclaration
     {
         [JsonPropertyName("name")]
         public string Name { get; set; } = string.Empty;
@@ -45,7 +45,5 @@ internal class GeminiPayload
         public string Description { get; set; } = string.Empty;
         [JsonPropertyName("parameters")]
         public Dictionary<string, object> Parameters { get; set; } = [];
-        [JsonPropertyName("required")]
-        public string[] Required = [];
     }
 }

@@ -12,6 +12,12 @@ static class DependendyInjection
         services.AddSingleton<ITaskDatabase, TaskDatabase>();
         services.AddHostedService<SchedulerService>();
 
+        BsonClassMap.RegisterClassMap<BaseTask>(cm =>
+        {
+            cm.AutoMap();
+            cm.SetIsRootClass(true);
+        });
+
         Type[] taskTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<BaseTask>();
         Array.ForEach(taskTypes, taskType => Register(services, taskType));
 
@@ -25,7 +31,9 @@ static class DependendyInjection
 
         if (!BsonClassMap.IsClassMapRegistered(type))
         {
-            BsonClassMap.RegisterClassMap(new BsonClassMap(type));
+            BsonClassMap classMap = new(type);
+            classMap.AutoMap();
+            BsonClassMap.RegisterClassMap(classMap);
         }
     }
 }

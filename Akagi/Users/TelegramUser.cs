@@ -1,11 +1,28 @@
-﻿using MongoDB.Bson.Serialization.Attributes;
+﻿using Akagi.Data;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Users;
 
-internal class TelegramUser
+internal class TelegramUser : DirtyTrackable
 {
-    public long Id { get; set; } = -1;
-    public string UserName { get; set; } = string.Empty;
+    private long _id = -1;
+    private string _userName = string.Empty;
+    private string _currentCharacterId = string.Empty;
+
+    public long Id
+    {
+        get => _id;
+        set => SetProperty(ref _id, value);
+    }
+    public string UserName
+    {
+        get => _userName;
+        set => SetProperty(ref _userName, value);
+    }
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
-    public string? CurrentCharacterId { get; set; } = null;
+    public string? CurrentCharacterId
+    {
+        get => _currentCharacterId;
+        set => SetProperty(ref _currentCharacterId, value ?? string.Empty);
+    }
 }

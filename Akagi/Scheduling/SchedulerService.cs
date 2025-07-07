@@ -19,6 +19,8 @@ internal class SchedulerService : BackgroundService
     {
         while (!stoppingToken.IsCancellationRequested)
         {
+            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
+
             List<BaseTask> tasks = await _taskDatabase.GetTasks();
 
             foreach (BaseTask task in tasks)
@@ -50,8 +52,6 @@ internal class SchedulerService : BackgroundService
                     _logger.LogError(ex, "Error executing task {TaskId} of type {TaskType}", task.Id, task.GetType().Name);
                 }
             }
-
-            await Task.Delay(TimeSpan.FromSeconds(30), stoppingToken);
         }
     }
 }

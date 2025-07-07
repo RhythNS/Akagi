@@ -12,6 +12,22 @@ internal class User : Savable
     private bool _valid = false;
     private ILLM.LLMType _llmType;
 
+    public override bool Dirty
+    {
+        get => base.Dirty || (_telegramUser == null || _telegramUser.Dirty);
+        set
+        {
+            base.Dirty = value;
+            if (value == false)
+            {
+                if (_telegramUser != null)
+                {
+                    _telegramUser.Dirty = false;
+                }
+            }
+        }
+    }
+
     public string Name
     {
         get => _name;

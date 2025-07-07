@@ -7,6 +7,8 @@ using Akagi.Receivers.Puppeteers;
 using Akagi.Receivers.SystemProcessors;
 using Akagi.Scheduling.Tasks;
 using Akagi.Users;
+using Akagi.Utils;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
@@ -33,6 +35,46 @@ internal class Receiver : IReceiver, ICleanable
         _llmFactory = llmFactory;
         _databaseFactory = databaseFactory;
         _logger = logger;
+    }
+
+    public Task CleanUpAsync()
+    {
+        CleanupUnusedLocks();
+        return Task.CompletedTask;
+    }
+
+    public Task Reflect(Character character, User user)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task OnSystemEvent(Character character, User user, Message message)
+    {
+        LockCharacter(character, user);
+
+        try
+        {
+            ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
+            if (communicator == null)
+            {
+                _logger.LogWarning("No communicator found for user {UserId}", user.Id);
+                return;
+            }
+
+            await using Context context = await GetContextAsync(character, user, communicator);
+            context.Conversation.AddMessage(message);
+
+            await ProcessCharacterMessageAsync(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing system event for user {UserId} and character {CharacterId}", user.Id, character.Id);
+            return;
+        }
+        finally
+        {
+            ReleaseLock(character, user);
+        }
     }
 
     public async Task OnMessageRecieved(ICommunicator from, User user, Character character, Message message)
@@ -70,6 +112,7 @@ internal class Receiver : IReceiver, ICleanable
 
         try
         {
+            from ??= Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (from == null)
             {
                 _logger.LogWarning("No communicator found for user {UserId}", user.Id);
@@ -94,11 +137,6 @@ internal class Receiver : IReceiver, ICleanable
         }
     }
 
-    public Task Reflect(Character character, User user)
-    {
-        throw new NotImplementedException();
-    }
-
     private async Task ProcessCharacterMessageAsync(Context context)
     {
         await context.Puppeteer.Init(context, _systemProcessorDatabase);
@@ -118,12 +156,6 @@ internal class Receiver : IReceiver, ICleanable
             Puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(character.PuppeteerId)
                         ?? throw new Exception($"Puppeteer with ID {character.PuppeteerId} not found for character {character.Id}"),
         };
-    }
-
-    public Task CleanUpAsync()
-    {
-        CleanupUnusedLocks();
-        return Task.CompletedTask;
     }
 
     private static void CleanupUnusedLocks()
@@ -155,6 +187,13 @@ internal class Receiver : IReceiver, ICleanable
             return false;
         }
         return true;
+    }
+
+    private static void LockCharacter(Character character, User user)
+    {
+        (string, string) key = (user.Id!, character.Id!);
+        SemaphoreSlim semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        semaphore.Wait();
     }
 
     private static void ReleaseLock(Character character, User user)

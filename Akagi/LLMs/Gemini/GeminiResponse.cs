@@ -38,7 +38,19 @@ public class Content
 public class Part
 {
     [JsonPropertyName("text")]
-    public required string Text { get; set; }
+    public string? Text { get; set; }
+
+    [JsonPropertyName("functionCall")]
+    public FunctionCall? FunctionCall { get; set; }
+}
+
+public class FunctionCall
+{
+    [JsonPropertyName("name")]
+    public required string Name { get; set; }
+
+    [JsonPropertyName("args")]
+    public required Dictionary<string, object> Args { get; set; }
 }
 
 public class UsageMetadata

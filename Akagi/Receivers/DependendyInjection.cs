@@ -1,7 +1,7 @@
 ﻿using Akagi.Receivers.Commands;
-using Akagi.Receivers.Commands.Messages;
 using Akagi.Receivers.Puppeteers;
 using Akagi.Receivers.SystemProcessors;
+using Akagi.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson.Serialization;
 
@@ -13,7 +13,10 @@ static class DependendyInjection
     {
         services.AddScoped<IReceiver, Receiver>();
         services.AddScoped<ICommandFactory, CommandFactory>();
-        services.AddScoped<TextMessageCommand>();
+
+        Type[] commandTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Command>();
+        Array.ForEach(commandTypes, commandType => services.AddTransient(commandType, commandType));
+
         services.AddSingleton<ISystemProcessorDatabase, SystemProcessorDatabase>();
         services.AddSingleton<IPuppeteerDatabase, PuppeteerDatabase>();
         RegisterDBClasses();
