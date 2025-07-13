@@ -1,0 +1,30 @@
+﻿@using Akagi.Web.Data
+@using Akagi.Web.Models
+
+@inject IDefinitionDatabase DefinitionDatabase
+@inject IEntryDatabase EntryDatabase
+
+@page "/TimeTracking/detail/{Id}"
+
+<Dimmer Active="isLoading">
+	<PagePretitle>
+		TimeTracking
+	</PagePretitle>
+
+</Dimmer>
+
+@code {
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	[Parameter]
+	public string Id { get; set; } = string.Empty;
+
+	private bool isLoading = true;
+
+	protected override async Task OnInitializedAsync()
+	{
+		await Task.Delay(1000);
+		isLoading = false;
+	}
+}

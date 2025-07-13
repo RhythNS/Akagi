@@ -1,0 +1,93 @@
+﻿@using Akagi.Web.Data
+@using Akagi.Web.Icons
+@using Akagi.Web.Models
+@using Akagi.Web.Models.TimeTrackers
+@using MongoDB.Driver
+
+@inject IDefinitionDatabase DefinitionDatabase
+@inject NavigationManager Navigation
+
+@page "/TimeTracking/list"
+
+<Dimmer Active="isLoading">
+	<PagePretitle>
+		TimeTracking
+	</PagePretitle>
+
+	<Card>
+		<CardHeader>
+			<CardTitle>Time Tracker List</CardTitle>
+			<div class="flex-grow-1" />
+			<Button Type="ButtonType.Button"
+					OnClick="Refresh">
+				<Icon IconType="@Icons.Refresh"
+					  BackgroundColor="TablerColor.Success" />
+			</Button>
+			<Button Type="ButtonType.Button"
+					OnClick="OnCreateClicked">
+				<Icon IconType="@Icons.New"
+					  BackgroundColor="TablerColor.Green" />
+			</Button>
+		</CardHeader>
+
+		<CardBody>
+			<Table Item="Definition"
+				   Items="_definitions"
+				   OnRowClicked="OnRowClicked">
+				<HeaderTemplate>
+					<strong>
+						Definitions
+					</strong>
+				</HeaderTemplate>
+				<ChildContent>
+					<Column Item="Definition"
+							Property="x => x.Name"
+							Sortable
+							Searchable>
+						<EditorTemplate>
+							<Input type="text"
+								   class="form-control"
+								   @bind-value="@context.Name" />
+						</EditorTemplate>
+					</Column>
+				</ChildContent>
+			</Table>
+		</CardBody>
+	</Card>
+</Dimmer>
+
+@code {
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	private List<Definition> _definitions = [];
+
+	private bool isLoading = true;
+
+	protected override Task OnInitializedAsync() => Refresh();
+
+	private async Task Refresh()
+	{
+		isLoading = true;
+
+		if (CurrentUser == null)
+		{
+			isLoading = false;
+			return;
+		}
+
+		FilterDefinition<Definition> filter = Builders<Definition>.Filter.Eq(x => x.UserId, CurrentUser.Id);
+		_definitions = await DefinitionDatabase.GetDocumentsByPredicateAsync(filter);
+		isLoading = false;
+	}
+
+	private void OnRowClicked(Definition definition)
+	{
+		Navigation.NavigateTo($"/TimeTracking/edit/{definition.Id}");
+	}
+
+	private void OnCreateClicked()
+	{
+		Navigation.NavigateTo($"/TimeTracking/create");
+	}
+}

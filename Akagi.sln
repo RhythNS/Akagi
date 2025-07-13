@@ -10,6 +10,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akagi.Web", "Akagi.Web\Akagi.Web.csproj", "{A211EE2F-0313-404F-8B9B-14869ED65F5E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +22,15 @@ Global
 		{390EB882-82C5-43A4-93E5-F3FDDB4B4FF0}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{390EB882-82C5-43A4-93E5-F3FDDB4B4FF0}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{390EB882-82C5-43A4-93E5-F3FDDB4B4FF0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A211EE2F-0313-404F-8B9B-14869ED65F5E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A211EE2F-0313-404F-8B9B-14869ED65F5E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A211EE2F-0313-404F-8B9B-14869ED65F5E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A211EE2F-0313-404F-8B9B-14869ED65F5E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {69C282F5-1805-4A0F-A323-8EE9B12B12E5}
 	EndGlobalSection
 EndGlobal

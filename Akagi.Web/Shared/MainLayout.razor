@@ -1,0 +1,43 @@
+﻿@using Akagi.Web.Models
+@using Akagi.Web.Services
+
+@inherits LayoutComponentBase
+
+@inject IUserState UserState
+
+@if (IsLoading)
+{
+    <p>Loading user...</p>
+}
+else if (CurrentUser is null || !CurrentUser.Valid)
+{
+    <p>User not authorized...</p>
+}
+else
+{
+    <CascadingValue Value="@CurrentUser" Name="CurrentUser">
+        <ModalContainer />
+        <ToastContainer />
+
+        <div>
+            <MainNavigation />
+            <div class="page-wrapper">
+                <div class="container-fluid">
+                    @Body
+                </div>
+            </div>
+        </div>
+    </CascadingValue>
+}
+
+
+@code {
+    private User? CurrentUser { get; set; }
+    private bool IsLoading { get; set; } = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrentUser = await UserState.GetCurrentUserAsync();
+        IsLoading = false;
+    }
+}

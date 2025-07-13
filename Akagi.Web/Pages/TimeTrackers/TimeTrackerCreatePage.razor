@@ -1,0 +1,111 @@
+﻿@using Akagi.Web.Data
+@using Akagi.Web.Icons
+@using Akagi.Web.Models
+@using Akagi.Web.Models.TimeTrackers
+@using TabBlazor.Services
+
+@inject IDefinitionDatabase DefinitionDatabase
+@inject ToastService ToastService
+@inject NavigationManager Navigation
+
+@page "/TimeTracking/create"
+
+<PagePretitle>
+	Create TimeTracking
+</PagePretitle>
+
+<Card>
+	<CardBody>
+		<TablerForm Model="ToAdd"
+					OnValidSubmit="Submit">
+			<Button Type="ButtonType.Button"
+					OnClick="OnCreateClicked">
+				<Icon IconType="@Icons.New"
+					  BackgroundColor="TablerColor.Green" />
+			</Button>
+
+			<div class="mb-3">
+				<label class="form-label">
+					Name
+				</label>
+				<InputText class="form-control"
+						   @bind-Value="ToAdd.Name" />
+				<TabValidationMessage For="(() => ToAdd.Name)" />
+			</div>
+
+			@foreach (FieldDefinition field in ToAdd.Fields)
+			{
+				<div class="mb-3">
+					<label class="form-label">
+						@field.Name
+					</label>
+					<InputText class="form-control"
+							   @bind-Value="field.Name" />
+					<ItemSelect Items="FieldTypes"
+								@bind-SelectedValue="field.Type"
+								SelectedTextExpression="x => x.ToString()" />
+					<Button Type="ButtonType.Button"
+							OnClick="@(() => OnFieldDeleteClicked(field))">
+						<Icon IconType="@Icons.Delete"
+							  BackgroundColor="TablerColor.Green" />
+					</Button>
+					<TabValidationMessage For="(() => field)" />
+				</div>
+			}
+
+			<Button Type="ButtonType.Submit"
+					Text="Save"
+					class="mt-1" />
+		</TablerForm>
+	</CardBody>
+</Card>
+
+@code {
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	public DefinitionModel ToAdd { get; set; } = new();
+
+	private static FieldType[] FieldTypes = Enum.GetValues<FieldType>().ToArray();
+
+	private async Task Submit(EditContext context)
+	{
+		if (context.Validate() == false || CurrentUser == null)
+		{
+			await ToastService.AddToastAsync(new ToastModel
+			{
+				Title = "Error",
+				Message = "Could not save definition..."
+			});
+			return;
+		}
+
+		Definition definition = new Definition
+		{
+			Name = ToAdd!.Name!,
+			UserId = CurrentUser!.Id!,
+			Fields = ToAdd.Fields.Select(x => new FieldDefinition
+			{
+				Name = x.Name,
+				Type = x.Type
+			}).ToList()
+		};
+
+		await DefinitionDatabase.SaveDocumentAsync(definition);
+		Navigation.NavigateTo("/TimeTracking/list");
+	}
+
+	private void OnCreateClicked()
+	{
+		ToAdd.Fields.Add(new FieldDefinition
+		{
+			Name = "New Field",
+			Type = FieldType.Text
+		});
+	}
+
+	private void OnFieldDeleteClicked(FieldDefinition field)
+	{
+		ToAdd.Fields.Remove(field);
+	}
+}

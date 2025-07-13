@@ -1,0 +1,23 @@
+﻿@using Akagi.Web.Icons
+
+<Navbar Direction=NavbarDirection.Vertical Background=NavbarBackground.Dark>
+	<a href="" class="navbar-brand navbar-brand-autodark">
+		<img src="img/TabBlazorLogoWhite.png" class="navbar-brand-image me-2">
+		<h2 class="text-muted">Akagi</h2>
+	</a>
+
+	<NavbarMenu>
+		<NavbarMenuItem Href="" Text="Home">
+			<MenuItemIcon>
+				<Icon class="icon" Elements="@Icons.Home" />
+			</MenuItemIcon>
+		</NavbarMenuItem>
+
+		<NavbarMenuItem Text="Time Tracking" Expanded="true">
+			<SubMenu>
+				<NavbarMenuItem Href="TimeTracking/list" Text="List" />
+				<NavbarMenuItem Href="TimeTracking/create" Text="Create" />
+			</SubMenu>
+		</NavbarMenuItem>
+	</NavbarMenu>
+</Navbar>
