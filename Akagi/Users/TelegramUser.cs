@@ -7,7 +7,7 @@ internal class TelegramUser : DirtyTrackable
 {
     private long _id = -1;
     private string _userName = string.Empty;
-    private string _currentCharacterId = string.Empty;
+    private string? _currentCharacterId = null;
 
     public long Id
     {
@@ -23,6 +23,6 @@ internal class TelegramUser : DirtyTrackable
     public string? CurrentCharacterId
     {
         get => _currentCharacterId;
-        set => SetProperty(ref _currentCharacterId, value ?? string.Empty);
+        set => SetProperty(ref _currentCharacterId, value);
     }
 }

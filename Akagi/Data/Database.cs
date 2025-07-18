@@ -70,7 +70,10 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
         IMongoCollection<T> collection = GetCollection();
         FilterDefinition<T> filter = Builders<T>.Filter.Eq(y => y.Id, id);
         T document = await collection.Find(filter).FirstOrDefaultAsync();
-        await document.AfterLoad();
+        if (document != null)
+        {
+            await document.AfterLoad();
+        }
         return document;
     }
 
