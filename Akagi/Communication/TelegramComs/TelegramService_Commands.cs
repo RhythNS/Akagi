@@ -53,9 +53,35 @@ internal partial class TelegramService : Communicator, IHostedService
             return;
         }
 
-        string[] args = command.Substring(textCommand.Name.Length)
-                               .Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        
+        string argString = command.Substring(textCommand.Name.Length).Trim();
+        List<string> args = [];
+        int i = 0;
+        while (i < argString.Length)
+        {
+            if (argString[i] == '{' && i + 1 < argString.Length && argString[i + 1] == '{')
+            {
+                int end = argString.IndexOf("}}", i + 2, StringComparison.Ordinal);
+                if (end == -1)
+                {
+                    args.Add(argString.Substring(i + 2).Trim());
+                    break;
+                }
+                args.Add(argString.Substring(i + 2, end - (i + 2)).Trim());
+                i = end + 2;
+            }
+            else if (!char.IsWhiteSpace(argString[i]))
+            {
+                int start = i;
+                while (i < argString.Length && !char.IsWhiteSpace(argString[i]))
+                    i++;
+                args.Add(argString.Substring(start, i - start));
+            }
+            else
+            {
+                i++;
+            }
+        }
+
         Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
         await using Command.Context context = new()
         {
@@ -74,7 +100,7 @@ internal partial class TelegramService : Communicator, IHostedService
             telegramCommand.Init(telegramContext);
         }
 
-        await textCommand.ExecuteAsync(context, args);
+        await textCommand.ExecuteAsync(context, [.. args]);
     }
 
     private async Task HandleDocumentCommand(Telegram.Bot.Types.Message message, Users.User user)

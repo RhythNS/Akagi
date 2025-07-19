@@ -75,20 +75,38 @@ internal class Conversation : DirtyTrackable
         _messages.Clear();
     }
 
-    public void RemoveMessage(Message message)
+    public bool RemoveMessage(Message message)
     {
-        if (_messages.Remove(message))
+        if (!_messages.Remove(message))
         {
-            Dirty = true;
+            return false;
         }
+
+        Dirty = true;
+        return true;
     }
 
-    public void RemoveMessageAt(int index)
+    public bool RemoveMessageAt(int index)
     {
-        if (index >= 0 && index < _messages.Count)
+        if (index < 0 || index >= _messages.Count)
         {
-            Dirty = true;
-            _messages.RemoveAt(index);
+            return false;
         }
+
+        Dirty = true;
+        _messages.RemoveAt(index);
+        return true;
+    }
+
+    public bool EditMessage(int index, string newText)
+    {
+        if (index < 0 || index >= _messages.Count || _messages[index] is not TextMessage textMessage)
+        {
+            return false;
+        }
+
+        Dirty = true;
+        textMessage.Text = newText;
+        return true;
     }
 }
