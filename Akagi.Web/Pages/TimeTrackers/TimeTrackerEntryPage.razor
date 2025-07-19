@@ -1,0 +1,213 @@
+﻿@using Akagi.Web.Data
+@using Akagi.Web.Models
+@using Akagi.Web.Models.TimeTrackers
+@using Blazority
+@using TabBlazor.Services
+
+@inject IDefinitionDatabase DefinitionDatabase
+@inject IEntryDatabase EntryDatabase
+@inject ToastService ToastService
+@inject NavigationManager Navigation
+
+@page "/TimeTracking/{DefinitionId}/entry/{EntryId}"
+@page "/TimeTracking/{DefinitionId}/entry/new"
+
+<link rel="stylesheet" href="_content/Blazority/lib/clr/ui/clr-ui.min.css" />
+<link rel="stylesheet" href="_content/Blazority/lib/clr/icons/clr-icons.min.css" />
+<link rel="stylesheet" href="_content/Blazority/blazority.min.css" />
+
+<PagePretitle>
+	Create Entry
+</PagePretitle>
+
+<TabBlazor.Card>
+	@if (_entry == null || _definition == null)
+	{
+		<CardHeader>
+			<TabBlazor.CardTitle>
+				Time Tracker Not Found
+			</TabBlazor.CardTitle>
+		</CardHeader>
+	}
+	else
+	{
+		<CardBody>
+			<TablerForm Model="_entry"
+						OnValidSubmit="Submit">
+
+				@foreach (var item in _definition.Fields)
+				{
+					<div class="mb-3">
+						<label class="form-label">
+							@item.Name
+						</label>
+						@{
+							switch (item.Type)
+							{
+								case FieldType.Boolean:
+									bool boolThing = (bool)_entry.Values[item.Name];
+									<InputCheckbox class="form-check-input"
+												   Value="(bool)_entry.Values[item.Name]"
+												   ValueChanged="@(x => _entry.Values[item.Name] = x)"
+												   ValueExpression="() => boolThing" />
+									break;
+								case FieldType.Int:
+									int intThing = (int)_entry.Values[item.Name];
+									<InputNumber class="form-control"
+												 TValue="int"
+												 Value="(int)_entry.Values[item.Name]"
+												 ValueChanged="@(x => _entry.Values[item.Name] = x)"
+												 ValueExpression="() => intThing" />
+									break;
+								case FieldType.Float:
+									float floatThing = (float)_entry.Values[item.Name];
+									<InputNumber class="form-control"
+												 TValue="float"
+												 Value="(float)_entry.Values[item.Name]"
+												 ValueChanged="@(x => _entry.Values[item.Name] = x)"
+												 ValueExpression="() => floatThing" />
+									break;
+								case FieldType.Text:
+									string stringThing = (string)_entry.Values[item.Name];
+									<InputText class="form-control"
+											   Value=@((string)_entry.Values[item.Name])
+											   ValueChanged="x => _entry.Values[item.Name] = x"
+											   ValueExpression="() => stringThing" />
+									break;
+								case FieldType.DateTime:
+									DateTime dateTimeThing = (DateTime)_entry.Values[item.Name];
+									<DateTimepicker Label="@item.Name"
+													TValue="DateTime"
+													Value=@((DateTime)_entry.Values[item.Name])
+													ValueChanged="x => _entry.Values[item.Name] = x"
+													ValueExpression="() => dateTimeThing" />
+									break;
+								case FieldType.Date:
+									DateOnly dateOnlyThing = (DateOnly)_entry.Values[item.Name];
+									<Blazority.Datepicker Label="@item.Name"
+														  TValue="DateOnly"
+														  Value=@((DateOnly)_entry.Values[item.Name])
+														  ValueChanged="x => _entry.Values[item.Name] = x"
+														  ValueExpression="() => dateOnlyThing" />
+									break;
+								case FieldType.Time:
+									TimeOnly timeOnlyThing = (TimeOnly)_entry.Values[item.Name];
+									<Timepicker Label="@item.Name"
+												TValue="TimeOnly"
+												Value=@((TimeOnly)_entry.Values[item.Name])
+												ValueChanged="x => _entry.Values[item.Name] = x"
+												ValueExpression="() => timeOnlyThing" />
+									break;
+							}
+						}
+					</div>
+				}
+
+				<TabBlazor.Button Type="ButtonType.Submit"
+						Text="Save"
+						class="mt-1" />
+			</TablerForm>
+		</CardBody>
+	}
+</TabBlazor.Card>
+
+@code {
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	[Parameter]
+	public string? DefinitionId { get; set; }
+
+	[Parameter]
+	public string? EntryId { get; set; }
+
+	private Entry? _entry = null;
+	private Definition? _definition = null;
+
+	protected override async Task OnInitializedAsync()
+	{
+		if (CurrentUser == null || string.IsNullOrEmpty(DefinitionId))
+		{
+			return;
+		}
+
+		_definition = await DefinitionDatabase.GetDocumentByIdAsync(DefinitionId);
+
+		if (_definition == null)
+		{
+			return;
+		}
+
+		if (!string.IsNullOrEmpty(EntryId) && EntryId != "new")
+		{
+			_entry = await EntryDatabase.GetDocumentByIdAsync(EntryId);
+		}
+		else
+		{
+			_entry = new Entry
+			{
+				DefinitionId = DefinitionId
+			};
+
+			foreach (FieldDefinition field in _definition.Fields)
+			{
+				switch (field.Type)
+				{
+					case FieldType.Boolean:
+						_entry.Values.Add(field.Name, false);
+						break;
+					case FieldType.Int:
+						_entry.Values.Add(field.Name, 0);
+						break;
+					case FieldType.Float:
+						_entry.Values.Add(field.Name, 0.0f);
+						break;
+					case FieldType.Text:
+						_entry.Values.Add(field.Name, string.Empty);
+						break;
+					case FieldType.DateTime:
+						_entry.Values.Add(field.Name, DateTime.Today);
+						break;
+					case FieldType.Date:
+						_entry.Values.Add(field.Name, DateOnly.FromDateTime(DateTime.Today));
+						break;
+					case FieldType.Time:
+						_entry.Values.Add(field.Name, TimeOnly.MinValue);
+						break;
+					default:
+						throw new ArgumentOutOfRangeException();
+				}
+			}
+		}
+	}
+
+	private async Task Submit(EditContext context)
+	{
+		if (_entry == null || context.Validate() == false || CurrentUser == null)
+		{
+			await ToastService.AddToastAsync(new ToastModel
+			{
+				Title = "Error",
+				Message = "Could not save definition..."
+			});
+			return;
+		}
+
+		_entry.CreatedAt = DateTime.UtcNow;
+		_entry.DefinitionId = DefinitionId!;
+
+		await EntryDatabase.SaveDocumentAsync(_entry);
+		await ToastService.AddToastAsync(new ToastModel
+		{
+			Title = "Success",
+			Message = "Entry saved successfully!"
+		});
+		Navigation.NavigateTo($"/TimeTracking/{DefinitionId}/detail");
+	}
+
+	private Task<IEnumerable<string>> Search(string typed)
+	{
+		IEnumerable<string> toReturn = new string[0];
+		return Task.FromResult(toReturn);
+	}
+}

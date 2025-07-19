@@ -1,15 +1,85 @@
 ﻿@using Akagi.Web.Data
+@using Akagi.Web.Icons
 @using Akagi.Web.Models
+@using Akagi.Web.Models.TimeTrackers
+@using MongoDB.Driver
 
 @inject IDefinitionDatabase DefinitionDatabase
 @inject IEntryDatabase EntryDatabase
+@inject NavigationManager Navigation
 
-@page "/TimeTracking/detail/{Id}"
+@page "/TimeTracking/{Id}/detail"
 
 <Dimmer Active="isLoading">
 	<PagePretitle>
 		TimeTracking
 	</PagePretitle>
+
+	<Card>
+		@if (_definition == null)
+		{
+			<CardHeader>
+				<CardTitle>
+					Time Tracker Not Found
+				</CardTitle>
+			</CardHeader>
+		}
+		else
+		{
+			<CardHeader>
+				<CardTitle>
+					@_definition.Name
+				</CardTitle>
+				<div class="flex-grow-1" />
+				<Button Type="ButtonType.Button"
+						OnClick="OnCreateClicked">
+					Create New Entry
+				</Button>
+				<Button Type="ButtonType.Button"
+						OnClick="ReturnToList">
+					Return to List
+				</Button>
+			</CardHeader>
+			<CardBody>
+				<Table Item="Entry"
+					   Items="_entries">
+					<HeaderTemplate>
+						<strong>
+							Time Tracker Entries
+						</strong>
+					</HeaderTemplate>
+					<ChildContent>
+						<Column Item="Entry"
+								Property="x => x.CreatedAt"
+								Title="Created At"
+								Sortable />
+						@foreach (FieldDefinition item in _entries.Count == 0 ? [] : _definition.Fields)
+						{
+							<Column Item="Entry"
+									Property="x => x.Id"
+									Title="@item.Name"
+									Searchable
+									Sortable
+									Groupable>
+								<Template>
+									@context.Values[item.Name]
+								</Template>
+							</Column>
+						}
+						<Column Item="Entry"
+							    Title=""
+								ActionColumn>
+							<Template>
+								<span @onclick="(() => OnEntryDeleteClicked(context))" @onclick:stopPropagation>
+									<span class="clickable-text">Delete</span>
+								</span>
+							</Template>
+						</Column>
+					</ChildContent>
+				</Table>
+			</CardBody>
+		}
+	</Card>
 
 </Dimmer>
 
@@ -20,11 +90,56 @@
 	[Parameter]
 	public string Id { get; set; } = string.Empty;
 
+	private Definition? _definition = null;
+	private List<Entry> _entries = [];
+
 	private bool isLoading = true;
 
-	protected override async Task OnInitializedAsync()
+	protected override Task OnInitializedAsync() => Refresh();
+
+	private async Task Refresh()
 	{
-		await Task.Delay(1000);
+		isLoading = true;
+
+		if (CurrentUser == null || string.IsNullOrEmpty(Id))
+		{
+			isLoading = false;
+			return;
+		}
+
+		_definition = await DefinitionDatabase.GetDocumentByIdAsync(Id);
+
+		if (_definition == null || CurrentUser == null || _definition.UserId != CurrentUser.Id)
+		{
+			isLoading = false;
+			return;
+		}
+
+		FilterDefinition<Entry> filter = Builders<Entry>.Filter.Eq(x => x.DefinitionId, _definition.Id);
+		_entries = await EntryDatabase.GetDocumentsByPredicateAsync(filter);
+		_entries.Sort((x, y) => x.CreatedAt.CompareTo(y.CreatedAt));
+
+
 		isLoading = false;
+	}
+
+	private void OnCreateClicked()
+	{
+		if (_definition == null)
+		{
+			return;
+		}
+		Navigation.NavigateTo($"/TimeTracking/{_definition.Id}/entry/new");
+	}
+
+	private async Task OnEntryDeleteClicked(Entry entry)
+	{
+		await EntryDatabase.DeleteDocumentAsync(entry.Id!);
+		_entries.Remove(entry);
+	}
+
+	private void ReturnToList()
+	{
+		Navigation.NavigateTo("/TimeTracking/list");
 	}
 }

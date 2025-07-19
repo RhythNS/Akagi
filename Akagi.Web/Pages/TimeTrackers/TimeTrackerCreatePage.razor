@@ -92,6 +92,11 @@
 		};
 
 		await DefinitionDatabase.SaveDocumentAsync(definition);
+		await ToastService.AddToastAsync(new ToastModel
+		{
+			Title = "Success",
+			Message = "Entry saved successfully!"
+		});
 		Navigation.NavigateTo("/TimeTracking/list");
 	}
 

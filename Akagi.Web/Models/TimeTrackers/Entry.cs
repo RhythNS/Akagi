@@ -10,5 +10,6 @@ public class Entry : Savable
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    [BsonSerializer(typeof(DictionaryStringObjectBsonSerializer))]
     public Dictionary<string, object> Values { get; set; } = [];
 }
