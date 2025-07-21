@@ -37,7 +37,7 @@ internal class SendSystemMessageTask : OneShotTask
         TextMessage message = new()
         {
             From = Characters.Conversations.Message.Type.System,
-            Text = Message,
+            Text = $"{TextMessage.SystemMessagePrefix}{Message}",
             Time = DateTime.UtcNow,
             VisibleTo = Characters.Conversations.Message.Type.System | Characters.Conversations.Message.Type.Character
         };

@@ -1,5 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Communication;
+using Akagi.Connectors;
 using Akagi.Data;
 using Akagi.LLMs;
 using Akagi.Receivers;
@@ -18,6 +19,7 @@ internal class Program
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
         builder.Services.AddUtils();
+        builder.Services.AddConnectors(builder.Configuration);
         builder.Services.AddData(builder.Configuration);
         builder.Services.AddPuppeteers();
         builder.Services.AddCharacter();

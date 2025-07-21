@@ -1,4 +1,5 @@
 ﻿using Akagi.Receivers.Commands;
+using Akagi.Receivers.MessageCompilers;
 using Akagi.Receivers.Puppeteers;
 using Akagi.Receivers.SystemProcessors;
 using Akagi.Utils;
@@ -19,12 +20,22 @@ static class DependendyInjection
 
         services.AddSingleton<ISystemProcessorDatabase, SystemProcessorDatabase>();
         services.AddSingleton<IPuppeteerDatabase, PuppeteerDatabase>();
-        RegisterDBClasses();
+        services.AddSingleton<IMessageCompilerDatabase, MessageCompilerDatabase>();
+
+        Type[] puppeteerTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Puppeteer>();
+        Array.ForEach(puppeteerTypes, puppeteerType => Register(services, puppeteerType));
+
+        Type[] messageCompilerTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<MessageCompiler>();
+        Array.ForEach(messageCompilerTypes, messageCompilerType => Register(services, messageCompilerType));
     }
 
-    private static void RegisterDBClasses()
+    private static void Register(IServiceCollection services, Type type)
     {
-        BsonClassMap.RegisterClassMap<SinglePuppeteer>();
-        BsonClassMap.RegisterClassMap<LinePuppeteer>();
+        if (!BsonClassMap.IsClassMapRegistered(type))
+        {
+            BsonClassMap classMap = new(type);
+            classMap.AutoMap();
+            BsonClassMap.RegisterClassMap(classMap);
+        }
     }
 }

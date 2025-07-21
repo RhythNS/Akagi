@@ -32,7 +32,7 @@ internal class GeminiClient : IGeminiClient
 
     private GeminiPayload GetPayload(SystemProcessor systemProcessor, Character character, User user)
     {
-        Message[] messages = systemProcessor.CompileMessages(user, character);
+        Message[] messages = systemProcessor.MessageCompiler.Compile(user, character);
         List<GeminiPayload.Content> contents = [];
         foreach (Message message in messages)
         {

@@ -10,7 +10,9 @@ internal class HelpListCommand : ListCommand
 
     public override Task ExecuteAsync(Context context, string[] args)
     {
-        Command[] commands = [.. Communicator.AvailableCommands.OrderBy(x => x.Name)];
+        Command[] commands = [.. Communicator.AvailableCommands
+                                             .Where(x => !x.AdminOnly || context.User.Admin)
+                                             .OrderBy(x => x.Name)];
 
         if (commands == null || commands.Length == 0)
         {

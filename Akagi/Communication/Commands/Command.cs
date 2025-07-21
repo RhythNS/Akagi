@@ -17,6 +17,8 @@ internal abstract class Command
 
     public abstract string Description { get; }
 
+    public virtual bool AdminOnly => false;
+
     public virtual Type[] CompatibleFor => [typeof(ICommunicator)];
 
     private ICommunicator? _communicator;

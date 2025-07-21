@@ -1,5 +1,6 @@
 ﻿using Akagi.Data;
 using Akagi.LLMs;
+using System.Text.Json;
 
 namespace Akagi.Users;
 
@@ -10,7 +11,9 @@ internal class User : Savable
     private string _lastUsedCommunicator = string.Empty;
     private TelegramUser? _telegramUser;
     private bool _valid = false;
+    private bool _admin = false;
     private ILLM.LLMType _llmType;
+    private Dictionary<string, string> _configurations = [];
 
     public override bool Dirty
     {
@@ -53,9 +56,58 @@ internal class User : Savable
         get => _valid;
         set => SetProperty(ref _valid, value);
     }
+    public bool Admin
+    {
+        get => _admin;
+        set => SetProperty(ref _admin, value);
+    }
     public ILLM.LLMType LLMType
     {
         get => _llmType;
         set => SetProperty(ref _llmType, value);
+    }
+    public Dictionary<string, string> Configurations
+    {
+        get => _configurations;
+        set => SetProperty(ref _configurations, value);
+    }
+
+    public T? GetConfig<T>() where T : class
+    {
+        string configKey = typeof(T).Name;
+        if (!Configurations.TryGetValue(configKey, out string? value))
+        {
+            return null;
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<T>(value);
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Failed to get configuration for {configKey} from user {Name} ({Username})", ex);
+        }
+    }
+
+    public T GetOrDefault<T>(T defaultValue) where T : class
+    {
+        T? value = GetConfig<T>();
+        return value ?? defaultValue;
+    }
+
+    public void SetConfig<T>(T config) where T : class
+    {
+        string configKey = typeof(T).Name;
+        try
+        {
+            string json = JsonSerializer.Serialize(config);
+            Configurations[configKey] = json;
+            Dirty = true;
+        }
+        catch (Exception ex)
+        {
+            throw new Exception($"Failed to set configuration for {configKey} for user {Name} ({Username})", ex);
+        }
     }
 }

@@ -9,6 +9,8 @@ internal class BuildTimeCommand : TextCommand
 
     public override string Description => "Retrieves the build time of the application.";
 
+    public override bool AdminOnly => true;
+
     private readonly ApplicationInformation applicationInformation;
 
     public BuildTimeCommand(ApplicationInformation applicationInformation)

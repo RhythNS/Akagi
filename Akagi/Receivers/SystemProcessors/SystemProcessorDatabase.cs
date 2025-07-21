@@ -1,5 +1,6 @@
 ﻿using Akagi.Data;
 using Akagi.Receivers.Commands;
+using Akagi.Receivers.MessageCompilers;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
@@ -8,11 +9,14 @@ namespace Akagi.Receivers.SystemProcessors;
 internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProcessorDatabase
 {
     private readonly ICommandFactory _commandFactory;
+    private readonly IMessageCompilerDatabase _compilerDatabase;
 
     public SystemProcessorDatabase(IOptionsMonitor<DatabaseOptions> options,
-                                   ICommandFactory commandFactory) : base(options, "system_processor")
+                                   ICommandFactory commandFactory,
+                                   IMessageCompilerDatabase compilerDatabase) : base(options, "system_processor")
     {
         _commandFactory = commandFactory;
+        _compilerDatabase = compilerDatabase;
     }
 
     public override bool CanSave(Savable savable) => savable is SystemProcessor;
@@ -27,6 +31,14 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
         {
             throw new Exception($"SystemProcessor with ID {id} not found.");
         }
+
+        MessageCompiler? messageCompiler = await _compilerDatabase.GetDocumentByIdAsync(systemProcessor.MessageCompilerId);
+
+        if (messageCompiler == null)
+        {
+            throw new Exception($"MessageCompiler with ID {systemProcessor.MessageCompilerId} not found for SystemProcessor {id}.");
+        }
+        systemProcessor.MessageCompiler = messageCompiler;
 
         List<Command> commands = [];
         for (int i = 0; i < systemProcessor.CommandNames.Length; i++)

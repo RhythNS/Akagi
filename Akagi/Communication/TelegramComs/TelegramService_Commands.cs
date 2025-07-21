@@ -52,6 +52,11 @@ internal partial class TelegramService : Communicator, IHostedService
             await _client.SendMessage(message.Chat.Id, "Unknown command");
             return;
         }
+        if (textCommand.AdminOnly && !user.Admin)
+        {
+            await _client.SendMessage(message.Chat.Id, "This command is for admins only.");
+            return;
+        }
 
         string argString = command.Substring(textCommand.Name.Length).Trim();
         List<string> args = [];
@@ -73,7 +78,9 @@ internal partial class TelegramService : Communicator, IHostedService
             {
                 int start = i;
                 while (i < argString.Length && !char.IsWhiteSpace(argString[i]))
+                {
                     i++;
+                }
                 args.Add(argString.Substring(start, i - start));
             }
             else
@@ -118,6 +125,11 @@ internal partial class TelegramService : Communicator, IHostedService
             await _client.SendMessage(message.Chat.Id, "Unknown command");
             return;
         }
+        if (documentCommand.AdminOnly && !user.Admin)
+        {
+            await _client.SendMessage(message.Chat.Id, "This command is for admins only.");
+            return;
+        }
 
         string[] args = command.Substring(documentCommand.Name.Length)
                                .Split(' ', StringSplitOptions.RemoveEmptyEntries);
@@ -149,7 +161,7 @@ internal partial class TelegramService : Communicator, IHostedService
         {
             telegramCommand.Init(telegramContext);
         }
-        
+
         await documentCommand.ExecuteAsync(context, [.. validFiles], args);
 
         validFiles.ForEach(x => x.Dispose());
