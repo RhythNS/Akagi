@@ -2,7 +2,7 @@
 
 internal class TatoebaUserConfig
 {
-    public string TargetLanguage { get; set; }
-    public string TranslationLanguage { get; set; }
-    public int MaxSentences { get; set; }
+    public required string TargetLanguage { get; set; }
+    public required string TranslationLanguage { get; set; }
+    public required int MaxSentences { get; set; }
 }

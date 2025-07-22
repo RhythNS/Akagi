@@ -1,4 +1,5 @@
-﻿using Akagi.Connectors.Tatoeba;
+﻿using Akagi.Connectors.Desu;
+using Akagi.Connectors.Tatoeba;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,5 +11,6 @@ static class DependencyInjection
     {
         services.Configure<TatoebaConnector.Options>(configuration.GetSection("Tatoeba"));
         services.AddScoped<ITatoebaConnector, TatoebaConnector>();
+        services.AddScoped<IDesuConnector, DesuConnector>();
     }
 }
