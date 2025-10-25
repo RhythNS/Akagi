@@ -248,7 +248,7 @@ internal class GeminiClient : IGeminiClient
                         switch (firstElement.ValueKind)
                         {
                             case JsonValueKind.String:
-                                argument.Value = firstElement.GetString();
+                                argument.Value = firstElement.GetString()!;
                                 break;
                             case JsonValueKind.Number:
                                 if (argument.ArgumentType == Argument.Type.Int)

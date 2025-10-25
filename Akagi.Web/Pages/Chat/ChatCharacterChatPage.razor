@@ -1,0 +1,446 @@
+﻿@using Akagi.Web.Models.Chat
+@using Akagi.Web.Pages.Chat.Components
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+@using Microsoft.AspNetCore.Components.Web
+@using TabBlazor.Services
+
+@implements IDisposable
+
+@inject ISocketClientContainer SocketClientContainer
+@inject ToastService ToastService
+
+@page "/Chat/{CharacterId}/"
+
+<ChatConnectionStatus />
+
+@if (_character == null)
+{
+	<p>Loading character...</p>
+}
+else
+{
+	<div class="chat-shell">
+		<div class="chat-page">
+			<div class="chat-scroll">
+				<div class="chat-thread">
+					@foreach (Conversation conv in _conversations)
+					{
+						<div class="conversation-separator">
+							<span>Conversation @conv.Id • @conv.Time.ToLocalTime().ToString("g") @(conv.IsCompleted ? "(completed)" : "")</span>
+						</div>
+
+						@foreach (Message baseMessage in conv.Messages)
+						{
+							if (baseMessage is not TextMessage textMessage)
+							{
+								continue;
+							}
+
+							bool fromUser = textMessage.From == Message.Type.User;
+							string senderName = fromUser ? "You" : _character.Name;
+
+							<div class="message-row @(fromUser ? "from-user" : "from-character")">
+								@if (!fromUser)
+								{
+									<Avatar class="me-2 d-none d-sm-block"
+											Rounded="AvatarRounded.Circle"
+											Size="AvatarSize.Large"
+											Data="@($"/socket/cards/{_character.CardId}/image.png?circuitId={SocketClientContainer.Client?.CircuitId}")" />
+								}
+								<div class="bubble">
+									<div class="meta">
+										<strong>@senderName</strong>
+										<span class="time">@textMessage.Time.ToLocalTime().ToString("t")</span>
+									</div>
+									<div class="content">
+										@foreach (string line in (textMessage.Text ?? string.Empty).Split(Environment.NewLine))
+										{
+											<span>@line</span>
+
+											<br />
+										}
+									</div>
+								</div>
+							</div>
+						}
+					}
+				</div>
+			</div>
+
+			<div class="composer" id="composer">
+				<label class="form-label mb-1">Message</label>
+				<InputTextArea class="form-control composer-input"
+							   placeholder="Type a message. Enter = send, Shift+Enter = newline"
+							   rows="3"
+							   @bind-Value="_newMessage"
+							   @onkeydown="OnMessageKeyDown" />
+				<div class="mt-2 d-flex gap-2 align-items-center">
+					<Button BackgroundColor="TablerColor.Green"
+							OnClick="SendMessageAsync"
+							Disabled="@(_isSending || string.IsNullOrWhiteSpace(_newMessage))">
+						Send
+					</Button>
+					@if (_isSending)
+					{
+						<span class="text-muted small">Sending...</span>
+					}
+					<span class="shortcut-hint text-muted ms-auto small d-none d-md-inline">
+						Enter to send • Shift+Enter newline
+					</span>
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+<style>
+	/* Full viewport container ensures no outer page scroll is needed */
+	.chat-shell {
+		height: 100dvh;
+		display: flex;
+		flex-direction: column;
+		/* Adjust if your main layout already adds padding/margins */
+	}
+
+	/* Flex column: scroll area + fixed-size composer */
+	.chat-page {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden; /* Prevent page scroll */
+		gap: .75rem;
+		padding: .5rem .5rem .75rem;
+		box-sizing: border-box;
+	}
+
+	/* The only scrollable area */
+	.chat-scroll {
+		flex: 1;
+		min-height: 0;
+		overflow-y: auto;
+		padding: .75rem .75rem 1rem;
+		border: 1px solid var(--tblr-border-color,#dee2e6);
+		border-radius: .75rem;
+		background: var(--tblr-body-bg,#fff);
+		scroll-behavior: smooth;
+	}
+
+	.chat-thread {
+		display: flex;
+		flex-direction: column;
+		gap: .6rem;
+	}
+
+	.conversation-separator {
+		text-align: center;
+		margin: 1.4rem 0 .9rem;
+		position: relative;
+		font-size: .65rem;
+		text-transform: uppercase;
+		letter-spacing: .05em;
+		color: #6c757d;
+		font-weight: 600;
+	}
+
+		.conversation-separator:before,
+		.conversation-separator:after {
+			content: "";
+			position: absolute;
+			top: 50%;
+			width: 38%;
+			height: 1px;
+			background: #e5e7eb;
+		}
+
+		.conversation-separator:before {
+			left: 0;
+		}
+
+		.conversation-separator:after {
+			right: 0;
+		}
+
+	.message-row {
+		display: flex;
+		align-items: flex-end;
+	}
+
+		.message-row.from-user {
+			justify-content: flex-end;
+		}
+
+	.bubble {
+		max-width: 70ch;
+		padding: .60rem .90rem .70rem;
+		border-radius: 1.15rem;
+		box-shadow: 0 1px 2px rgba(0,0,0,.08);
+		position: relative;
+		display: flex;
+		flex-direction: column;
+		gap: .30rem;
+		font-size: .92rem;
+		line-height: 1.28rem;
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	.message-row.from-character .bubble {
+		background: #f1f3f5;
+		color: #212529;
+		border-bottom-left-radius: .40rem;
+	}
+
+	.message-row.from-user .bubble {
+		background: var(--tblr-primary,#4c6ef5);
+		color: #fff;
+		border-bottom-right-radius: .40rem;
+	}
+
+	.bubble .meta {
+		font-size: .60rem;
+		opacity: .75;
+		display: flex;
+		align-items: center;
+		gap: .4rem;
+		margin-bottom: .05rem;
+		font-weight: 500;
+	}
+
+	.message-row.from-user .bubble .meta {
+		color: rgba(255,255,255,.85);
+	}
+
+	.message-row.from-character .bubble:after,
+	.message-row.from-user .bubble:after {
+		content: "";
+		position: absolute;
+		bottom: 0;
+		width: 12px;
+		height: 12px;
+		background: inherit;
+	}
+
+	.message-row.from-character .bubble:after {
+		left: -4px;
+		clip-path: polygon(0 100%, 0 0, 100% 100%);
+	}
+
+	.message-row.from-user .bubble:after {
+		right: -4px;
+		clip-path: polygon(0 100%, 100% 0, 100% 100%);
+	}
+
+	/* Composer always visible (no sticky/fixed needed since container doesn't scroll) */
+	.composer {
+		border: 1px solid var(--tblr-border-color,#dee2e6);
+		border-radius: .75rem;
+		padding: .9rem .9rem 1rem;
+		background: var(--tblr-body-bg,#fff);
+		box-shadow: 0 2px 4px -2px rgba(0,0,0,.05);
+	}
+
+	.composer-input {
+		resize: vertical;
+		min-height: 90px;
+		max-height: 35vh;
+	}
+
+	.shortcut-hint {
+		opacity: .65;
+	}
+
+	/* Mobile adjustments */
+	@@media (max-width: 576px) {
+		.bubble {
+			max-width: 85%;
+		}
+
+		.chat-page {
+			gap: .5rem;
+			padding: .5rem;
+		}
+
+		.chat-scroll {
+			padding: .6rem .6rem .9rem;
+		}
+
+		.composer {
+			padding: .75rem .75rem .85rem;
+		}
+
+		.composer-input {
+			min-height: 70px;
+		}
+	}
+
+	/* Short viewports */
+	@@media (max-height: 540px) {
+		.composer-input {
+			min-height: 60px;
+			max-height: 28vh;
+		}
+	}
+</style>
+
+@code {
+	[Parameter]
+	public required string CharacterId { get; set; } = string.Empty;
+
+	private Character? _character = null;
+	private Conversation[] _conversations = [];
+
+	private string _newMessage = string.Empty;
+	private bool _isSending = false;
+	private bool registeredForMessages = false;
+
+	public void Dispose()
+	{
+		SocketClient? client = SocketClientContainer.Client;
+		if (client == null)
+		{
+			return;
+		}
+
+		client.MessageRecieved -= OnClientMessageReceived;
+	}
+
+	protected override async Task OnInitializedAsync()
+	{
+		SocketClient? client = SocketClientContainer.Client;
+		if (client == null)
+		{
+			return;
+		}
+		if (!registeredForMessages)
+		{
+			client.MessageRecieved += OnClientMessageReceived;
+			registeredForMessages = true;
+		}
+
+		if (string.IsNullOrWhiteSpace(CharacterId))
+		{
+			throw new ArgumentException("CharacterId cannot be null or empty.", nameof(CharacterId));
+		}
+
+		if (string.Equals(CharacterId, "0", StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		CharacterListRequest request = new CharacterListRequest
+		{
+			Ids = [CharacterId]
+		};
+		Character[] characters = await request.Get(client);
+		if (characters.Length == 0 || characters[0] == null || characters[0].Id != CharacterId)
+		{
+			throw new InvalidOperationException($"Character with ID '{CharacterId}' not found.");
+		}
+
+		_character = characters[0];
+
+		await RefreshAllMessages();
+	}
+
+	private async Task RefreshAllMessages()
+	{
+		SocketClient? client = SocketClientContainer.Client;
+		if (client == null)
+		{
+			return;
+		}
+
+		ConversationRequest request = new ConversationRequest
+		{
+			CharacterId = CharacterId,
+		};
+		_conversations = await request.Get(client);
+		StateHasChanged();
+	}
+
+	private async Task SendMessageAsync()
+	{
+		if (_isSending || string.IsNullOrWhiteSpace(_newMessage))
+		{
+			return;
+		}
+
+		SocketClient? client = SocketClientContainer.Client;
+		if (client == null)
+		{
+			return;
+		}
+
+		string messageToSend = _newMessage.Trim();
+		_newMessage = string.Empty;
+		_isSending = true;
+		StateHasChanged();
+
+		try
+		{
+			SendTextMessageRequest request = new SendTextMessageRequest
+			{
+				CharacterId = CharacterId,
+				Text = messageToSend,
+			};
+			try
+			{
+				TextMessageResult result = await request.Get(client);
+				if (!string.IsNullOrEmpty(result.Error))
+				{
+					await ToastService.AddToastAsync(new ToastModel
+					{
+						Title = "Message Response",
+						Message = $"Error from character: {result.Error}"
+					});
+					return;
+				}
+				Conversation? conv = _conversations.MaxBy(x => x.Time);
+				if (conv == null)
+				{
+					await ToastService.AddToastAsync(new ToastModel
+					{
+						Title = "Message Response",
+						Message = "No active conversation found. Please refresh the page and try again."
+					});
+					return;
+				}
+				conv.Messages.Add(new TextMessage
+				{
+					From = Message.Type.User,
+					Text = messageToSend,
+					Time = DateTime.UtcNow,
+				});
+			}
+			catch (Exception)
+			{
+				await ToastService.AddToastAsync(new ToastModel
+				{
+					Title = "Message Response",
+					Message = "Failed to get a response from the character. Please try again."
+				});
+				return;
+			}
+		}
+		finally
+		{
+			_isSending = false;
+			StateHasChanged();
+		}
+	}
+
+	private async Task OnMessageKeyDown(KeyboardEventArgs e)
+	{
+		if (e.Key == "Enter" && !e.ShiftKey)
+		{
+			await SendMessageAsync();
+		}
+	}
+
+	private void OnClientMessageReceived(string? characterId, Message message)
+	{
+		_conversations.MaxBy(x => x.Time)?.Messages.Add(message);
+		InvokeAsync(StateHasChanged);
+	}
+}

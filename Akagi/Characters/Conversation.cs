@@ -7,10 +7,16 @@ namespace Akagi.Characters;
 
 internal class Conversation : DirtyTrackable
 {
+    private int _id;
     private DateTime _time = DateTime.MinValue;
     private List<Message> _messages = [];
     private bool _isCompleted = false;
 
+    public int Id
+    {
+        get => _id;
+        set => SetProperty(ref _id, value);
+    }
     public DateTime Time
     {
         get => _time;
@@ -108,5 +114,29 @@ internal class Conversation : DirtyTrackable
         Dirty = true;
         textMessage.Text = newText;
         return true;
+    }
+
+    public Bridge.Chat.Models.Conversation ToBridgeModel()
+    {
+        List<Bridge.Chat.Models.TextMessage> bridgeMessages = [];
+        foreach (Message message in _messages)
+        {
+            if (message is TextMessage textMessage)
+            {
+                bridgeMessages.Add(textMessage.ToBridgeMessage());
+            }
+            else
+            {
+                throw new NotSupportedException($"Unsupported message type: {message.GetType().Name}");
+            }
+        }
+
+        return new Bridge.Chat.Models.Conversation
+        {
+            Id = Id,
+            Time = Time,
+            Messages = bridgeMessages,
+            IsCompleted = IsCompleted
+        };
     }
 }

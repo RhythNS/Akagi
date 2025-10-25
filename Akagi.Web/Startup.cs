@@ -1,7 +1,12 @@
 using Akagi.Web.Data;
 using Akagi.Web.Services;
+using Akagi.Web.Services.Sockets;
+using Akagi.Web.Services.Users;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.FileProviders;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using TabBlazor;
@@ -19,44 +24,116 @@ public class Startup
 
     public void ConfigureServices(IServiceCollection services)
     {
+        services.AddLogging();
+        services.AddMemoryCache();
+
         services.AddRazorPages();
         services.AddServerSideBlazor();
         services.AddTabler();
         services.AddHttpContextAccessor();
         services.AddControllers();
-
         services.AddData(Configuration);
-        services.AddServices();
+        services.AddServices(Configuration);
 
         services.AddAuthentication(options =>
         {
             options.DefaultScheme = CookieAuthenticationDefaults.AuthenticationScheme;
             options.DefaultChallengeScheme = "Google";
-        }
-        ).AddCookie()
-         .AddGoogle(options =>
-         {
-             IConfigurationSection googleAuthNSection = Configuration.GetSection("Authentication:Google");
-             options.ClientId = googleAuthNSection["ClientId"]!;
-             options.ClientSecret = googleAuthNSection["ClientSecret"]!;
-             options.CallbackPath = "/signin-google";
+        }).AddCookie(options =>
+        {
+            options.Events = new CookieAuthenticationEvents
+            {
+                OnValidatePrincipal = async context =>
+                {
+                    Claim? internalIdClaim = context.Principal?.FindFirst("internal_id");
+                    if (internalIdClaim != null)
+                    {
+                        IUserDatabase userDatabase = context.HttpContext.RequestServices.GetRequiredService<IUserDatabase>();
+                        string userId = internalIdClaim.Value;
 
-             options.Events = new OAuthEvents
-             {
-                 OnCreatingTicket = async context =>
-                 {
-                     string googleId = context.Principal!.FindFirstValue(ClaimTypes.NameIdentifier)!;
-                     string name = context.Principal!.FindFirstValue(ClaimTypes.Name)!;
-                     string email = context.Principal!.FindFirstValue(ClaimTypes.Email)!;
+                        Models.User? user = await userDatabase.GetDocumentByIdAsync(userId);
 
-                     IUserService userService = context.HttpContext.RequestServices.GetRequiredService<IUserService>();
-                     Models.User user = await userService.FindOrCreateUserAsync(googleId, name, email);
+                        if (user == null)
+                        {
+                            context.RejectPrincipal();
+                            await context.HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+                            return;
+                        }
 
-                     ClaimsIdentity claimsIdentity = (ClaimsIdentity)context.Principal!.Identity!;
-                     claimsIdentity.AddClaim(new Claim("internal_id", user!.Id!.ToString()));
-                 }
-             };
-         });
+                        ClaimsIdentity identity = (ClaimsIdentity)context.Principal!.Identity!;
+                        if (!context.Principal.HasClaim(c => c.Type == "access_token"))
+                        {
+                            string? accessToken = context.Properties?.GetTokenValue("access_token");
+                            if (accessToken != null)
+                            {
+                                identity.AddClaim(new Claim("access_token", accessToken));
+                            }
+                        }
+
+                        if (!context.Principal.HasClaim(c => c.Type == "id_token"))
+                        {
+                            string? idToken = context.Properties?.GetTokenValue("id_token");
+                            if (idToken != null)
+                            {
+                                identity.AddClaim(new Claim("id_token", idToken));
+                            }
+                        }
+                    }
+                }
+            };
+        }).AddGoogle(options =>
+        {
+            IConfigurationSection googleAuthNSection = Configuration.GetSection("Authentication:Google");
+            options.ClientId = googleAuthNSection["ClientId"]!;
+            options.ClientSecret = googleAuthNSection["ClientSecret"]!;
+            options.CallbackPath = "/signin-google";
+
+            options.Scope.Add("openid");
+            options.Scope.Add("profile");
+            options.Scope.Add("email");
+            options.SaveTokens = true;
+
+            options.Events = new OAuthEvents
+            {
+                OnCreatingTicket = async context =>
+                {
+                    string googleId = context.Principal!.FindFirstValue(ClaimTypes.NameIdentifier)!;
+                    string name = context.Principal!.FindFirstValue(ClaimTypes.Name)!;
+                    string email = context.Principal!.FindFirstValue(ClaimTypes.Email)!;
+
+                    string accessToken = context.AccessToken!;
+
+                    string? idToken = context.Properties?.GetTokenValue("id_token");
+
+                    IUserService userService = context.HttpContext.RequestServices.GetRequiredService<IUserService>();
+                    Models.User user = await userService.FindOrCreateUserAsync(googleId, name, email);
+
+                    context.Properties?.StoreTokens(
+                    [
+                        new AuthenticationToken { Name = "access_token", Value = accessToken },
+                        new AuthenticationToken { Name = "id_token", Value = idToken ?? "" }
+                    ]);
+
+                    ClaimsIdentity claimsIdentity = (ClaimsIdentity)context.Principal!.Identity!;
+                    claimsIdentity.AddClaim(new Claim("internal_id", user!.Id!.ToString()));
+
+                    if (idToken != null)
+                    {
+                        claimsIdentity.AddClaim(new Claim("id_token", idToken));
+                    }
+
+                    claimsIdentity.AddClaim(new Claim("access_token", accessToken));
+
+                    if (context.ExpiresIn.HasValue)
+                    {
+                        DateTime expiresAt = DateTimeOffset.UtcNow.Add(context.ExpiresIn.Value).DateTime;
+                        claimsIdentity.AddClaim(new Claim("access_token_expires_at", expiresAt.ToString("o")));
+                    }
+                }
+            };
+
+            options.ClaimActions.MapJsonKey("id_token", "id_token");
+        });
 
         services.AddRateLimiter(options =>
         {
@@ -87,6 +164,7 @@ public class Startup
         }
 
         app.UseHttpsRedirection();
+
         app.UseStaticFiles();
 
         app.UseRouting();
@@ -95,6 +173,25 @@ public class Startup
         app.UseAuthorization();
 
         app.UseRateLimiter();
+
+        app.UseStaticFiles(new StaticFileOptions
+        {
+            FileProvider = new SocketFileProvider(
+                app.ApplicationServices.GetRequiredService<ISocketService>(),
+                app.ApplicationServices.GetRequiredService<IMemoryCache>(),
+                app.ApplicationServices.GetRequiredService<ILogger<SocketFileProvider>>(),
+                app.ApplicationServices.GetRequiredService<IHttpContextAccessor>()
+            ),
+            RequestPath = "/socket",
+            OnPrepareResponse = ctx =>
+            {
+                if (!ctx.Context.User.Identity?.IsAuthenticated == true)
+                {
+                    ctx.Context.Response.StatusCode = 401;
+                    ctx.Context.Response.Body = Stream.Null;
+                }
+            }
+        });
 
         app.UseEndpoints(endpoints =>
         {

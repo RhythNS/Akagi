@@ -1,0 +1,34 @@
+﻿@using Akagi.Web.Icons
+@using Akagi.Web.Services.Sockets
+
+@inject ISocketClientContainer SocketClientContainer
+
+<PagePretitle>
+	<Dimmer Active=_loading>
+		@(SocketClientContainer.IsConnected ? "Connected" : "Disconnected")
+		<Icon IconType="@Icons.Power"
+			  TextColor="@(SocketClientContainer.IsConnected? TablerColor.Green: TablerColor.Red)"
+			  Size="12"
+			  Filled="true"
+			  OnClick="ToggleConnection" />
+	</Dimmer>
+</PagePretitle>
+
+@code
+{
+	private bool _loading = false;
+
+	private async Task ToggleConnection()
+	{
+		_loading = true;
+		if (SocketClientContainer.IsConnected)
+		{
+			await SocketClientContainer.TryDisconnectAsync();
+		}
+		else
+		{
+			await SocketClientContainer.TryConnectAsync();
+		}
+		_loading = false;
+	}
+}

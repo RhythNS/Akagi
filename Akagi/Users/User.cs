@@ -10,6 +10,7 @@ internal class User : Savable
     private string _username = string.Empty;
     private string _lastUsedCommunicator = string.Empty;
     private TelegramUser? _telegramUser;
+    private GoogleUser? _googleUser;
     private bool _valid = false;
     private bool _admin = false;
     private ILLM.LLMType _llmType;
@@ -50,6 +51,11 @@ internal class User : Savable
     {
         get => _telegramUser;
         set => SetProperty(ref _telegramUser, value);
+    }
+    public GoogleUser? GoogleUser
+    {
+        get => _googleUser;
+        set => SetProperty(ref _googleUser, value);
     }
     public bool Valid
     {

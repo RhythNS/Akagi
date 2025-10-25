@@ -22,14 +22,14 @@ public class DictionaryStringObjectBsonSerializer : IBsonSerializer<Dictionary<s
 
     public Dictionary<string, object> Deserialize(BsonDeserializationContext context, BsonDeserializationArgs args)
     {
-        var bsonReader = context.Reader;
-        var dict = new Dictionary<string, object>();
+        IBsonReader bsonReader = context.Reader;
+        Dictionary<string, object> dict = [];
 
         bsonReader.ReadStartDocument();
         while (bsonReader.ReadBsonType() != BsonType.EndOfDocument)
         {
-            var name = bsonReader.ReadName();
-            var bsonType = bsonReader.GetCurrentBsonType();
+            string name = bsonReader.ReadName();
+            BsonType bsonType = bsonReader.GetCurrentBsonType();
 
             object value = bsonType switch
             {
@@ -46,9 +46,9 @@ public class DictionaryStringObjectBsonSerializer : IBsonSerializer<Dictionary<s
             // Handle TimeOnly and DateOnly stored as string
             if (value is string str)
             {
-                if (TimeOnly.TryParse(str, out var t))
+                if (TimeOnly.TryParse(str, out TimeOnly t))
                     value = t;
-                else if (DateOnly.TryParse(str, out var d))
+                else if (DateOnly.TryParse(str, out DateOnly d))
                     value = d;
             }
 
@@ -60,9 +60,9 @@ public class DictionaryStringObjectBsonSerializer : IBsonSerializer<Dictionary<s
 
     public void Serialize(BsonSerializationContext context, BsonSerializationArgs args, Dictionary<string, object> value)
     {
-        var writer = context.Writer;
+        IBsonWriter writer = context.Writer;
         writer.WriteStartDocument();
-        foreach (var kvp in value)
+        foreach (KeyValuePair<string, object> kvp in value)
         {
             writer.WriteName(kvp.Key);
             switch (kvp.Value)

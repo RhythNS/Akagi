@@ -99,7 +99,8 @@ internal class Character : Savable
         Conversation newConversation = new()
         {
             Time = DateTime.UtcNow,
-            Messages = []
+            Messages = [],
+            Id = Conversations.Count > 0 ? Conversations.Max(c => c.Id) + 1 : 1,
         };
 
         Dirty = true;

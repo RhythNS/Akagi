@@ -8,6 +8,9 @@ public class User : Savable
     [JsonPropertyName("googleId")]
     public required string GoogleId { get; set; }
 
+    [JsonIgnore]
+    public string? GoogleToken { get; set; }
+
     [JsonPropertyName("name")]
     public required string Name { get; set; }
 

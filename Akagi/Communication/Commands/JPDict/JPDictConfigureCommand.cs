@@ -17,7 +17,7 @@ internal class JPDictConfigureCommand : TextCommand
         string defaultPrint = args[0].ToLowerInvariant();
         string language = args[1].ToLowerInvariant();
 
-        DesuUserConfig userConfig = new DesuUserConfig
+        DesuUserConfig userConfig = new()
         {
             DefaultPrint = defaultPrint,
             Language = language

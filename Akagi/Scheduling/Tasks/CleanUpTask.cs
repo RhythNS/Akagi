@@ -1,4 +1,4 @@
-﻿using Akagi.Utils;
+﻿using Akagi.Flow;
 using DnsClient.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;

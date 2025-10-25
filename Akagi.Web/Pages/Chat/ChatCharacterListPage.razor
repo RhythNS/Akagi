@@ -1,0 +1,87 @@
+﻿@using Akagi.Web.Models.Chat
+@using Akagi.Web.Pages.Chat.Components
+@using Akagi.Web.Services.Circuits
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@inject ISocketClientContainer SocketClientContainer
+@inject NavigationManager NavigationManager
+
+@page "/Chat/CharacterList"
+
+<ChatConnectionStatus />
+
+@switch (currentState)
+{
+	case State.Loading:
+		<p>Loading...</p>
+		break;
+
+	case State.Offline:
+		<p>Socket client is offline.</p>
+		return;
+
+	case State.Online:
+
+		<Button BackgroundColor="TablerColor.Green"
+				OnClick="OnNoActiveCharacterSelected">
+			Without active character
+		</Button>
+
+		<div class="my-3" />
+
+		@if (_characters.Length == 0)
+		{
+			<p>No characters found :(</p>
+			return;
+		}
+
+		foreach (Character character in _characters)
+		{
+			<ChatCharacterElement Character="character"
+								  OnCharacterSelected="OnCharacterSelected" />
+		}
+		break;
+
+	default:
+		throw new InvalidOperationException("Unknown state.");
+}
+
+@code {
+	private enum State
+	{
+		Loading,
+		Offline,
+		Online
+	}
+
+	private State currentState = State.Loading;
+
+	private Character[] _characters = Array.Empty<Character>();
+
+	protected override async Task OnParametersSetAsync()
+	{
+		SocketClient? client = SocketClientContainer.Client;
+
+		if (client is null)
+		{
+			currentState = State.Offline;
+			return;
+		}
+
+		CharacterListRequest request = new();
+		_characters = await request.Get(client);
+
+		currentState = State.Online;
+	}
+
+	private void OnNoActiveCharacterSelected()
+	{
+		NavigationManager.NavigateTo("/Chat/0/");
+	}
+
+	private void OnCharacterSelected(Character character)
+	{
+		NavigationManager.NavigateTo($"/Chat/{character.Id}/");
+	}
+}

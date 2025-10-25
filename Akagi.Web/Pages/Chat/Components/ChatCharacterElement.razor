@@ -1,0 +1,65 @@
+﻿@using Akagi.Web.Models.Chat
+@using Akagi.Web.Services.Circuits
+
+@inject ICircuitIdAccessor CircuitIdAccessor
+
+<div class="card"
+	 style="cursor: pointer;">
+	<div class="card-body">
+		<div class="row row-sm align-items-center">
+			<div class="col-auto">
+				<Avatar Rounded="AvatarRounded.Circle"
+						Size="AvatarSize.ExtraLarge"
+						@onclick="HandleCharacterClick"
+						Data=@($"/socket/cards/{Character.CardId}/image.png?circuitId={CircuitIdAccessor.CircuitId}") />
+			</div>
+			<div class="col">
+				<h4 class="card-title m-0">
+					<a @onclick="HandleCharacterClick">
+						@(Character.Name)
+					</a>
+				</h4>
+				<div class="text-secondary">
+					Maybe put tags here or something
+				</div>
+				<div class="small mt-1">
+					<span class="text-success">●</span>
+					@*<Badge BackgroundColor="TablerColor.Success" />*@
+					Online
+				</div>
+			</div>
+			<div class="col-auto">
+				Options
+			</div>
+			<div class="col-auto">
+				<Dropdown>
+					<ChildContent>
+						<Icon Size="16" IconType="@Icons.Icons.Dots_vertical" />
+					</ChildContent>
+
+					<DropdownTemplate>
+						<DropdownMenu>
+							<DropdownItem>Send Message</DropdownItem>
+							<DropdownItem>Update profile</DropdownItem>
+							<DropdownItem>Disable</DropdownItem>
+						</DropdownMenu>
+					</DropdownTemplate>
+
+				</Dropdown>
+			</div>
+		</div>
+	</div>
+</div>
+
+@code {
+	[Parameter]
+	public required Character Character { get; set; }
+
+	[Parameter]
+	public required EventCallback<Character> OnCharacterSelected { get; set; }
+
+	private async Task HandleCharacterClick()
+	{
+		await OnCharacterSelected.InvokeAsync(Character);
+	}
+}

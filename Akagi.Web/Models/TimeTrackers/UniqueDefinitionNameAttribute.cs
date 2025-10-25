@@ -1,5 +1,5 @@
 using Akagi.Web.Data;
-using Akagi.Web.Services;
+using Akagi.Web.Services.Users;
 using MongoDB.Driver;
 using System.ComponentModel.DataAnnotations;
 
