@@ -45,37 +45,37 @@
 							switch (item.Type)
 							{
 								case FieldType.Boolean:
-									bool boolThing = (bool)_entry.Values[item.Name];
+									bool boolThing = Convert.ToBoolean(_entry.Values[item.Name]);
 									<InputCheckbox class="form-check-input"
-												   Value="(bool)_entry.Values[item.Name]"
+												   Value="Convert.ToBoolean(_entry.Values[item.Name])"
 												   ValueChanged="@(x => _entry.Values[item.Name] = x)"
 												   ValueExpression="() => boolThing" />
 									break;
 								case FieldType.Int:
-									int intThing = (int)_entry.Values[item.Name];
+									int intThing = Convert.ToInt32(_entry.Values[item.Name]);
 									<InputNumber class="form-control"
 												 TValue="int"
-												 Value="(int)_entry.Values[item.Name]"
+												 Value="Convert.ToInt32(_entry.Values[item.Name])"
 												 ValueChanged="@(x => _entry.Values[item.Name] = x)"
 												 ValueExpression="() => intThing" />
 									break;
 								case FieldType.Float:
-									float floatThing = (float)_entry.Values[item.Name];
+									float floatThing = Convert.ToSingle(_entry.Values[item.Name]);
 									<InputNumber class="form-control"
 												 TValue="float"
-												 Value="(float)_entry.Values[item.Name]"
+												 Value="Convert.ToSingle(_entry.Values[item.Name])"
 												 ValueChanged="@(x => _entry.Values[item.Name] = x)"
 												 ValueExpression="() => floatThing" />
 									break;
 								case FieldType.Text:
-									string stringThing = (string)_entry.Values[item.Name];
+									string stringThing = Convert.ToString(_entry.Values[item.Name]) ?? "";
 									<InputText class="form-control"
-											   Value=@((string)_entry.Values[item.Name])
+											   Value=@(Convert.ToString(_entry.Values[item.Name]))
 											   ValueChanged="x => _entry.Values[item.Name] = x"
 											   ValueExpression="() => stringThing" />
 									break;
 								case FieldType.DateTime:
-									DateTime dateTimeThing = (DateTime)_entry.Values[item.Name];
+									DateTime dateTimeThing = Convert.ToDateTime(_entry.Values[item.Name]);
 									<DateTimepicker Label="@item.Name"
 													TValue="DateTime"
 													Value=@((DateTime)_entry.Values[item.Name])

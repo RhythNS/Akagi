@@ -67,7 +67,16 @@
 							</Column>
 						}
 						<Column Item="Entry"
-							    Title=""
+								Title="Edit"
+								ActionColumn>
+							<Template>
+								<span @onclick="(() => OnEntryEditClicked(context))" @onclick:stopPropagation>
+									<span class="clickable-text">Edit</span>
+								</span>
+							</Template>
+						</Column>
+						<Column Item="Entry"
+								Title="Delete"
 								ActionColumn>
 							<Template>
 								<span @onclick="(() => OnEntryDeleteClicked(context))" @onclick:stopPropagation>
@@ -130,6 +139,15 @@
 			return;
 		}
 		Navigation.NavigateTo($"/TimeTracking/{_definition.Id}/entry/new");
+	}
+
+	private void OnEntryEditClicked(Entry entry)
+	{
+		if (_definition == null || entry == null)
+		{
+			return;
+		}
+		Navigation.NavigateTo($"/TimeTracking/{_definition.Id}/entry/{entry.Id}");
 	}
 
 	private async Task OnEntryDeleteClicked(Entry entry)
