@@ -1,10 +1,14 @@
 ﻿@using Akagi.Web.Data
+@using Akagi.Web.Exporters
 @using Akagi.Web.Icons
 @using Akagi.Web.Models
 @using Akagi.Web.Models.TimeTrackers
 @using MongoDB.Driver
+@using TabBlazor.Services
 
 @inject IDefinitionDatabase DefinitionDatabase
+@inject IMySqlExporter MySqlExporter
+@inject ToastService ToastService
 @inject NavigationManager Navigation
 
 @page "/TimeTracking/list"
@@ -27,6 +31,11 @@
 					OnClick="OnCreateClicked">
 				<Icon IconType="@Icons.New"
 					  BackgroundColor="TablerColor.Green" />
+			</Button>
+			<Button Type="ButtonType.Button"
+					OnClick="OnExportClicked">
+				<Icon IconType="@Icons.Home"
+					  BackgroundColor="TablerColor.Success" />
 			</Button>
 		</CardHeader>
 
@@ -79,6 +88,32 @@
 		FilterDefinition<Definition> filter = Builders<Definition>.Filter.Eq(x => x.UserId, CurrentUser.Id);
 		_definitions = await DefinitionDatabase.GetDocumentsByPredicateAsync(filter);
 		isLoading = false;
+	}
+
+	private async Task OnExportClicked()
+	{
+		try
+		{
+			await MySqlExporter.ExportAsync();
+
+			await ToastService.AddToastAsync(
+				new ToastModel
+				{
+					Title = "Exporter",
+					Message = "Successfully exported Time Tracker data to MySQL database."
+				}
+			);
+		}
+		catch (Exception)
+		{
+			await ToastService.AddToastAsync(
+				new ToastModel
+				{
+					Title = "Exporter",
+					Message = "Failed to export Time Tracker data to MySQL database.",
+				}
+			);
+		}
 	}
 
 	private void OnRowClicked(Definition definition)

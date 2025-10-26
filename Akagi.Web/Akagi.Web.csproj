@@ -8,12 +8,14 @@
 
   <ItemGroup>
 	<PackageReference Include="Blazority" Version="2.0.1" />
+	<PackageReference Include="Dapper" Version="2.1.66" />
 	<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.4" />
 	<PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4" />
 	<PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.4" />
 	<PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.4" />
 	<PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="8.0.18" />
 	<PackageReference Include="MongoDB.Driver" Version="3.4.0" />
+	<PackageReference Include="MySqlConnector" Version="2.4.0" />
 	<PackageReference Include="NetCoreServer" Version="8.0.7" />
 	<PackageReference Include="TabBlazor" Version="0.14.42-beta" />
   </ItemGroup>

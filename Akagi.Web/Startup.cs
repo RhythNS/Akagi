@@ -1,4 +1,5 @@
 using Akagi.Web.Data;
+using Akagi.Web.Exporters;
 using Akagi.Web.Services;
 using Akagi.Web.Services.Sockets;
 using Akagi.Web.Services.Users;
@@ -6,7 +7,6 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.FileProviders;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using TabBlazor;
@@ -33,6 +33,7 @@ public class Startup
         services.AddHttpContextAccessor();
         services.AddControllers();
         services.AddData(Configuration);
+        services.AddExporters(Configuration);
         services.AddServices(Configuration);
 
         services.AddAuthentication(options =>
