@@ -103,9 +103,20 @@
 					</div>
 				}
 
+				<div>
+					<label class="form-label">
+						Submit multiple
+					</label>
+					<InputCheckbox class="form-check-input"
+								   @bind-Value=_submitMultiple />
+				</div>
 				<TabBlazor.Button Type="ButtonType.Submit"
-						Text="Save"
-						class="mt-1" />
+								  Text="Save"
+								  class="mt-1" />
+				<TabBlazor.Button Type="ButtonType.Link"
+								  Text="Abort"
+								  LinkTo=@(detailPath)
+								  class="mt-1" />
 			</TablerForm>
 		</CardBody>
 	}
@@ -123,6 +134,9 @@
 
 	private Entry? _entry = null;
 	private Definition? _definition = null;
+	private bool _submitMultiple = false;
+
+	private string detailPath => $"/TimeTracking/{DefinitionId}/detail";
 
 	protected override async Task OnInitializedAsync()
 	{
@@ -202,6 +216,12 @@
 			Title = "Success",
 			Message = "Entry saved successfully!"
 		});
+
+		if (_submitMultiple)
+		{
+			_entry.Id = null;
+			return;
+		}
 		Navigation.NavigateTo($"/TimeTracking/{DefinitionId}/detail");
 	}
 

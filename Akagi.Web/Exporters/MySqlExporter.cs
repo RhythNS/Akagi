@@ -90,7 +90,7 @@ public class MySqlExporter : IMySqlExporter
                 }
 
                 string tableName = BuildTableName(def);
-                await EnsurePerDefinitionTableAsync(connection, transaction, tableName, def, cancellationToken);
+                await EnsurePerDefinitionTableAsync(connection, transaction, tableName, cancellationToken);
 
                 if (!entriesByDef.TryGetValue(def.Id!, out List<Entry>? entries) || entries.Count == 0)
                 {
@@ -154,11 +154,10 @@ ON DUPLICATE KEY UPDATE {string.Join(", ", updateAssignments)};";
 
     // Creates the per-definition table with base columns if it doesn't exist,
     // and ensures base columns exist if table was pre-existing.
-    private async Task EnsurePerDefinitionTableAsync(
+    private static async Task EnsurePerDefinitionTableAsync(
         MySqlConnection conn,
         MySqlTransaction tx,
         string tableName,
-        Definition def,
         CancellationToken ct)
     {
         string createSql = $@"
@@ -235,7 +234,7 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @TableName;";
             string colName = SanitizeIdentifier(field.Name ?? string.Empty);
             string columnDef = GetMySqlColumnDefinition(field.Type);
 
-            if (!existingColumns.ContainsKey(colName))
+            if (!existingColumns.TryGetValue(colName, out (string DataType, string ColumnType) existing))
             {
                 string alter = $@"ALTER TABLE `{tableName}` ADD COLUMN `{colName}` {columnDef};";
                 await conn.ExecuteAsync(new CommandDefinition(alter, transaction: tx, cancellationToken: ct));
@@ -243,7 +242,6 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @TableName;";
             else
             {
                 // Optionally check for type mismatch here; for now, only log if different base DATA_TYPE.
-                (string DataType, string ColumnType) existing = existingColumns[colName];
                 string expectedDataType = columnDef.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0].ToLowerInvariant();
                 if (!existing.DataType.Equals(expectedDataType, StringComparison.OrdinalIgnoreCase))
                 {
@@ -364,8 +362,7 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @TableName;";
     {
         // Stable 8-char suffix from Definition.Id (or from Name+UserId if Id missing)
         string basis = !string.IsNullOrEmpty(def.Id) ? def.Id! : $"{def.Name}|{def.UserId}";
-        using SHA256 sha = SHA256.Create();
-        byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(basis));
+        byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(basis));
         return Convert.ToHexString(hash)[..8].ToLowerInvariant();
     }
 
