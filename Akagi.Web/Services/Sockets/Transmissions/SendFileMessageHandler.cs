@@ -15,8 +15,9 @@ public class SendFileMessageHandler : SocketTransmissionHandler
         FileMessageResult result = new()
         {
             CharacterId = response.CharacterId,
-            FileUrl = response.FileUrl,
             Message = response.Text,
+            FileType = response.FileType,
+            FileUrl = response.FileUrl,
             Error = response.Error
         };
 

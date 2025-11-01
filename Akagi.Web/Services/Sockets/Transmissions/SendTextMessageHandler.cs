@@ -12,7 +12,7 @@ public class SendTextMessageHandler : SocketTransmissionHandler
     public override void Execute(Context context, TransmissionWrapper transmissionWrapper)
     {
         SendTextMessageResponseTransmission responseTransmission = GetTransmission<SendTextMessageResponseTransmission>(transmissionWrapper);
-        TextMessageResult result = new TextMessageResult
+        TextMessageResult result = new()
         {
             CharacterId = responseTransmission.CharacterId,
             Text = responseTransmission.Text,

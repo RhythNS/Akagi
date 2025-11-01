@@ -38,25 +38,17 @@ internal class CharacterRequestHandler : SocketTransmissionHandler
         List<Bridge.Chat.Models.Character> castCharacters = [];
         foreach (Character character in characters)
         {
-            DateTime? lastMessageTime = null;
-            if (character.Conversations.Any())
-            {
-                Conversation? lastConversation = character.Conversations
-                    .OrderByDescending(conv => conv.Messages.Max(msg => msg.Time))
-                    .FirstOrDefault();
-                if (lastConversation != null)
-                {
-                    lastMessageTime = lastConversation.Messages
-                        .OrderByDescending(msg => msg.Time)
-                        .FirstOrDefault()?.Time;
-                }
-            }
+            DateTime lastMessageTime = character.Conversations
+                .SelectMany(c => c.Messages)
+                .Select(m => (DateTime?)m.Time)
+                .Max() ?? DateTime.MinValue;
+
             castCharacters.Add(new Bridge.Chat.Models.Character
             {
                 Name = character.Name,
                 CardId = character.CardId,
                 Id = character.Id!,
-                LastMessageTime = lastMessageTime ?? DateTime.MinValue,
+                LastMessageTime = lastMessageTime,
             });
         }
 
