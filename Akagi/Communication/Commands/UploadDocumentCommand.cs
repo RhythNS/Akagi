@@ -23,7 +23,7 @@ internal abstract class UploadDocumentCommand<T> : DocumentCommand where T : Sav
         List<string> successNames = [];
         foreach (Document document in documents)
         {
-            MemoryStream? stream = await document.GetStream();
+            using MemoryStream? stream = await document.GetStream();
             if (stream == null)
             {
                 continue;

@@ -4,11 +4,16 @@
 @using Akagi.Web.Services.Sockets.Requests
 @using Microsoft.AspNetCore.Components.Web
 @using TabBlazor.Services
-
-@implements IDisposable
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.JSInterop
 
 @inject ISocketClientContainer SocketClientContainer
 @inject ToastService ToastService
+@inject NavigationManager NavigationManager
+@inject IJSRuntime JS
+@inject ILogger<ChatCharacterChatPage> Logger
+
+@implements IDisposable
 
 @page "/Chat/{CharacterId}/"
 
@@ -22,7 +27,7 @@ else
 {
 	<div class="chat-shell">
 		<div class="chat-page">
-			<div class="chat-scroll">
+			<div class="chat-scroll" @ref="_scrollEl">
 				<div class="chat-thread">
 					@foreach (Conversation conv in _conversations)
 					{
@@ -75,10 +80,24 @@ else
 							   rows="3"
 							   @bind-Value="_newMessage"
 							   @onkeydown="OnMessageKeyDown" />
+
+				<div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
+					<InputFile OnChange="OnFileSelected" />
+					@if (_selectedFile is not null)
+					{
+						<span class="small text-muted">
+							Attachment: @_selectedFile.Name (@(_selectedFile.Size / 1024) KB)
+						</span>
+						<Button BackgroundColor="TablerColor.Red" OnClick="ClearSelectedFile" Size="ButtonSize.Small">
+							Remove
+						</Button>
+					}
+				</div>
+
 				<div class="mt-2 d-flex gap-2 align-items-center">
 					<Button BackgroundColor="TablerColor.Green"
 							OnClick="SendMessageAsync"
-							Disabled="@(_isSending || string.IsNullOrWhiteSpace(_newMessage))">
+							Disabled="@(_isSending || (string.IsNullOrWhiteSpace(_newMessage) && _selectedFile is null))">
 						Send
 					</Button>
 					@if (_isSending)
@@ -294,6 +313,15 @@ else
 	private bool _isSending = false;
 	private bool registeredForMessages = false;
 
+	private IBrowserFile? _selectedFile = null;
+	private const long MaxUploadBytes = 50 * 1024 * 1024; // 50 MB
+	private HttpClient? _httpClient;
+
+	// Auto-scroll support
+	private ElementReference _scrollEl;
+	private IJSObjectReference? _jsModule;
+	private bool _pendingScroll;
+
 	public void Dispose()
 	{
 		SocketClient? client = SocketClientContainer.Client;
@@ -343,6 +371,31 @@ else
 		await RefreshAllMessages();
 	}
 
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			_jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Chat/ChatCharacterChatPage.razor.js");
+			_pendingScroll = true;
+		}
+
+		if (_pendingScroll)
+		{
+			_pendingScroll = false;
+			if (_jsModule != null)
+			{
+				try
+				{
+					await _jsModule.InvokeVoidAsync("scrollToBottom", _scrollEl);
+				}
+				catch
+				{
+					// ignore JS errors
+				}
+			}
+		}
+	}
+
 	private async Task RefreshAllMessages()
 	{
 		SocketClient? client = SocketClientContainer.Client;
@@ -356,6 +409,7 @@ else
 			CharacterId = CharacterId,
 		};
 		_conversations = await request.Get(client);
+		_pendingScroll = true;
 		StateHasChanged();
 	}
 
@@ -372,11 +426,70 @@ else
 			return;
 		}
 
-		string messageToSend = _newMessage.Trim();
-		_newMessage = string.Empty;
+		string messageToSend = _newMessage?.Trim() ?? string.Empty;
+
 		_isSending = true;
+		_newMessage = string.Empty;
 		StateHasChanged();
 
+		try
+		{
+			if (_selectedFile is not null)
+			{
+				FileTemp? file = await GetFileContent(_selectedFile);
+				if (file == null)
+				{
+					await ToastService.AddToastAsync(new ToastModel
+					{
+						Title = "Upload failed",
+						Message = "Could not upload the selected file."
+					});
+					return;
+				}
+
+				await SendFile(client, messageToSend, file);
+			}
+			else
+			{
+				await SendText(client, messageToSend);
+			}
+		}
+		finally
+		{
+			_selectedFile = null;
+			_isSending = false;
+			StateHasChanged();
+		}
+	}
+
+	private class FileTemp
+	{
+		public required string Name { get; init; }
+		public required string Type { get; init; }
+		public required byte[] Data { get; init; }
+	}
+
+	private async Task<FileTemp?> GetFileContent(IBrowserFile file)
+	{
+		try
+		{
+			using StreamContent fileContent = new(file.OpenReadStream(MaxUploadBytes));
+			byte[] bytes = await fileContent.ReadAsByteArrayAsync();
+			return new FileTemp
+			{
+				Name = file.Name,
+				Type = file.ContentType,
+				Data = bytes
+			};
+		}
+		catch
+		{
+			return null;
+		}
+	}
+
+	private async Task SendText(SocketClient client, string messageToSend)
+	{
 		try
 		{
 			SendTextMessageRequest request = new SendTextMessageRequest
@@ -384,49 +497,94 @@ else
 				CharacterId = CharacterId,
 				Text = messageToSend,
 			};
-			try
-			{
-				TextMessageResult result = await request.Get(client);
-				if (!string.IsNullOrEmpty(result.Error))
-				{
-					await ToastService.AddToastAsync(new ToastModel
-					{
-						Title = "Message Response",
-						Message = $"Error from character: {result.Error}"
-					});
-					return;
-				}
-				Conversation? conv = _conversations.MaxBy(x => x.Time);
-				if (conv == null)
-				{
-					await ToastService.AddToastAsync(new ToastModel
-					{
-						Title = "Message Response",
-						Message = "No active conversation found. Please refresh the page and try again."
-					});
-					return;
-				}
-				conv.Messages.Add(new TextMessage
-				{
-					From = Message.Type.User,
-					Text = messageToSend,
-					Time = DateTime.UtcNow,
-				});
-			}
-			catch (Exception)
+
+			TextMessageResult result = await request.Get(client);
+			if (!string.IsNullOrEmpty(result.Error))
 			{
 				await ToastService.AddToastAsync(new ToastModel
 				{
 					Title = "Message Response",
-					Message = "Failed to get a response from the character. Please try again."
+					Message = $"Error from character: {result.Error}"
 				});
 				return;
 			}
+			Conversation? conv = _conversations.MaxBy(x => x.Time);
+			if (conv == null)
+			{
+				await ToastService.AddToastAsync(new ToastModel
+				{
+					Title = "Message Response",
+					Message = "No active conversation found. Please refresh the page and try again."
+				});
+				return;
+			}
+			conv.Messages.Add(new TextMessage
+			{
+				From = Message.Type.User,
+				Text = messageToSend,
+				Time = DateTime.UtcNow,
+			});
+			_pendingScroll = true;
 		}
-		finally
+		catch (Exception)
 		{
-			_isSending = false;
-			StateHasChanged();
+			await ToastService.AddToastAsync(new ToastModel
+			{
+				Title = "Message Response",
+				Message = "Failed to get a response from the character. Please try again."
+			});
+		}
+	}
+
+	private async Task SendFile(SocketClient client, string messageToSend, FileTemp fileToSend)
+	{
+		try
+		{
+			SendFileMessageRequest request = new SendFileMessageRequest
+			{
+				CharacterId = CharacterId,
+				Text = messageToSend,
+				FileName = fileToSend.Name,
+				FileType = fileToSend.Type,
+				FileData = fileToSend.Data,
+			};
+
+			FileMessageResult result = await request.Get(client);
+			if (!string.IsNullOrEmpty(result.Error))
+			{
+				await ToastService.AddToastAsync(new ToastModel
+				{
+					Title = "Message Response",
+					Message = $"Error from character: {result.Error}"
+				});
+				return;
+			}
+			Conversation? conv = _conversations.MaxBy(x => x.Time);
+			if (conv == null)
+			{
+				await ToastService.AddToastAsync(new ToastModel
+				{
+					Title = "Message Response",
+					Message = "No active conversation found. Please refresh the page and try again."
+				});
+				return;
+			}
+			conv.Messages.Add(new TextMessage
+			{
+				From = Message.Type.User,
+				Text = messageToSend,
+				Time = DateTime.UtcNow,
+			});
+			_pendingScroll = true;
+
+		}
+		catch (Exception)
+		{
+			await ToastService.AddToastAsync(new ToastModel
+			{
+				Title = "Message Response",
+				Message = "Failed to get a response from the character. Please try again."
+			});
 		}
 	}
 
@@ -441,6 +599,19 @@ else
 	private void OnClientMessageReceived(string? characterId, Message message)
 	{
 		_conversations.MaxBy(x => x.Time)?.Messages.Add(message);
+		_pendingScroll = true;
 		InvokeAsync(StateHasChanged);
+	}
+
+	private void OnFileSelected(InputFileChangeEventArgs e)
+	{
+		_selectedFile = e.File;
+		StateHasChanged();
+	}
+
+	private void ClearSelectedFile()
+	{
+		_selectedFile = null;
+		StateHasChanged();
 	}
 }

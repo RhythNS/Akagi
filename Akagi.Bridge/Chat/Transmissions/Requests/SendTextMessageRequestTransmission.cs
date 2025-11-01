@@ -3,7 +3,7 @@
 namespace Akagi.Bridge.Chat.Transmissions.Requests;
 
 [MessagePackObject]
-public class SendTextMessageRequestTransmission : Transmission
+public class SendTextMessageRequestTransmission : Transmission, IMessageRequest
 {
     public override string MessageType => nameof(SendTextMessageRequestTransmission);
     [Key(0)]

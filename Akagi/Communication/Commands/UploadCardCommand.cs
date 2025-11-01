@@ -26,7 +26,7 @@ internal class UploadCardCommand : DocumentCommand
         List<string> successNames = [];
         foreach (Document document in documents)
         {
-            MemoryStream? stream = await document.GetStream();
+            using MemoryStream? stream = await document.GetStream();
 
             if (stream == null)
             {

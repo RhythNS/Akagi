@@ -9,137 +9,38 @@ using Microsoft.Extensions.Logging;
 
 namespace Akagi.Communication.SocketComs.Transmissions;
 
-internal class SendTextMessageRequestHandler : SocketTransmissionHandler
+internal class SendTextMessageRequestHandler : SendMessageRequestHandler<SendTextMessageRequestTransmission>
 {
     public override string HandlesType => nameof(SendTextMessageRequestTransmission);
 
-    private readonly IDatabaseFactory _databaseFactory;
-    private readonly ICharacterDatabase _characterDatabase;
-    private readonly IUserDatabase _userDatabase;
-    private readonly ILogger<SendTextMessageRequestHandler> _logger;
-
-    public SendTextMessageRequestHandler(IDatabaseFactory databaseFactory,
-                                         ICharacterDatabase characterDatabase,
-                                         IUserDatabase userDatabase,
-                                         ILogger<SendTextMessageRequestHandler> logger)
+    public SendTextMessageRequestHandler(IDatabaseFactory databaseFactory, ICharacterDatabase characterDatabase, IUserDatabase userDatabase, ILogger<SendTextMessageRequestHandler> logger) : base(databaseFactory, characterDatabase, userDatabase, logger)
     {
-        _databaseFactory = databaseFactory;
-        _characterDatabase = characterDatabase;
-        _userDatabase = userDatabase;
-        _logger = logger;
     }
 
-    public override Task ExecuteAsync(Context context, TransmissionWrapper transmissionWrapper)
+    protected override SendTextMessageRequestTransmission GetMessage(TransmissionWrapper transmission)
     {
-        User user = context.User ?? throw new ArgumentNullException(nameof(context), "User cannot be null in SendTextMessageRequestHandler");
-        SendTextMessageRequestTransmission sendTextMessageRequest = GetTransmission<SendTextMessageRequestTransmission>(transmissionWrapper);
-        if (sendTextMessageRequest.CharacterId == null)
-        {
-            throw new ArgumentException("CharacterId cannot be null in SendTextMessageRequestHandler");
-        }
-        string text = sendTextMessageRequest.Text;
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            _logger.LogWarning("Received empty text message from user {UserId}", user.Id);
-            SendResponse(context, sendTextMessageRequest, "Message cannot be empty.");
-            return Task.CompletedTask;
-        }
-
-        if (text.StartsWith("/", StringComparison.InvariantCultureIgnoreCase))
-        {
-            return HandleCommand(context, user, sendTextMessageRequest, text);
-        }
-        else
-        {
-            return HandleMessage(context, user, sendTextMessageRequest, text);
-        }
+        return GetTransmission<SendTextMessageRequestTransmission>(transmission);
     }
 
-    private async Task HandleCommand(Context context, User user, SendTextMessageRequestTransmission request, string text)
+    protected override Task HandleDocumentCommand(Context context, Character? character, User user, SendTextMessageRequestTransmission message, DocumentCommand command, string[] args)
     {
-        Command? command = context.Service.AvailableCommands.FirstOrDefault(command => command.Name.StartsWith(text, StringComparison.InvariantCultureIgnoreCase));
-        if (command == null)
-        {
-            _logger.LogWarning("Unknown command '{Command}' from user {UserId}", text, user.Id);
-            SendResponse(context, request, "Invalid command!");
-
-            return;
-        }
-        if (command.AdminOnly && !user.Admin)
-        {
-            _logger.LogWarning("Admin command '{Command}' attempted by non-admin user {UserId}", text, user.Id);
-            SendResponse(context, request, "This command is for admins only.");
-            return;
-        }
-
-        SendResponse(context, request);
-        _logger.LogInformation("Received command '{Command}' from user {UserId}", text, user.Id);
-
-        string argString = text.Substring(command.Name.Length).Trim();
-        string[] args = Command.ParseArguments(argString);
-        Character? character = await GetCharacter(request);
-
-        if (command is TextCommand textCommand)
-        {
-            await using Command.Context textContext = new()
-            {
-                Character = character,
-                User = user,
-                DatabaseFactory = _databaseFactory
-            };
-
-            await textCommand.ExecuteAsync(textContext, args);
-        }
-        else
-        {
-            _logger.LogWarning("Command '{CommandName}' is an unknown command type, cannot execute.", command.Name);
-            // SendResponse(context, request, $"Unknown command type: {command.GetType().Name}");
-        }
+        SendResponse(context, message, "No document attached.");
+        return Task.CompletedTask;
     }
 
-    private async Task HandleMessage(Context context, User user, SendTextMessageRequestTransmission request, string text)
-    {
-        Character? character = await GetCharacter(request);
-        if (character == null || character.UserId != user.Id)
-        {
-            _logger.LogWarning("Character not found or does not belong to user {UserId}", user.Id);
-            SendResponse(context, request, "Character not found or does not belong to you.");
-            return;
-        }
-
-        SendResponse(context, request);
-
-        if (user.LastUsedCommunicator != context.Service.Name)
-        {
-            user.LastUsedCommunicator = context.Service.Name;
-            await _userDatabase.SaveDocumentAsync(user);
-        }
-
-        _logger.LogInformation("Received message '{Text}' from user {UserId} for character {CharacterId}", text, user.Id, character.Id);
-        try
-        {
-            await context.Service.RecieveText(user, character, text);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error processing message '{Text}' from user {UserId} for character {CharacterId}", text, user.Id, character.Id);
-            // SendResponse(context, request, $"Error processing message: {ex.Message}");
-        }
-    }
-
-    private async Task<Character?> GetCharacter(SendTextMessageRequestTransmission request)
-    {
-        return request.CharacterId == null ? null : await _characterDatabase.GetCharacter(request.CharacterId);
-    }
-
-    private static void SendResponse(Context context, SendTextMessageRequestTransmission request, string? error = null)
+    protected override void SendResponse(Context context, SendTextMessageRequestTransmission message, string? error = null)
     {
         SendTextMessageResponseTransmission response = new()
         {
-            CharacterId = request.CharacterId,
-            Text = request.Text,
+            CharacterId = message.CharacterId,
+            Text = message.Text,
             Error = error,
         };
         context.Session.SendTransmission(response);
+    }
+
+    protected override Task TryHandleMessage(Context context, Character character, User user, SendTextMessageRequestTransmission message)
+    {
+        return context.Service.RecieveText(user, character, message.Text);
     }
 }
