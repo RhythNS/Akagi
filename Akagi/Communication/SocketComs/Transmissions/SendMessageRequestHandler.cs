@@ -75,7 +75,7 @@ internal abstract class SendMessageRequestHandler<M> : SocketTransmissionHandler
     private async Task HandleCommand(Context context, User user, M message)
     {
         string text = message.Text;
-        Command? command = context.Service.AvailableCommands.FirstOrDefault(command => command.Name.StartsWith(text, StringComparison.InvariantCultureIgnoreCase));
+        Command? command = context.Service.AvailableCommands.FirstOrDefault(command => text.StartsWith(command.Name, StringComparison.InvariantCultureIgnoreCase));
         if (command == null)
         {
             Logger.LogWarning("Unknown command '{Command}' from user {UserId}", text, user.Id);
