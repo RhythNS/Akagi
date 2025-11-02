@@ -32,7 +32,7 @@ internal abstract class SendMessageRequestHandler<M> : SocketTransmissionHandler
         M message = GetMessage(transmissionWrapper);
         if (message.CharacterId == null)
         {
-            throw new ArgumentException($"CharacterId cannot be null in {message.GetType()}");
+            throw new ArgumentException($"CharacterId is invalid in {message.GetType()}");
         }
         string text = message.Text;
         if (string.IsNullOrWhiteSpace(text))
@@ -144,6 +144,8 @@ internal abstract class SendMessageRequestHandler<M> : SocketTransmissionHandler
 
     private async Task<Character?> GetCharacter(M message)
     {
-        return message.CharacterId == null ? null : await CharacterDatabase.GetCharacter(message.CharacterId);
+        return message.CharacterId == null || string.Equals(message.CharacterId, "0", StringComparison.OrdinalIgnoreCase)
+            ? null
+            : await CharacterDatabase.GetCharacter(message.CharacterId);
     }
 }

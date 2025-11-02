@@ -19,121 +19,137 @@
 
 <ChatConnectionStatus />
 
-@if (_character == null)
+@if (_loading)
 {
 	<p>Loading character...</p>
+	return;
 }
-else
-{
-	<div class="chat-shell">
-		<div class="chat-page">
-			<div class="chat-scroll" @ref="_scrollEl">
-				<div class="chat-thread">
-					@foreach (Conversation conv in _conversations)
+
+<div class="chat-shell">
+	<div class="chat-page">
+		<div class="chat-scroll" @ref="_scrollEl">
+			<div class="chat-thread">
+				@foreach (Conversation conv in _conversations)
+				{
+					<div class="conversation-separator">
+						<span>Conversation @conv.Id • @conv.Time.ToLocalTime().ToString("g") @(conv.IsCompleted ? "(completed)" : "")</span>
+					</div>
+
+					DateTime? lastDate = null;
+
+					@foreach (Message baseMessage in conv.Messages)
 					{
-						<div class="conversation-separator">
-							<span>Conversation @conv.Id • @conv.Time.ToLocalTime().ToString("g") @(conv.IsCompleted ? "(completed)" : "")</span>
-						</div>
-
-						@foreach (Message baseMessage in conv.Messages)
+						if (baseMessage is not TextMessage textMessage)
 						{
-							if (baseMessage is not TextMessage textMessage)
+							continue;
+						}
+
+						DateTime currentDate = textMessage.Time.ToLocalTime().Date;
+						if (lastDate.HasValue && currentDate != lastDate.Value)
+						{
+							<div class="day-separator">
+								<span>@currentDate.ToString("dddd, MMM d, yyyy")</span>
+							</div>
+						}
+						lastDate = currentDate;
+
+						bool fromUser = textMessage.From == Message.Type.User;
+						string senderName = fromUser ? "You" : _character?.Name ?? "?";
+
+						<div class="message-row @(fromUser ? "from-user" : "from-character")">
+							@if (!fromUser)
 							{
-								continue;
-							}
-
-							bool fromUser = textMessage.From == Message.Type.User;
-							string senderName = fromUser ? "You" : _character.Name;
-
-							<div class="message-row @(fromUser ? "from-user" : "from-character")">
-								@if (!fromUser)
+								@if (_character == null)
+								{
+									<Avatar class="me-2 d-none d-sm-block"
+											Rounded="AvatarRounded.Circle"
+											Size="AvatarSize.Large" />
+								}
+								else
 								{
 									<Avatar class="me-2 d-none d-sm-block"
 											Rounded="AvatarRounded.Circle"
 											Size="AvatarSize.Large"
 											Data="@($"/socket/cards/{_character.CardId}/image.png?circuitId={SocketClientContainer.Client?.CircuitId}")" />
 								}
-								<div class="bubble">
-									<div class="meta">
-										<strong>@senderName</strong>
-										<span class="time">@textMessage.Time.ToLocalTime().ToString("t")</span>
-									</div>
-									<div class="content">
-										@foreach (string line in (textMessage.Text ?? string.Empty).Split(Environment.NewLine))
-										{
-											<span>@line</span>
+							}
+							<div class="bubble">
+								<div class="meta">
+									<strong>@senderName</strong>
+									<span class="time">@textMessage.Time.ToLocalTime().ToString("t")</span>
+								</div>
+								<div class="content">
+									@foreach (string line in (textMessage.Text ?? string.Empty).Split(Environment.NewLine))
+									{
+										<span>@line</span>
 
-											<br />
-										}
-									</div>
+										<br />
+									}
 								</div>
 							</div>
-						}
+						</div>
 					}
-				</div>
+				}
+			</div>
+		</div>
+
+		<div class="composer" id="composer">
+			<label class="form-label mb-1">Message</label>
+			<InputTextArea class="form-control composer-input"
+						   placeholder="Type a message. Enter = send, Shift+Enter = newline"
+						   rows="3"
+						   @bind-Value="_newMessage"
+						   @oninput="OnComposerInput"
+						   @onkeydown="OnMessageKeyDown" />
+
+			<div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
+				<InputFile OnChange="OnFileSelected" />
+				@if (_selectedFile is not null)
+				{
+					<span class="small text-muted">
+						Attachment: @_selectedFile.Name (@(_selectedFile.Size / 1024) KB)
+					</span>
+					<Button BackgroundColor="TablerColor.Red" OnClick="ClearSelectedFile" Size="ButtonSize.Small">
+						Remove
+					</Button>
+				}
 			</div>
 
-			<div class="composer" id="composer">
-				<label class="form-label mb-1">Message</label>
-				<InputTextArea class="form-control composer-input"
-							   placeholder="Type a message. Enter = send, Shift+Enter = newline"
-							   rows="3"
-							   @bind-Value="_newMessage"
-							   @onkeydown="OnMessageKeyDown" />
-
-				<div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
-					<InputFile OnChange="OnFileSelected" />
-					@if (_selectedFile is not null)
-					{
-						<span class="small text-muted">
-							Attachment: @_selectedFile.Name (@(_selectedFile.Size / 1024) KB)
-						</span>
-						<Button BackgroundColor="TablerColor.Red" OnClick="ClearSelectedFile" Size="ButtonSize.Small">
-							Remove
-						</Button>
-					}
-				</div>
-
-				<div class="mt-2 d-flex gap-2 align-items-center">
-					<Button BackgroundColor="TablerColor.Green"
-							OnClick="SendMessageAsync"
-							Disabled="@(_isSending || (string.IsNullOrWhiteSpace(_newMessage) && _selectedFile is null))">
-						Send
-					</Button>
-					@if (_isSending)
-					{
-						<span class="text-muted small">Sending...</span>
-					}
-					<span class="shortcut-hint text-muted ms-auto small d-none d-md-inline">
-						Enter to send • Shift+Enter newline
-					</span>
-				</div>
+			<div class="mt-2 d-flex gap-2 align-items-center">
+				<Button BackgroundColor="TablerColor.Green"
+						OnClick="SendMessageAsync"
+						Disabled="@(_isSending || (string.IsNullOrWhiteSpace(_newMessage) && _selectedFile is null))">
+					Send
+				</Button>
+				@if (_isSending)
+				{
+					<span class="text-muted small">Sending...</span>
+				}
+				<span class="shortcut-hint text-muted ms-auto small d-none d-md-inline">
+					Enter to send • Shift+Enter newline
+				</span>
 			</div>
 		</div>
 	</div>
-}
+</div>
 
 <style>
-	/* Full viewport container ensures no outer page scroll is needed */
 	.chat-shell {
 		height: 100dvh;
 		display: flex;
 		flex-direction: column;
-		/* Adjust if your main layout already adds padding/margins */
 	}
 
-	/* Flex column: scroll area + fixed-size composer */
 	.chat-page {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		overflow: hidden; /* Prevent page scroll */
+		overflow: hidden;
 		gap: .75rem;
 		padding: .5rem .5rem .75rem;
 		box-sizing: border-box;
 	}
 
-	/* The only scrollable area */
 	.chat-scroll {
 		flex: 1;
 		min-height: 0;
@@ -177,6 +193,35 @@ else
 		}
 
 		.conversation-separator:after {
+			right: 0;
+		}
+
+	.day-separator {
+		text-align: center;
+		margin: .8rem 0 .5rem;
+		position: relative;
+		font-size: .60rem;
+		text-transform: uppercase;
+		letter-spacing: .04em;
+		color: #6c757d;
+		font-weight: 600;
+	}
+
+		.day-separator:before,
+		.day-separator:after {
+			content: "";
+			position: absolute;
+			top: 50%;
+			width: 38%;
+			height: 1px;
+			background: #e5e7eb;
+		}
+
+		.day-separator:before {
+			left: 0;
+		}
+
+		.day-separator:after {
 			right: 0;
 		}
 
@@ -250,7 +295,6 @@ else
 		clip-path: polygon(0 100%, 100% 0, 100% 100%);
 	}
 
-	/* Composer always visible (no sticky/fixed needed since container doesn't scroll) */
 	.composer {
 		border: 1px solid var(--tblr-border-color,#dee2e6);
 		border-radius: .75rem;
@@ -269,7 +313,6 @@ else
 		opacity: .65;
 	}
 
-	/* Mobile adjustments */
 	@@media (max-width: 576px) {
 		.bubble {
 			max-width: 85%;
@@ -293,7 +336,6 @@ else
 		}
 	}
 
-	/* Short viewports */
 	@@media (max-height: 540px) {
 		.composer-input {
 			min-height: 60px;
@@ -306,10 +348,13 @@ else
 	[Parameter]
 	public required string CharacterId { get; set; } = string.Empty;
 
+	private bool _loading = true;
+
 	private Character? _character = null;
 	private Conversation[] _conversations = [];
 
 	private string _newMessage = string.Empty;
+	private bool _skipNextInputUpdate = false;
 	private bool _isSending = false;
 	private bool registeredForMessages = false;
 
@@ -350,24 +395,24 @@ else
 			throw new ArgumentException("CharacterId cannot be null or empty.", nameof(CharacterId));
 		}
 
-		if (string.Equals(CharacterId, "0", StringComparison.OrdinalIgnoreCase))
+		if (string.Equals(CharacterId, "0", StringComparison.OrdinalIgnoreCase) == false)
 		{
-			return;
-		}
+			CharacterListRequest request = new CharacterListRequest
+			{
+				Ids = [CharacterId]
+			};
+			Character[] characters = await request.Get(client);
+			if (characters.Length == 0 || characters[0] == null || characters[0].Id != CharacterId)
+			{
+				throw new InvalidOperationException($"Character with ID '{CharacterId}' not found.");
+			}
 
-		CharacterListRequest request = new CharacterListRequest
-		{
-			Ids = [CharacterId]
-		};
-		Character[] characters = await request.Get(client);
-		if (characters.Length == 0 || characters[0] == null || characters[0].Id != CharacterId)
-		{
-			throw new InvalidOperationException($"Character with ID '{CharacterId}' not found.");
+			_character = characters[0];
 		}
-
-		_character = characters[0];
 
 		await RefreshAllMessages();
+
+		_loading = false;
 	}
 
 	protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -403,11 +448,25 @@ else
 			return;
 		}
 
-		ConversationRequest request = new ConversationRequest
+		if (CharacterId == "0")
 		{
-			CharacterId = CharacterId,
-		};
-		_conversations = await request.Get(client);
+			_conversations =
+				[
+					new Conversation
+					{
+						Id = 0,
+						Time = DateTime.UtcNow
+					}
+				];
+		}
+		else
+		{
+			ConversationRequest request = new ConversationRequest
+			{
+				CharacterId = CharacterId,
+			};
+			_conversations = await request.Get(client);
+		}
 		_pendingScroll = true;
 		StateHasChanged();
 	}
@@ -591,8 +650,20 @@ else
 	{
 		if (e.Key == "Enter" && !e.ShiftKey)
 		{
+			_skipNextInputUpdate = true;
 			await SendMessageAsync();
 		}
+	}
+
+	private void OnComposerInput(ChangeEventArgs e)
+	{
+		if (_skipNextInputUpdate)
+		{
+			_skipNextInputUpdate = false;
+			return;
+		}
+
+		_newMessage = e.Value?.ToString() ?? string.Empty;
 	}
 
 	private void OnClientMessageReceived(string? characterId, Message message)
