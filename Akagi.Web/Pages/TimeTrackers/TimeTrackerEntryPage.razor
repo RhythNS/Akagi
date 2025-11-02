@@ -69,10 +69,21 @@
 									break;
 								case FieldType.Text:
 									string stringThing = Convert.ToString(_entry.Values[item.Name]) ?? "";
+									var listId = $"list-{item.Name.Replace(" ", "-")}";
 									<InputText class="form-control"
+											   list="@listId"
 											   Value=@(Convert.ToString(_entry.Values[item.Name]))
 											   ValueChanged="x => _entry.Values[item.Name] = x"
 											   ValueExpression="() => stringThing" />
+									<datalist id="@listId">
+										@if (_textFieldSuggestions.TryGetValue(item.Name, out var options))
+										{
+											foreach (var opt in options.Distinct(StringComparer.OrdinalIgnoreCase))
+											{
+												<option value="@opt"></option>
+											}
+										}
+									</datalist>
 									break;
 								case FieldType.DateTime:
 									DateTime dateTimeThing = Convert.ToDateTime(_entry.Values[item.Name]);
@@ -131,6 +142,8 @@
 
 	[Parameter]
 	public string? EntryId { get; set; }
+
+	private readonly Dictionary<string, List<string>> _textFieldSuggestions = new(StringComparer.OrdinalIgnoreCase);
 
 	private Entry? _entry = null;
 	private Definition? _definition = null;
@@ -192,6 +205,18 @@
 						throw new ArgumentOutOfRangeException();
 				}
 			}
+		}
+
+		await LoadSuggestions();
+	}
+
+	private async Task LoadSuggestions()
+	{
+		foreach (var field in _definition?.Fields.Where(f => f.Type == FieldType.Text) ?? [])
+		{
+			object[] values = await EntryDatabase.GetDistinctValuesAsync(field.Name);
+			List<string> suggestions = values.Select(v => v?.ToString() ?? string.Empty).ToList();
+			_textFieldSuggestions[field.Name] = suggestions;
 		}
 	}
 

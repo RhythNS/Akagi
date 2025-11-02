@@ -40,7 +40,7 @@ public abstract class Database<T> : IDatabase<T> where T : Savable
         _mongoDatabase = client.GetDatabase(_databaseName);
     }
 
-    private IMongoCollection<T> GetCollection()
+    protected IMongoCollection<T> GetCollection()
     {
         if (_mongoDatabase == null)
         {
