@@ -1,6 +1,8 @@
 ﻿using Akagi.Data;
+using Akagi.Flow;
 using Akagi.Receivers.Commands;
 using Akagi.Receivers.MessageCompilers;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 
@@ -45,8 +47,11 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
         {
             commands.Add(_commandFactory.Create(systemProcessor.CommandNames[i]));
         }
-        systemProcessor.InitCommands([.. commands]);
 
+        IDatabaseFactory databaseFactory = Globals.Instance.ServiceProvider.GetService<IDatabaseFactory>()
+            ?? throw new Exception("DatabaseFactory service not found.");
+
+        await systemProcessor.Init([.. commands], databaseFactory);
         await systemProcessor.AfterLoad();
 
         return systemProcessor;
@@ -62,6 +67,9 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
             throw new Exception($"Not all SystemProcessors with IDs {string.Join(", ", ids)} were found.");
         }
 
+        IDatabaseFactory databaseFactory = Globals.Instance.ServiceProvider.GetService<IDatabaseFactory>()
+            ?? throw new Exception("DatabaseFactory service not found.");
+
         foreach (SystemProcessor systemProcessor in systemProcessors)
         {
             List<Command> commands = [];
@@ -69,7 +77,8 @@ internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProce
             {
                 commands.Add(_commandFactory.Create(systemProcessor.CommandNames[i]));
             }
-            systemProcessor.InitCommands([.. commands]);
+
+            await systemProcessor.Init([.. commands], databaseFactory);
         }
 
         await Task.WhenAll(systemProcessors.Select(sp => sp.AfterLoad()));

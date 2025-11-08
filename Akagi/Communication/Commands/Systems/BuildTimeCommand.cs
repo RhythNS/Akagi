@@ -1,7 +1,7 @@
 ﻿using Akagi.Utils;
 using Akagi.Utils.Extensions;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Systems;
 
 internal class BuildTimeCommand : TextCommand
 {

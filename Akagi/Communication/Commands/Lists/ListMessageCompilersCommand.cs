@@ -1,6 +1,6 @@
 ﻿using Akagi.Receivers.MessageCompilers;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Lists;
 
 internal class ListMessageCompilersCommand : ListCommand
 {

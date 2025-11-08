@@ -14,30 +14,38 @@ internal class ForgetfulMessageCompiler : MessageCompiler
         set => SetProperty(ref _maxMessages, value);
     }
 
-    public override Message[] Compile(User user, Character character)
+    public override void FilterCompile(User user, Character character, ref List<Conversation> filteredConversations)
     {
         List<Message> messages = [];
-
-        IEnumerable<Conversation> conversations = character.Conversations.OrderByDescending(x => x.Time);
+        IEnumerable<Conversation> conversations = filteredConversations.OrderByDescending(x => x.Time);
         foreach (Conversation conversation in conversations)
         {
             if (messages.Count >= MaxMessages)
+            {
                 break;
+            }
+
             foreach (Message message in conversation.Messages
-                                                    .Where(x => (x.VisibleTo & ReadableMessages) != 0)
-                                                    .OrderByDescending(x => x.Time))
+                .Where(x => (x.VisibleTo & ReadableMessages) != 0)
+                .OrderByDescending(x => x.Time))
             {
                 if (messages.Count >= MaxMessages)
-                    break;
-                if (message.VisibleTo.HasFlag(Message.Type.Character) || message.VisibleTo.HasFlag(Message.Type.User))
                 {
-                    messages.Add(message);
+                    break;
                 }
+
+                messages.Add(message);
             }
         }
-
         messages.Reverse();
 
-        return [.. messages];
+        filteredConversations.Clear();
+        Conversation newConversation = new()
+        {
+            Id = 0,
+            Time = DateTime.UtcNow,
+            Messages = [.. messages]
+        };
+        filteredConversations.Add(newConversation);
     }
 }

@@ -2,7 +2,7 @@
 using Akagi.Characters.Cards;
 using Akagi.Receivers.Puppeteers;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Savables;
 
 internal class CreateCharacterCommand : TextCommand
 {

@@ -1,6 +1,6 @@
 ﻿using Akagi.Characters.Cards;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Lists;
 
 internal class ListCardsCommand : ListCommand
 {

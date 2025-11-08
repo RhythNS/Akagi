@@ -28,6 +28,17 @@ internal abstract class Puppeteer : Savable
             return _context;
         }
     }
+    protected ISystemProcessorDatabase SystemProcessorDatabase
+    {
+        get
+        {
+            if (_systemProcessorDatabase == null)
+            {
+                throw new InvalidOperationException("Puppeteer has not been initialized with a system processor database.");
+            }
+            return _systemProcessorDatabase;
+        }
+    }
 
     protected Character Character => Context.Character;
     protected Conversation Conversation => Context.Conversation;
@@ -49,29 +60,4 @@ internal abstract class Puppeteer : Savable
     public abstract Task ProcessAsync();
 
     protected virtual Task InnerInit() => Task.CompletedTask;
-
-    protected async Task<SystemProcessor> GetSingle(string id)
-    {
-        if (_systemProcessorDatabase == null)
-        {
-            throw new InvalidOperationException("System processor database has not been initialized.");
-        }
-        SystemProcessor? systemProcessor = await _systemProcessorDatabase.GetSystemProcessor(id);
-        if (systemProcessor == null)
-        {
-            throw new InvalidOperationException($"System processor with id {id} not found.");
-        }
-        return systemProcessor;
-    }
-
-    protected async Task<SystemProcessor[]> GetMultiple(string[] ids)
-    {
-        if (_systemProcessorDatabase == null)
-        {
-            throw new InvalidOperationException("System processor database has not been initialized.");
-        }
-
-        SystemProcessor[] systemProcessors = await _systemProcessorDatabase.GetSystemProcessor(ids);
-        return systemProcessors;
-    }
 }

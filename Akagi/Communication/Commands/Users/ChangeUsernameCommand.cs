@@ -1,6 +1,6 @@
 ﻿using Akagi.Users;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Users;
 
 internal class ChangeUsernameCommand : TextCommand
 {

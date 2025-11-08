@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Lists;
 
 internal abstract class ListCommand : TextCommand
 {

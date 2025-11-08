@@ -26,8 +26,8 @@ internal class LinePuppeteer : Puppeteer
     {
         for (int i = 0; i < Definitions.Length; i++)
         {
-            Definitions[i].SystemProcessor = await GetSingle(Definitions[i].SystemProcessorId)
-                ?? throw new InvalidOperationException($"System processor with ID {Definitions[i].SystemProcessorId} not found.");
+            Definitions[i].SystemProcessor = await SystemProcessorDatabase.GetSystemProcessor(Definitions[i].SystemProcessorId
+                ?? throw new InvalidOperationException($"System processor with ID {Definitions[i].SystemProcessorId} not found."));
         }
     }
 

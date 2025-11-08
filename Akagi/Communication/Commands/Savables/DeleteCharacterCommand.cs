@@ -1,6 +1,6 @@
 ﻿using Akagi.Characters;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Savables;
 
 internal class DeleteCharacterCommand : TextCommand
 {

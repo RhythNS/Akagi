@@ -139,4 +139,19 @@ internal class Conversation : DirtyTrackable
             IsCompleted = IsCompleted
         };
     }
+
+    public Conversation Copy()
+    {
+        Conversation copy = new()
+        {
+            Id = Id,
+            Time = Time,
+            IsCompleted = IsCompleted
+        };
+        foreach (Message message in Messages)
+        {
+            copy.AddMessage(message.Copy());
+        }
+        return copy;
+    }
 }

@@ -19,6 +19,16 @@ internal class DatabaseFactory : IDatabaseFactory
         return database;
     }
 
+    public T GetDatabase<T>() where T : IDatabase
+    {
+        IDatabase? database = _databases.OfType<T>().FirstOrDefault();
+        if (database == null)
+        {
+            throw new InvalidOperationException($"No database of type {typeof(T).Name} found.");
+        }
+        return (T)database;
+    }
+
     public Task<bool> SaveIsDirty(Savable savable)
     {
         if (savable.Dirty)

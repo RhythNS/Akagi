@@ -1,6 +1,6 @@
 ﻿using Akagi.Data;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Savables;
 
 internal abstract class UploadDocumentCommand<T> : DocumentCommand where T : Savable
 {

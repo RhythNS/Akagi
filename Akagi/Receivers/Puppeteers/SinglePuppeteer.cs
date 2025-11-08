@@ -20,7 +20,7 @@ internal class SinglePuppeteer : Puppeteer
 
     protected override async Task InnerInit()
     {
-        _systemProcessor = await GetSingle(SystemProcessorId);
+        _systemProcessor = await SystemProcessorDatabase.GetSystemProcessor(SystemProcessorId);
     }
 
     public override async Task ProcessAsync()

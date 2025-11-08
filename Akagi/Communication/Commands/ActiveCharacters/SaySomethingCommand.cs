@@ -1,6 +1,6 @@
 ﻿using Akagi.Receivers;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.ActiveCharacters;
 
 internal class SaySomethingCommand : TextCommand
 {

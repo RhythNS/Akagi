@@ -1,6 +1,6 @@
 ﻿using Akagi.Connectors.Desu;
 
-namespace Akagi.Communication.Commands.JPDict;
+namespace Akagi.Communication.Commands.JPDicts;
 
 internal class JPDictLookupCommand : TextCommand
 {

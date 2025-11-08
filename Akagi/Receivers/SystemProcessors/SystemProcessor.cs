@@ -62,17 +62,13 @@ internal class SystemProcessor : Savable
     public MessageCompiler MessageCompiler
     {
         get => messageCompiler ?? throw new InvalidOperationException("MessageCompiler has not been initialized.");
-        set
-        {
-            messageCompiler = value ?? throw new ArgumentNullException(nameof(value), "MessageCompiler cannot be null.");
-            messageCompiler.ReadableMessages = ReadableMessages;
-        }
+        set => messageCompiler = value ?? throw new ArgumentNullException(nameof(value), "MessageCompiler cannot be null.");
     }
 
     [JsonIgnore]
     public Command[] Commands { get; set; } = [];
 
-    public void InitCommands(Command[] commands)
+    public async Task Init(Command[] commands, IDatabaseFactory databaseFactory)
     {
         if (commands.Length != CommandNames.Length)
         {
@@ -80,6 +76,8 @@ internal class SystemProcessor : Savable
         }
 
         Commands = commands;
+
+        await MessageCompiler.Init(ReadableMessages, databaseFactory.GetDatabase<IMessageCompilerDatabase>());
     }
 
     public virtual string CompileSystemPrompt(User user, Character character)

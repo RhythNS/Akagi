@@ -1,7 +1,7 @@
 ﻿using Akagi.Data;
 using Akagi.Receivers.MessageCompilers;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Savables;
 
 internal class UploadMessageCompilerCommand : UploadDocumentCommand<MessageCompiler>
 {

@@ -1,6 +1,7 @@
-﻿using System.Text;
+﻿using Akagi.Communication.Commands.Lists;
+using System.Text;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Systems;
 
 internal class HelpListCommand : ListCommand
 {

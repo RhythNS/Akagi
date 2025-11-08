@@ -1,4 +1,4 @@
-﻿namespace Akagi.Communication.Commands;
+﻿namespace Akagi.Communication.Commands.Systems;
 
 internal class PingCommand : TextCommand
 {

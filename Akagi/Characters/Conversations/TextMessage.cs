@@ -17,4 +17,15 @@ internal class TextMessage : Message
             Text = Text
         };
     }
+
+    public override Message Copy()
+    {
+        return new TextMessage
+        {
+            Time = Time,
+            From = From,
+            VisibleTo = VisibleTo,
+            Text = Text
+        };
+    }
 }

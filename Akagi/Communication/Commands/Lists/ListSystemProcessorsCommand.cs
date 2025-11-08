@@ -1,6 +1,6 @@
 ﻿using Akagi.Receivers.SystemProcessors;
 
-namespace Akagi.Communication.Commands;
+namespace Akagi.Communication.Commands.Lists;
 
 internal class ListSystemProcessorsCommand : ListCommand
 {

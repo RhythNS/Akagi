@@ -1,4 +1,4 @@
-﻿namespace Akagi.Communication.Commands;
+﻿namespace Akagi.Communication.Commands.Users;
 
 internal class ChangeNameCommand : TextCommand
 {
