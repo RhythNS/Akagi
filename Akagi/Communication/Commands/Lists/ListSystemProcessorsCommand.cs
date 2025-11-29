@@ -1,4 +1,4 @@
-﻿using Akagi.Receivers.SystemProcessors;
+﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 
 namespace Akagi.Communication.Commands.Lists;
 

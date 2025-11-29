@@ -128,6 +128,7 @@ internal partial class TelegramService : Communicator, IHostedService
                     Username = message.From.Username!,
                     Name = message.From.FirstName!,
                     LastUsedCommunicator = Name,
+                    LLMDefinition = _llmDefinitions.Definitions[0],
                     TelegramUser = new TelegramUser
                     {
                         Id = message.From.Id,

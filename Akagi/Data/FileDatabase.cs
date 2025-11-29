@@ -10,7 +10,7 @@ internal class FileDatabase : IFileDatabase
     protected IMongoDatabase _database = default!;
     protected GridFSBucket _gridFS = default!;
 
-    private string _connectionString =string.Empty;
+    private string _connectionString = string.Empty;
     private string _databaseName = string.Empty;
     private readonly string _collectionName = "files";
 

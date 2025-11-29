@@ -33,7 +33,7 @@ internal class UploadCardCommand : DocumentCommand
                 continue;
             }
 
-            bool success = await _cardDatabase.SaveCardFromImage(stream);
+            bool success = await _cardDatabase.SaveCardFromImage(stream) != null;
             if (success)
             {
                 successNames.Add(document.Name);

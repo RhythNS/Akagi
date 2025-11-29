@@ -13,12 +13,14 @@ internal class User : Savable
     private GoogleUser? _googleUser;
     private bool _valid = false;
     private bool _admin = false;
-    private ILLM.LLMType _llmType;
+    private LLMDefinition? _llmDefinition;
     private Dictionary<string, string> _configurations = [];
 
     public override bool Dirty
     {
-        get => base.Dirty || (_telegramUser == null || _telegramUser.Dirty);
+        get => base.Dirty
+            || (_telegramUser == null || _telegramUser.Dirty)
+            || (_googleUser == null || _googleUser.Dirty);
         set
         {
             base.Dirty = value;
@@ -67,10 +69,10 @@ internal class User : Savable
         get => _admin;
         set => SetProperty(ref _admin, value);
     }
-    public ILLM.LLMType LLMType
+    public LLMDefinition? LLMDefinition
     {
-        get => _llmType;
-        set => SetProperty(ref _llmType, value);
+        get => _llmDefinition;
+        set => SetProperty(ref _llmDefinition, value);
     }
     public Dictionary<string, string> Configurations
     {

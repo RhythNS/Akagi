@@ -1,9 +1,8 @@
-﻿using Akagi.Characters;
+﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
+using Akagi.Receivers;
 using Akagi.Receivers.Commands;
 using Akagi.Receivers.Commands.Messages;
-using Akagi.Receivers.SystemProcessors;
-using Akagi.Users;
 using DnsClient.Internal;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,6 +18,7 @@ internal class GeminiClient : IGeminiClient
         public string ApiKey { get; set; } = string.Empty;
     }
 
+    private string? _model;
     private readonly string _apiKey;
     private readonly ICommandFactory _commandFactory;
     private readonly ILogger<GeminiClient> _logger;
@@ -30,9 +30,15 @@ internal class GeminiClient : IGeminiClient
         _logger = logger;
     }
 
-    private GeminiPayload GetPayload(SystemProcessor systemProcessor, Character character, User user)
+    public void SetModel(string model)
     {
-        Message[] messages = systemProcessor.MessageCompiler.Compile(user, character);
+        _model = model;
+    }
+
+    private GeminiPayload GetPayload(SystemProcessor systemProcessor, Context context)
+    {
+        Message[] messages = systemProcessor.MessageCompiler.Compile(context);
+
         List<GeminiPayload.Content> contents = [];
         foreach (Message message in messages)
         {
@@ -65,6 +71,8 @@ internal class GeminiClient : IGeminiClient
                     break;
             }
         }
+
+        GeminiPayload.FunctionCallingMode functionCallingMode = systemProcessor.RunMode.ToFunctionCallingMode();
 
         List<GeminiPayload.FunctionDeclaration> declarations = [];
         foreach (Command command in systemProcessor.Commands)
@@ -120,6 +128,10 @@ internal class GeminiClient : IGeminiClient
 
         if (declarations.Count == 0)
         {
+            if (functionCallingMode == GeminiPayload.FunctionCallingMode.ANY)
+            {
+                throw new Exception("Function calling mode is ANY but there are no function declarations.");
+            }
             payload = new()
             {
                 Instruction = new GeminiPayload.SystemInstruction
@@ -128,7 +140,7 @@ internal class GeminiClient : IGeminiClient
                     [
                         new GeminiPayload.Part
                     {
-                        Text = systemProcessor.CompileSystemPrompt(user, character)
+                        Text = systemProcessor.CompileSystemPrompt(context.User, context.Character)
                     }
                     ]
                 },
@@ -145,11 +157,18 @@ internal class GeminiClient : IGeminiClient
                     [
                         new GeminiPayload.Part
                         {
-                            Text = systemProcessor.CompileSystemPrompt(user, character)
+                            Text = systemProcessor.CompileSystemPrompt(context.User, context.Character)
                         }
                     ]
                 },
                 Contents = [.. contents],
+                ToolConf = new GeminiPayload.ToolConfig
+                {
+                    FunctionCalling = new GeminiPayload.FunctionCallingConfig
+                    {
+                        Mode = functionCallingMode
+                    }
+                },
                 Tools =
                 [
                     new GeminiPayload.Tool
@@ -162,16 +181,25 @@ internal class GeminiClient : IGeminiClient
         return payload;
     }
 
-    public async Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Character character, User user)
+    public async Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context)
     {
         using HttpClient httpClient = new();
 
+        if (string.IsNullOrEmpty(_apiKey))
+        {
+            throw new Exception("Gemini API key is not set.");
+        }
+        if (string.IsNullOrEmpty(_model))
+        {
+            throw new Exception("Gemini model is not set.");
+        }
+
         HttpRequestMessage request = new(
             HttpMethod.Post,
-            $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={_apiKey}"
+            $"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={_apiKey}"
         );
 
-        GeminiPayload payload = GetPayload(systemProcessor, character, user);
+        GeminiPayload payload = GetPayload(systemProcessor, context);
 
         request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 

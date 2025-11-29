@@ -1,4 +1,6 @@
 ﻿using Akagi.Characters.Cards;
+using Akagi.Characters.Conversations;
+using Akagi.Characters.Memories;
 using Akagi.Data;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -11,7 +13,10 @@ internal class Character : Savable
     private string _cardId = string.Empty;
     private Card? _card;
     private string _puppeteerId = string.Empty;
+    private string[] _reflectorIds = [];
     private string _userId = string.Empty;
+    private string[] _triggerPointIds = [];
+    private bool _allowAutomaticProcessing = true;
     private string _name = string.Empty;
 
     public override bool Dirty
@@ -52,10 +57,27 @@ internal class Character : Savable
         set => SetProperty(ref _puppeteerId, value);
     }
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    public string[] ReflectorIds
+    {
+        get => _reflectorIds;
+        set => SetProperty(ref _reflectorIds, value);
+    }
+    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    public string[] TriggerPointIds
+    {
+        get => _triggerPointIds;
+        set => SetProperty(ref _triggerPointIds, value);
+    }
+    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string UserId
     {
         get => _userId;
         set => SetProperty(ref _userId, value);
+    }
+    public bool AllowAutomaticProcessing
+    {
+        get => _allowAutomaticProcessing;
+        set => SetProperty(ref _allowAutomaticProcessing, value);
     }
     public string Name
     {
@@ -106,6 +128,41 @@ internal class Character : Savable
         Dirty = true;
         _conversations.Add(newConversation);
         return newConversation;
+    }
+
+    public void CompleteCurrentConversationAtIndex(int messageIndex)
+    {
+        Conversation? conv = Conversations.MaxBy(c => c.Time);
+        if (conv == null)
+        {
+            return;
+        }
+        if (messageIndex < 0 || messageIndex >= conv.Messages.Count)
+        {
+            throw new ArgumentOutOfRangeException(nameof(messageIndex), "Message index is out of range.");
+        }
+        List<Message> completedMessages = [.. conv.Messages.Take(messageIndex + 1)];
+        Conversation completedConversation = new()
+        {
+            Id = conv.Id,
+            Time = completedMessages.Max(x => x.Time),
+            Messages = completedMessages,
+            IsCompleted = true
+        };
+
+        List<Message> remainingMessages = [.. conv.Messages.Skip(messageIndex + 1)];
+        Conversation remainingConversation = new()
+        {
+            Id = Conversations.Count > 0 ? Conversations.Max(c => c.Id) + 1 : 1,
+            Time = remainingMessages.Count > 0 ? remainingMessages.Max(x => x.Time) : DateTime.UtcNow,
+            Messages = remainingMessages,
+            IsCompleted = false
+        };
+
+        Dirty = true;
+        _conversations.Remove(conv);
+        _conversations.Add(completedConversation);
+        _conversations.Add(remainingConversation);
     }
 
     public void ClearCurrentConversation()

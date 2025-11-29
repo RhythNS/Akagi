@@ -1,5 +1,5 @@
-﻿using Akagi.Data;
-using Akagi.Receivers.Puppeteers;
+﻿using Akagi.Characters.CharacterBehaviors.Puppeteers;
+using Akagi.Data;
 
 namespace Akagi.Communication.Commands.Savables;
 

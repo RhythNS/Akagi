@@ -1,8 +1,10 @@
 ﻿using Akagi.Bridge.Chat.Transmissions;
 using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Bridge.Chat.Transmissions.Responses;
+using Akagi.LLMs;
 using Akagi.Users;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
@@ -14,15 +16,18 @@ internal class LoginRequestHandler : SocketTransmissionHandler
     private readonly IUserDatabase _userDatabase;
     private readonly ILogger<LoginRequestHandler> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
+    private readonly LLMDefinitions _llmDefinitions;
 
     public LoginRequestHandler(
-        IUserDatabase userDatabase, 
+        IUserDatabase userDatabase,
         ILogger<LoginRequestHandler> logger,
-        IHttpClientFactory httpClientFactory)
+        IHttpClientFactory httpClientFactory,
+        IOptions<LLMDefinitions> llmDefinitions)
     {
         _userDatabase = userDatabase;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
+        _llmDefinitions = llmDefinitions.Value;
     }
 
     public override string HandlesType => nameof(LoginRequestTransmission);
@@ -31,16 +36,16 @@ internal class LoginRequestHandler : SocketTransmissionHandler
     {
         LoginRequestTransmission loginRequest = GetTransmission<LoginRequestTransmission>(transmissionWrapper);
 
-        _logger.LogInformation("Received login request for user with token: {Token}", 
+        _logger.LogInformation("Received login request for user with token: {Token}",
             loginRequest.Token?.Length > 20 ? $"{loginRequest.Token[..20]}..." : loginRequest.Token);
 
         string sanitizedToken = loginRequest.Token?.Trim() ?? string.Empty;
-        
+
         if (sanitizedToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
         {
             sanitizedToken = sanitizedToken.Substring(7);
         }
-        
+
         if (string.IsNullOrEmpty(sanitizedToken))
         {
             _logger.LogError("Empty token received");
@@ -52,7 +57,7 @@ internal class LoginRequestHandler : SocketTransmissionHandler
             // Validate the access token using Google's tokeninfo endpoint
             HttpClient httpClient = _httpClientFactory.CreateClient();
             HttpResponseMessage response = await httpClient.GetAsync($"https://www.googleapis.com/oauth2/v3/tokeninfo?access_token={sanitizedToken}");
-            
+
             if (!response.IsSuccessStatusCode)
             {
                 _logger.LogError("Failed to validate Google token: {StatusCode}", response.StatusCode);
@@ -76,6 +81,7 @@ internal class LoginRequestHandler : SocketTransmissionHandler
                     Username = tokenInfo.Name ?? "User",
                     Name = tokenInfo.Name ?? "User",
                     LastUsedCommunicator = context.Service.Name,
+                    LLMDefinition = _llmDefinitions.Definitions[0],
                     GoogleUser = new GoogleUser
                     {
                         Id = tokenInfo.Sub,
@@ -106,16 +112,16 @@ internal class LoginRequestHandler : SocketTransmissionHandler
     {
         [JsonPropertyName("sub")]
         public string? Sub { get; set; }
-        
+
         [JsonPropertyName("email")]
         public string? Email { get; set; }
-        
+
         [JsonPropertyName("name")]
         public string? Name { get; set; }
-        
+
         [JsonPropertyName("given_name")]
         public string? GivenName { get; set; }
-        
+
         [JsonPropertyName("family_name")]
         public string? FamilyName { get; set; }
     }

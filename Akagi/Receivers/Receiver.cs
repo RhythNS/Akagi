@@ -1,11 +1,13 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.CharacterBehaviors.Puppeteers;
+using Akagi.Characters.CharacterBehaviors.Reflectors;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.TriggerPoints;
 using Akagi.Communication;
 using Akagi.Data;
 using Akagi.Flow;
 using Akagi.LLMs;
-using Akagi.Receivers.Puppeteers;
-using Akagi.Receivers.SystemProcessors;
 using Akagi.Scheduling.Tasks;
 using Akagi.Users;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,18 +21,21 @@ internal class Receiver : IReceiver, ICleanable
     private static readonly ConcurrentDictionary<(string userId, string characterId), SemaphoreSlim> _locks = new();
 
     private readonly IPuppeteerDatabase _puppeteerDatabase;
+    private readonly IReflectorDatabase _reflectorDatabase;
     private readonly ISystemProcessorDatabase _systemProcessorDatabase;
     private readonly ILLMFactory _llmFactory;
     private readonly IDatabaseFactory _databaseFactory;
     private readonly ILogger<Receiver> _logger;
 
     public Receiver(IPuppeteerDatabase puppeteerDatabase,
+                    IReflectorDatabase reflectorDatabase,
                     ISystemProcessorDatabase systemProcessorDatabase,
                     ILLMFactory llmFactory,
                     IDatabaseFactory databaseFactory,
                     ILogger<Receiver> logger)
     {
         _puppeteerDatabase = puppeteerDatabase;
+        _reflectorDatabase = reflectorDatabase;
         _systemProcessorDatabase = systemProcessorDatabase;
         _llmFactory = llmFactory;
         _databaseFactory = databaseFactory;
@@ -43,9 +48,53 @@ internal class Receiver : IReceiver, ICleanable
         return Task.CompletedTask;
     }
 
-    public Task Reflect(Character character, User user)
+    public async Task Reflect(Character character, User user, string name)
     {
-        throw new NotImplementedException();
+        LockCharacter(character, user);
+        try
+        {
+            ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
+            if (communicator == null)
+            {
+                _logger.LogWarning("No communicator found for user {UserId}", user.Id);
+                return;
+            }
+
+            await using Context context = GetContext(character, user, communicator);
+
+            bool reflected = false;
+            foreach (string id in character.ReflectorIds)
+            {
+                Reflector reflector = await _reflectorDatabase.GetDocumentByIdAsync(id)
+                        ?? throw new Exception($"Reflector with ID {id} not found for character {character.Id}");
+
+                if (string.Equals(reflector.Name, name, StringComparison.OrdinalIgnoreCase) == false)
+                {
+                    continue;
+                }
+
+                ILogger logger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Reflector>>();
+
+                await reflector.Init(logger, context, _systemProcessorDatabase);
+                await reflector.ProcessAsync();
+
+                reflected = true;
+            }
+
+            if (reflected)
+            {
+                await TriggerForCharacter(TriggerPoint.TriggerType.ReflectionCompleted, character);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reflecting for user {UserId} and character {CharacterId}", user.Id, character.Id);
+            return;
+        }
+        finally
+        {
+            ReleaseLock(character, user);
+        }
     }
 
     public async Task OnSystemEvent(Character character, User user, Message message)
@@ -61,7 +110,7 @@ internal class Receiver : IReceiver, ICleanable
                 return;
             }
 
-            await using Context context = await GetContextAsync(character, user, communicator);
+            await using Context context = GetContext(character, user, communicator);
             context.Conversation.AddMessage(message);
 
             await ProcessCharacterMessageAsync(context);
@@ -87,7 +136,7 @@ internal class Receiver : IReceiver, ICleanable
 
         try
         {
-            await using Context context = await GetContextAsync(character, user, from);
+            await using Context context = GetContext(character, user, from);
 
             context.Conversation.AddMessage(message);
             await ProcessCharacterMessageAsync(context);
@@ -119,7 +168,7 @@ internal class Receiver : IReceiver, ICleanable
                 return;
             }
 
-            await using Context context = await GetContextAsync(character, user, from);
+            await using Context context = GetContext(character, user, from);
 
             await ProcessCharacterMessageAsync(context);
         }
@@ -139,23 +188,41 @@ internal class Receiver : IReceiver, ICleanable
 
     private async Task ProcessCharacterMessageAsync(Context context)
     {
-        await context.Puppeteer.Init(context, _systemProcessorDatabase);
-        await context.Puppeteer.ProcessAsync();
+        Puppeteer puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(context.Character.PuppeteerId)
+                    ?? throw new Exception($"Puppeteer with ID {context.Character.PuppeteerId} not found for character {context.Character.Id}");
+
+        ILogger logger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Puppeteer>>();
+
+        await puppeteer.Init(logger, context, _systemProcessorDatabase);
+        await puppeteer.ProcessAsync();
+
+        await TriggerForCharacter(TriggerPoint.TriggerType.MessageProcessed, context.Character);
     }
 
-    private async Task<Context> GetContextAsync(Character character, User user, ICommunicator communicator)
+    private Context GetContext(Character character, User user, ICommunicator communicator)
     {
         return new Context()
         {
             Character = character,
-            Conversation = character.GetCurrentConversation()!,
+            Conversation = character.GetCurrentConversation(),
             User = user,
             Communicator = communicator,
-            LLM = _llmFactory.Create(user),
-            DatabaseFactory = _databaseFactory,
-            Puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(character.PuppeteerId)
-                        ?? throw new Exception($"Puppeteer with ID {character.PuppeteerId} not found for character {character.Id}"),
+            LLMFactory = _llmFactory,
+            DatabaseFactory = _databaseFactory
         };
+    }
+
+    private async Task TriggerForCharacter(TriggerPoint.TriggerType type, Character character)
+    {
+        foreach (string triggerId in character.TriggerPointIds)
+        {
+            TriggerPoint triggerPoint = await _databaseFactory.GetDatabase<ITriggerPointDatabase>().GetDocumentByIdAsync(triggerId)
+                ?? throw new Exception($"TriggerPoint with ID {triggerId} not found for character {character.Id}");
+
+            await triggerPoint.On(type);
+
+            await _databaseFactory.SaveIfDirty(triggerPoint);
+        }
     }
 
     private static void CleanupUnusedLocks()
@@ -193,7 +260,10 @@ internal class Receiver : IReceiver, ICleanable
     {
         (string, string) key = (user.Id!, character.Id!);
         SemaphoreSlim semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
-        semaphore.Wait();
+        if (semaphore.Wait(TimeSpan.FromMinutes(1)) == false)
+        {
+            throw new TimeoutException($"Timeout waiting for lock on character {character.Id} for user {user.Id}");
+        }
     }
 
     private static void ReleaseLock(Character character, User user)

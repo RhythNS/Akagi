@@ -1,5 +1,5 @@
-﻿using Akagi.Data;
-using Akagi.Receivers.SystemProcessors;
+﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+using Akagi.Data;
 
 namespace Akagi.Communication.Commands.Savables;
 

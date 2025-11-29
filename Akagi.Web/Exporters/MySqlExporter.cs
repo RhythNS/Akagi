@@ -361,7 +361,7 @@ WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = @TableName;";
     private static string ShortStableSuffix(Definition def)
     {
         // Stable 8-char suffix from Definition.Id (or from Name+UserId if Id missing)
-        string basis = !string.IsNullOrEmpty(def.Id) ? def.Id! : $"{def.Name}|{def.UserId}";
+        string basis = !string.IsNullOrEmpty(def.Id) ? def.Id : $"{def.Name}|{def.UserId}";
         byte[] hash = SHA256.HashData(Encoding.UTF8.GetBytes(basis));
         return Convert.ToHexString(hash)[..8].ToLowerInvariant();
     }

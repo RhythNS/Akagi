@@ -9,6 +9,8 @@ static class DependendyInjection
     {
         services.AddOptions<GeminiClient.Options>()
             .BindConfiguration("Gemini");
+        services.AddOptions<LLMDefinitions>()
+            .BindConfiguration("LLMDefinitions");
         services.AddSingleton<IGeminiClient, GeminiClient>();
         services.AddScoped<ILLMFactory, LLMFactory>();
     }

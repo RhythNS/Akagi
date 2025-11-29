@@ -19,12 +19,12 @@ internal class CardDatabase : Database<Card>, ICardDatabase
 
     public override Task SaveAsync(Savable savable) => SaveDocumentAsync((Card)savable);
 
-    public async Task<bool> SaveCardFromImage(MemoryStream stream)
+    public async Task<Card?> SaveCardFromImage(MemoryStream stream)
     {
         string? character = GetPngTextChunk(stream, "chara");
         if (character == null)
         {
-            return false;
+            return null;
         }
 
         byte[] bytes = Convert.FromBase64String(character);
@@ -33,7 +33,7 @@ internal class CardDatabase : Database<Card>, ICardDatabase
         RawCard? rawCard = JsonSerializer.Deserialize<RawCard>(decodedString);
         if (rawCard == null)
         {
-            return false;
+            return null;
         }
 
         string fileName = Guid.NewGuid().ToString() + ".png";
@@ -43,7 +43,7 @@ internal class CardDatabase : Database<Card>, ICardDatabase
         Card card = Card.FromRawCard(rawCard, character, objectId.ToString());
         await SaveDocumentAsync(card);
 
-        return true;
+        return card;
     }
 
     private static string? GetPngTextChunk(MemoryStream stream, string keyword)

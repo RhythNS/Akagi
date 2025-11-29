@@ -4,7 +4,6 @@ using MongoDB.Driver;
 using System.Collections.Concurrent;
 using System.Text;
 using Wacton.Desu.Japanese;
-using static System.Reflection.Metadata.BlobBuilder;
 
 namespace Akagi.Connectors.Desu;
 

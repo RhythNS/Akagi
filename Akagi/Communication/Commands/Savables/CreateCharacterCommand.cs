@@ -1,6 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Cards;
-using Akagi.Receivers.Puppeteers;
+using Akagi.Characters.CharacterBehaviors.Puppeteers;
 
 namespace Akagi.Communication.Commands.Savables;
 

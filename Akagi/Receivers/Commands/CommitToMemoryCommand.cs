@@ -1,4 +1,6 @@
-﻿namespace Akagi.Receivers.Commands;
+﻿using Akagi.Characters.Memories;
+
+namespace Akagi.Receivers.Commands;
 
 internal class CommitToMemoryCommand : Command
 {
@@ -6,7 +8,8 @@ internal class CommitToMemoryCommand : Command
 
     public override string Description => "Commit a thought to memory.";
 
-    public override Argument[] Arguments =>
+    public override Argument[] Arguments => _arguments;
+    private readonly Argument[] _arguments =
     [
         new Argument
         {
@@ -26,7 +29,12 @@ internal class CommitToMemoryCommand : Command
             throw new ArgumentException("Thought argument is required and cannot be empty.");
         }
         string thought = Arguments[0].Value;
-        context.Character.Memory.AddThought(thought);
+        SingleFactThought singleFactThought = new()
+        {
+            Fact = thought,
+            Timestamp = DateTime.UtcNow
+        };
+        context.Character.Memory.ShortTerm.AddThought(singleFactThought);
         return Task.CompletedTask;
     }
 }

@@ -4,5 +4,5 @@ namespace Akagi.Characters.Cards;
 
 internal interface ICardDatabase : IDatabase<Card>
 {
-    public Task<bool> SaveCardFromImage(MemoryStream memoryStream);
+    public Task<Card?> SaveCardFromImage(MemoryStream memoryStream);
 }

@@ -1,4 +1,4 @@
-﻿using Akagi.Receivers.MessageCompilers;
+﻿using Akagi.Characters.CharacterBehaviors.MessageCompilers;
 
 namespace Akagi.Communication.Commands.Lists;
 

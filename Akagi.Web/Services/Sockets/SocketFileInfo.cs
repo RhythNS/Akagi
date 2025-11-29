@@ -54,7 +54,7 @@ public class SocketFileInfo : IFileInfo
 
         if (_cache != null && _cache.TryGetValue(_name, out byte[]? cachedData))
         {
-            _cachedContent = cachedData!;
+            _cachedContent = cachedData;
             _contentFetched = true;
             return _cachedContent;
         }

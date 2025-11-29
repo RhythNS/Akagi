@@ -55,6 +55,12 @@ internal class Conversation : DirtyTrackable
         return message;
     }
 
+    public void InsertMessage(int index, Message message)
+    {
+        Dirty = true;
+        _messages.Insert(index, message);
+    }
+
 #pragma warning disable IDE0060 // Remove unused parameter TODO: fix this
     public Message AddCommand(Command command, DateTime time, Message.Type from)
 #pragma warning restore IDE0060 // Remove unused parameter

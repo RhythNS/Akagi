@@ -1,6 +1,5 @@
 ﻿using Akagi.Web.Models;
 using Akagi.Web.Services.Sockets.Requests;
-using Akagi.Web.Services.Users;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using System.Net;

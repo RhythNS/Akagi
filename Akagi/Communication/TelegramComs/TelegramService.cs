@@ -1,6 +1,7 @@
 ﻿using Akagi.Characters;
 using Akagi.Communication.Commands;
 using Akagi.Data;
+using Akagi.LLMs;
 using Akagi.Receivers;
 using Akagi.Users;
 using Microsoft.Extensions.Hosting;
@@ -28,6 +29,7 @@ internal partial class TelegramService : Communicator, IHostedService
     private readonly IDatabaseFactory _databaseFactory;
     private readonly TextCommand[] _textCommands = [];
     private readonly DocumentCommand[] _documentCommands = [];
+    private readonly LLMDefinitions _llmDefinitions;
 
     private TelegramBotClient? _client;
     private Telegram.Bot.Types.User? _me;
@@ -37,6 +39,7 @@ internal partial class TelegramService : Communicator, IHostedService
                            IUserDatabase userDatabase,
                            ICharacterDatabase characterDatabase,
                            IDatabaseFactory databaseFactory,
+                           IOptions<LLMDefinitions> llmDefinitions,
                            IEnumerable<Command> commands,
                            ILogger<TelegramService> logger) : base(receiver)
     {
@@ -45,6 +48,7 @@ internal partial class TelegramService : Communicator, IHostedService
         _characterDatabase = characterDatabase;
         _databaseFactory = databaseFactory;
         _userDatabase = userDatabase;
+        _llmDefinitions = llmDefinitions.Value;
 
         Command[] validCommands = [..commands.Where(x => x.CompatibleFor
                                              .All(y => typeof(TelegramService).IsAssignableTo(y)))];

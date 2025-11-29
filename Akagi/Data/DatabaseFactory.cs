@@ -29,7 +29,7 @@ internal class DatabaseFactory : IDatabaseFactory
         return (T)database;
     }
 
-    public Task<bool> SaveIsDirty(Savable savable)
+    public Task<bool> SaveIfDirty(Savable savable)
     {
         if (savable.Dirty)
         {
