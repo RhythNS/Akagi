@@ -6,6 +6,11 @@ using System.Text.Json;
 
 namespace Akagi.Characters.Cards;
 
+internal interface ICardDatabase : IDatabase<Card>
+{
+    public Task<Card?> SaveCardFromImage(MemoryStream memoryStream);
+}
+
 internal class CardDatabase : Database<Card>, ICardDatabase
 {
     private readonly IFileDatabase fileDatabase;

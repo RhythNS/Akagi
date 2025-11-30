@@ -5,6 +5,11 @@ using System.Web;
 
 namespace Akagi.Connectors.Tatoeba;
 
+internal interface ITatoebaConnector
+{
+    public Task<string> GetExample(string query, TatoebaUserConfig tatoebaUserConfig);
+}
+
 internal class TatoebaConnector : ITatoebaConnector
 {
     internal class Options

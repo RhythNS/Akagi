@@ -4,6 +4,11 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.LLMs;
 
+internal interface ILLMFactory
+{
+    public ILLM Create(User user, LLMDefinition? overrideModel);
+}
+
 internal class LLMFactory : ILLMFactory
 {
     private readonly IServiceProvider _serviceProvider;

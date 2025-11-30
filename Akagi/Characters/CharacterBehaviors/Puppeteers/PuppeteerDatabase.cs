@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 
 namespace Akagi.Characters.CharacterBehaviors.Puppeteers;
 
+internal interface IPuppeteerDatabase : IDatabase<Puppeteer>;
+
 internal class PuppeteerDatabase : Database<Puppeteer>, IPuppeteerDatabase
 {
     public PuppeteerDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "puppeteer")

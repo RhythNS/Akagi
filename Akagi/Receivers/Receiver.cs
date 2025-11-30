@@ -16,6 +16,14 @@ using System.Collections.Concurrent;
 
 namespace Akagi.Receivers;
 
+internal interface IReceiver
+{
+    public Task OnMessageRecieved(ICommunicator from, User user, Character character, Message message);
+    public Task OnPromptContinue(ICommunicator? from, Character character, User user);
+    public Task Reflect(Character character, User user, string name);
+    public Task OnSystemEvent(Character character, User user, Message message);
+}
+
 internal class Receiver : IReceiver, ICleanable
 {
     private static readonly ConcurrentDictionary<(string userId, string characterId), SemaphoreSlim> _locks = new();

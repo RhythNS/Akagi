@@ -5,7 +5,7 @@ using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters.Presets.Hardcoded.MessageCompilers;
 
-internal class LatestCompletedConversationCompilerPreset : Preset
+internal class LatestUnCompletedConversationCompilerPreset : Preset
 {
     private string _messageCompilerId = string.Empty;
 
@@ -18,10 +18,10 @@ internal class LatestCompletedConversationCompilerPreset : Preset
 
     public override async Task CreateAsync(IDatabaseFactory databaseFactory)
     {
-        LatestCompletedConversationCompiler compiler = new()
+        LatestUnCompletedConversationCompiler compiler = new()
         {
-            Name = "Latest Completed Conversation Compiler",
-            Description = "Filters to only the latest completed conversation.",
+            Name = "Latest UnCompleted Conversation Compiler",
+            Description = "Filters to only the latest not completed conversation.",
         };
 
         await Save(databaseFactory, compiler, MessageCompilerId);

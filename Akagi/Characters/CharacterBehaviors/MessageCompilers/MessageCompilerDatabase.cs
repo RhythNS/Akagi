@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
 
+internal interface IMessageCompilerDatabase : IDatabase<MessageCompiler>;
+
 internal class MessageCompilerDatabase : Database<MessageCompiler>, IMessageCompilerDatabase
 {
     public MessageCompilerDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "message_compiler")

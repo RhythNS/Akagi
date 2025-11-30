@@ -7,6 +7,11 @@ using Wacton.Desu.Japanese;
 
 namespace Akagi.Connectors.Desu;
 
+internal interface IDesuConnector
+{
+    public string Lookup(string word, DesuUserConfig userConfig);
+}
+
 internal class DesuConnector : IDesuConnector, ISystemInitializer
 {
     private static IJapaneseEntry[]? _entries;

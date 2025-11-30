@@ -4,6 +4,11 @@ using Microsoft.Extensions.Options;
 
 namespace Akagi.Scheduling;
 
+internal interface ITaskDatabase : IDatabase<BaseTask>
+{
+    public Task<List<BaseTask>> GetTasks();
+}
+
 internal class TaskDatabase : Database<BaseTask>, ITaskDatabase
 {
     public TaskDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "tasks")

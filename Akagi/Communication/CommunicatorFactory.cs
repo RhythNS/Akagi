@@ -1,5 +1,12 @@
 ﻿namespace Akagi.Communication;
 
+internal interface ICommunicatorFactory
+{
+    public ICommunicator? Create(string name);
+
+    public IEnumerable<string> GetAvailableCommunicators();
+}
+
 internal class CommunicatorFactory : ICommunicatorFactory
 {
     private readonly IEnumerable<ICommunicator> _communicators;

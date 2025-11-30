@@ -5,6 +5,13 @@ using MongoDB.Driver;
 
 namespace Akagi.Users;
 
+internal interface IUserDatabase : IDatabase<User>
+{
+    public Task<User?> GetUser(FilterDefinition<User> user);
+
+    public Task<User?> GetByUsername(string username);
+}
+
 internal class UserDatabase : Database<User>, IUserDatabase
 {
     private readonly ILogger<UserDatabase> _logger;

@@ -4,6 +4,11 @@ using MongoDB.Driver;
 
 namespace Akagi.Characters.Presets;
 
+internal interface IPresetDatabase : IDatabase<Preset>
+{
+    public Task<T?> GetPreset<T>() where T : Preset;
+}
+
 internal class PresetDatabase : Database<Preset>, IPresetDatabase
 {
     public PresetDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "presets")

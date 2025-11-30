@@ -6,6 +6,13 @@ using MongoDB.Driver;
 
 namespace Akagi.Characters;
 
+internal interface ICharacterDatabase : IDatabase<Character>
+{
+    public Task<Character?> GetCharacter(string id);
+
+    public Task<List<Character>> GetCharactersForUser(User user);
+}
+
 internal class CharacterDatabase : Database<Character>, ICharacterDatabase
 {
     private readonly ICardDatabase _cardDatabase;

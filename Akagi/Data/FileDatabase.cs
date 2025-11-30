@@ -5,6 +5,15 @@ using MongoDB.Driver.GridFS;
 
 namespace Akagi.Data;
 
+internal interface IFileDatabase
+{
+    public Task<ObjectId> UploadFileAsync(Stream fileStream, string fileName, string contentType);
+
+    public Task<Stream> DownloadFileAsync(ObjectId id);
+
+    public Task DeleteFileAsync(ObjectId id);
+}
+
 internal class FileDatabase : IFileDatabase
 {
     protected IMongoDatabase _database = default!;

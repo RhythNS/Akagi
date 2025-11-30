@@ -3,6 +3,8 @@ using Microsoft.Extensions.Options;
 
 namespace Akagi.Characters.TriggerPoints;
 
+internal interface ITriggerPointDatabase : IDatabase<TriggerPoint>;
+
 internal class TriggerPointDatabase : Database<TriggerPoint>, ITriggerPointDatabase
 {
     public TriggerPointDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "triggerPoint")

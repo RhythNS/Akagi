@@ -11,6 +11,8 @@ using System.Text.Json;
 
 namespace Akagi.LLMs.Gemini;
 
+internal interface IGeminiClient : ILLM;
+
 internal class GeminiClient : IGeminiClient
 {
     internal class Options
