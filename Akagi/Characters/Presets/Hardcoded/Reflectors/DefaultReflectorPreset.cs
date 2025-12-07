@@ -2,6 +2,8 @@
 using Akagi.Characters.Presets.Hardcoded.SystemProcessors;
 using Akagi.Data;
 using Akagi.Utils.Attributes;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters.Presets.Hardcoded.Reflectors;
 
@@ -10,6 +12,7 @@ internal class DefaultReflectorPreset : Preset
 {
     private string reflectorId = string.Empty;
 
+    [BsonRepresentation(BsonType.ObjectId)]
     public string ReflectorId
     {
         get => reflectorId;
@@ -26,7 +29,7 @@ internal class DefaultReflectorPreset : Preset
             ConversationSystemProccessorId = preset.ProcessorId
         };
 
-        await Save(databaseFactory, reflector);
+        await Save(databaseFactory, reflector, ReflectorId);
 
         ReflectorId = reflector.Id!;
     }

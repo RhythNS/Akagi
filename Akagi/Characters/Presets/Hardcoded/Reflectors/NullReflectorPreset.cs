@@ -1,5 +1,7 @@
 ﻿using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Data;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters.Presets.Hardcoded.Reflectors;
 
@@ -7,6 +9,7 @@ internal class NullReflectorPreset : Preset
 {
     private string reflectorId = string.Empty;
 
+    [BsonRepresentation(BsonType.ObjectId)]
     public string ReflectorId
     {
         get => reflectorId;

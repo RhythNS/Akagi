@@ -37,5 +37,6 @@ internal class SwitchCardCommand : TextCommand
             return;
         }
         context.Character.CardId = card.Id!;
+        await Communicator.SendMessage(context.User, "Switched cards!");
     }
 }

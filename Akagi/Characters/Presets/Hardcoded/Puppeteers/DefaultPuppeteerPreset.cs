@@ -2,14 +2,17 @@
 using Akagi.Characters.Presets.Hardcoded.SystemProcessors;
 using Akagi.Data;
 using Akagi.Utils.Attributes;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters.Presets.Hardcoded.Puppeteers;
 
-[DependsOn(typeof(RoleplayProcessorPreset))]
-internal class RoleplayPuppeteerPreset : Preset
+[DependsOn(typeof(DefaultProcessorPreset))]
+internal class DefaultPuppeteerPreset : Preset
 {
     private string _puppeteerId = string.Empty;
 
+    [BsonRepresentation(BsonType.ObjectId)]
     public string PuppeteerId
     {
         get => _puppeteerId;
@@ -18,12 +21,12 @@ internal class RoleplayPuppeteerPreset : Preset
 
     protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
-        RoleplayProcessorPreset roleplayProcessor = await Load<RoleplayProcessorPreset>(databaseFactory, UserId);
+        DefaultProcessorPreset roleplayProcessor = await Load<DefaultProcessorPreset>(databaseFactory, UserId);
 
         SinglePuppeteer singlePuppeteer = new()
         {
             Name = "Roleplay Puppeteer",
-            SystemProcessorId = roleplayProcessor.Id!,
+            SystemProcessorId = roleplayProcessor.ProcessorId!,
         };
 
         await Save(databaseFactory, singlePuppeteer, PuppeteerId);

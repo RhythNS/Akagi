@@ -7,13 +7,27 @@ internal class HelpListCommand : ListCommand
 {
     public override string Name => "/help";
 
-    public override string Description => "Lists all available commands. Usage: /help";
+    public override string Description => "Lists all available commands. Usage: /help <searchTerm>";
 
     public override Task ExecuteAsync(Context context, string[] args)
     {
-        Command[] commands = [.. Communicator.AvailableCommands
-                                             .Where(x => !x.AdminOnly || context.User.Admin)
-                                             .OrderBy(x => x.Name)];
+        string? searchTerm = args.Length < 1 ? null : args[0].ToLowerInvariant();
+
+        Command[] commands =
+        [
+            .. Communicator.AvailableCommands
+            .Where(x =>
+            {
+                if (searchTerm != null)
+                {
+                    return x.Name.Contains(searchTerm,
+                        StringComparison.InvariantCultureIgnoreCase);
+                }
+
+               return !x.AdminOnly || context.User.Admin;
+            }
+            ).OrderBy(x => x.Name)
+        ];
 
         if (commands == null || commands.Length == 0)
         {
@@ -27,10 +41,7 @@ internal class HelpListCommand : ListCommand
         {
             Command command = commands[i];
             sb.AppendLine($"{command.Name} - {command.Description}");
-            if (i < commands.Length - 1)
-            {
-                sb.AppendLine("------------------------------");
-            }
+            sb.AppendLine();
         }
 
         return Communicator.SendMessage(context.User, sb.ToString());

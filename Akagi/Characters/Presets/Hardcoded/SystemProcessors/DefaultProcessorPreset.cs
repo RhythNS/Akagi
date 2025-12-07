@@ -10,7 +10,7 @@ using MongoDB.Bson.Serialization.Attributes;
 namespace Akagi.Characters.Presets.Hardcoded.SystemProcessors;
 
 [DependsOn(typeof(DefaultCompilerPreset))]
-internal class RoleplayProcessorPreset : Preset
+internal class DefaultProcessorPreset : Preset
 {
     private string _processorId = string.Empty;
 

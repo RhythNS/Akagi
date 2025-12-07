@@ -22,7 +22,7 @@ internal class ChangeCharacterCommand : TelegramTextCommand
             await Communicator.SendMessage(context.User, "Please provide a character id");
             return;
         }
-        string name = args[0];
+        string name = string.Join(' ', args);
         List<Character> characters = await _characterDatabase.GetCharactersForUser(context.User);
         Character? character = characters.FirstOrDefault(x => x.Name.Equals(name, StringComparison.OrdinalIgnoreCase));
         if (character == null)

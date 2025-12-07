@@ -13,6 +13,7 @@ using Akagi.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using static Akagi.Characters.TriggerPoints.TriggerPoint;
 
 namespace Akagi.Receivers;
 
@@ -91,7 +92,7 @@ internal class Receiver : IReceiver, ICleanable
 
             if (reflected)
             {
-                await TriggerForCharacter(TriggerPoint.TriggerType.ReflectionCompleted, character);
+                await TriggerForCharacter(TriggerType.ReflectionCompleted, character, user);
             }
         }
         catch (Exception ex)
@@ -204,7 +205,7 @@ internal class Receiver : IReceiver, ICleanable
         await puppeteer.Init(logger, context, _systemProcessorDatabase);
         await puppeteer.ProcessAsync();
 
-        await TriggerForCharacter(TriggerPoint.TriggerType.MessageProcessed, context.Character);
+        await TriggerForCharacter(TriggerType.MessageProcessed, context.Character, context.User);
     }
 
     private Context GetContext(Character character, User user, ICommunicator communicator)
@@ -220,13 +221,20 @@ internal class Receiver : IReceiver, ICleanable
         };
     }
 
-    private async Task TriggerForCharacter(TriggerPoint.TriggerType type, Character character)
+    private async Task TriggerForCharacter(TriggerType type, Character character, User user)
     {
         foreach (string triggerId in character.TriggerPointIds)
         {
             TriggerPoint triggerPoint = await _databaseFactory.GetDatabase<ITriggerPointDatabase>().GetDocumentByIdAsync(triggerId)
                 ?? throw new Exception($"TriggerPoint with ID {triggerId} not found for character {character.Id}");
+            await using TriggerContext context = new()
+            {
+                Character = character,
+                User = user,
+                DatabaseFactory = _databaseFactory,
+            };
 
+            await triggerPoint.Init(context);
             await triggerPoint.On(type);
 
             await _databaseFactory.SaveIfDirty(triggerPoint);
