@@ -16,7 +16,7 @@ internal class TriggerReflectPreset : Preset
         set => SetProperty(ref _triggerId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
         TriggerReflect triggerReflect = new()
         {

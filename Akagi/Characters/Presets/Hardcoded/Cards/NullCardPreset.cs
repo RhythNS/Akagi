@@ -20,7 +20,7 @@ internal class NullCardPreset : Preset
         set => SetProperty(ref cardId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
         if (string.IsNullOrEmpty(CardId) == false)
         {

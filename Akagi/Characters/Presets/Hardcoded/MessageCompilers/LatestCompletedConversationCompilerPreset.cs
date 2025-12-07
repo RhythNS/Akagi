@@ -16,7 +16,7 @@ internal class LatestCompletedConversationCompilerPreset : Preset
         set => SetProperty(ref _messageCompilerId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
         LatestCompletedConversationCompiler compiler = new()
         {

@@ -67,6 +67,19 @@ internal class GeminiClient : IGeminiClient
                         Role = role
                     });
                     break;
+                case CommandMessage commandMessage:
+                    contents.Add(new GeminiPayload.Content
+                    {
+                        Parts =
+                        [
+                            new GeminiPayload.Part
+                            {
+                                Text = message.From == Message.Type.System ? "SYSTEM MESSAGE: " + commandMessage.Output : commandMessage.Output
+                            }
+                        ],
+                        Role = role
+                    });
+                    break;
 
                 default:
                     _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
@@ -81,8 +94,9 @@ internal class GeminiClient : IGeminiClient
         {
             Dictionary<string, object> properties = [];
             List<string> required = [];
+            Argument[] args = command.GetDefaultArguments();
 
-            foreach (Argument argument in command.Arguments)
+            foreach (Argument argument in args)
             {
                 Dictionary<string, object> propertySchema = new()
                 {
@@ -213,6 +227,8 @@ internal class GeminiClient : IGeminiClient
         {
             if (retries-- > 0 && response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
             {
+                _logger.LogWarning($"Received 503 Service Unavailable from Gemini API. Retrying...");
+
                 await Task.Delay(TimeSpan.FromSeconds(5));
                 goto retry;
             }
@@ -248,24 +264,25 @@ internal class GeminiClient : IGeminiClient
         List<Command> commands = [];
         foreach (Part part in geminiResponse.Candidates[0].Content.Parts)
         {
+            Command command;
             if (part.Text != null)
             {
-                TextMessageCommand command = _commandFactory.Create<TextMessageCommand>();
-                command.SetMessage(part.Text, systemProcessor.Output);
-                commands.Add(command);
+                TextMessageCommand textCommand = _commandFactory.Create<TextMessageCommand>();
+                textCommand.SetMessage(part.Text);
+                command = textCommand;
             }
             else if (part.FunctionCall != null)
             {
                 try
                 {
-                    Command command = systemProcessor.Commands
+                    command = systemProcessor.Commands
                         .FirstOrDefault(x => x.Name.Equals(part.FunctionCall.Name, StringComparison.OrdinalIgnoreCase))
                         ?? throw new Exception($"Could not find {part.FunctionCall.Name} command!");
-                    // TODO: maybe copy command instead of using it directly?
 
+                    Argument[] args = command.GetDefaultArguments();
                     foreach (KeyValuePair<string, object> partParameter in part.FunctionCall.Args)
                     {
-                        Argument argument = command.Arguments.First(x => x.Name == partParameter.Key);
+                        Argument argument = args.First(x => x.Name == partParameter.Key);
 
                         if (partParameter.Value is not JsonElement jsonElement || jsonElement.ValueKind != JsonValueKind.Array)
                         {
@@ -296,7 +313,7 @@ internal class GeminiClient : IGeminiClient
                                 continue;
                         }
                     }
-                    commands.Add(command);
+                    command.Arguments = args;
                 }
                 catch (Exception ex)
                 {
@@ -309,6 +326,9 @@ internal class GeminiClient : IGeminiClient
                 _logger.LogWarning("Unknown part type in Gemini response: {content}", content);
                 continue;
             }
+
+            command.From = systemProcessor.Output;
+            commands.Add(command);
         }
 
         return [.. commands];

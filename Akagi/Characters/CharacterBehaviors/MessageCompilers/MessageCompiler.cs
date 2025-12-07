@@ -37,7 +37,7 @@ internal abstract class MessageCompiler : Savable
             .Select(c => c.Copy()))
         {
             conversation.Messages = [.. conversation.Messages
-                .Where(m => (m.VisibleTo & ReadableMessages) != 0)
+                .Where(m => (m.From & ReadableMessages) != 0)
                 .OrderBy(m => m.Time)];
             if (conversation.Messages.Count > 0)
             {

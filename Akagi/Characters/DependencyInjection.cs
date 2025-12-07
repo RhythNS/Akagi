@@ -27,6 +27,8 @@ static class DependencyInjection
         services.AddSingleton<ITriggerPointDatabase, TriggerPointDatabase>();
         services.AddSingleton<ITriggerActionDatabase, TriggerActionDatabase>();
 
+        services.AddScoped<IPresetCreator, PresetCreator>();
+
         RegisterDBClasses();
     }
 

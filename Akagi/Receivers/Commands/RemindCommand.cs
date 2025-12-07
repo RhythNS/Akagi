@@ -11,8 +11,7 @@ internal class RemindCommand : Command
 
     public override string Description => "Remind the user of a thought or task.";
 
-    public override Argument[] Arguments => _arguments;
-    private readonly Argument[] _arguments =
+    public override Argument[] GetDefaultArguments() =>
     [
         new Argument
         {
@@ -53,6 +52,9 @@ internal class RemindCommand : Command
 
         ITaskDatabase taskDatabase = Globals.Instance.ServiceProvider.GetRequiredService<ITaskDatabase>();
         taskDatabase.SaveAsync(sendSystemMessageTask);
+
+        string output = $"Reminder set for {timeInMinutes} minute(s) from now: {thought}";
+        context.Conversation.AddMessage(CreateCommandMessage(output));
 
         return Task.CompletedTask;
     }

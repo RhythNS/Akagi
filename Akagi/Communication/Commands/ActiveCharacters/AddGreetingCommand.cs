@@ -40,7 +40,6 @@ internal class AddGreetingCommand : TextCommand
             From = Message.Type.Character,
             Text = greeting,
             Time = DateTime.UtcNow,
-            VisibleTo =  Message.Type.Character | Message.Type.User | Message.Type.System
         };
         conversation.AddMessage(message);
 

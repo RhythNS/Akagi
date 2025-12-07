@@ -80,8 +80,6 @@ internal abstract class CharacterBehavior : Savable
 
     protected async Task DefaultNextSteps(ILLM llm, SystemProcessor systemProcessor, int maxSteps = 3)
     {
-        Command[] commands = await llm.GetNextSteps(systemProcessor, Context);
-
         bool shouldContinue = true;
         do
         {
@@ -90,6 +88,15 @@ internal abstract class CharacterBehavior : Savable
                 Logger.LogWarning("Max steps reached in DefaultNextSteps for character {CharacterId}, user {UserId}, {SystemProcessorName}",
                     Character.Id, User.Id, systemProcessor.Name);
                 break;
+            }
+
+            Command[] commands = await llm.GetNextSteps(systemProcessor, Context);
+
+            if (commands.Length == 0)
+            {
+                Logger.LogWarning("No commands returned from LLM for character {CharacterId}, user {UserId}, {SystemProcessorName}",
+                    Character.Id, User.Id, systemProcessor.Name);
+                return;
             }
 
             foreach (Command command in commands)

@@ -16,9 +16,9 @@ internal class TriggerReflectOnCompletedConversationPreset : Preset
         set => SetProperty(ref _triggerId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
-        TriggerReflectPreset reflect = await Load<TriggerReflectPreset>(databaseFactory);
+        TriggerReflectPreset reflect = await Load<TriggerReflectPreset>(databaseFactory, UserId);
 
         TriggerPoint triggerPoint = new()
         {

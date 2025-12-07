@@ -16,7 +16,7 @@ internal class Forgetful5MessageCompilerPreset : Preset
         set => SetProperty(ref _messageCompilerId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
         ForgetfulMessageCompiler compiler = new()
         {

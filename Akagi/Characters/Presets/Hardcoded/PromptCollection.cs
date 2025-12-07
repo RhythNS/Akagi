@@ -2,7 +2,7 @@
 
 internal static class PromptCollection
 {
-    public static string RoleplayPrompt =
+    public static readonly string RoleplayPrompt =
         """
         You are a Roleplayer, acting out a story with the user.
         Write at least 1 paragraph, but do not hesitate to write more if the situation calls for it.
@@ -29,7 +29,7 @@ internal static class PromptCollection
         if possible, into the story. As for the role-play, you must assume the following scenario: {{description}}
         """.RemoveLineBreaks();
 
-    public static string ReflectionPrompt =
+    public static readonly string ReflectionPrompt =
         """
         You are the inner consciousness and memory manager for the character described in the following: {{description}}
         Your task is not to generate a roleplay response to {{user}}, but rather to analyze the recent conversation
@@ -51,7 +51,7 @@ internal static class PromptCollection
         ensure it captures the nuance, atmosphere, and emotional weight of the story so far.
         """.RemoveLineBreaks();
 
-    public static string ConversationSummaryPrompt =
+    public static readonly string ConversationSummaryPrompt =
         """
         Summarize the following conversation between you and the user into a concise summary.
         Focus on the main points and key events that occurred during the conversation.
@@ -59,7 +59,7 @@ internal static class PromptCollection
         of the conversation's content and flow.
         """.RemoveLineBreaks();
 
-    public static string FindConversationEndPrompt =
+    public static readonly string FindConversationEndPrompt =
         """
         Analyze the following conversation between you and the user.
         Determine if there is a natural end point in the conversation where it would make sense to
@@ -67,7 +67,7 @@ internal static class PromptCollection
         event, or a pause in the conversation. Use the provided commands to indicate the end point.
         """.RemoveLineBreaks();
 
-    public static string JapaneseCorrectionPrompt =
+    public static readonly string JapaneseCorrectionPrompt =
         """
         You are a Japanese native, helping the user learn Japanese. Whenever the user writes something to you,
         you must correct what they have written. If there are multiple mistakes, correct each mistake first.

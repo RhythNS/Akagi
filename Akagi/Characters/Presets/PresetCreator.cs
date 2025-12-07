@@ -1,11 +1,15 @@
 ﻿using Akagi.Data;
-using Akagi.Flow;
 using Akagi.Utils.Extensions;
 using Microsoft.Extensions.Logging;
 
 namespace Akagi.Characters.Presets;
 
-internal class PresetCreator : ISystemInitializer
+internal interface IPresetCreator
+{
+    public Task CreateForUser(string userId);
+}
+
+internal class PresetCreator : IPresetCreator
 {
     private readonly IDatabaseFactory _databaseFactory;
     private readonly ILogger<PresetCreator> _logger;
@@ -16,9 +20,9 @@ internal class PresetCreator : ISystemInitializer
         _logger = logger;
     }
 
-    public async Task InitializeAsync()
+    public async Task CreateForUser(string userId)
     {
-        _logger.LogInformation("Creating default presets...");
+        _logger.LogInformation("Creating default presets for {userId}...", userId);
 
         IPresetDatabase presetDatabase = _databaseFactory.GetDatabase<IPresetDatabase>();
 
@@ -27,7 +31,7 @@ internal class PresetCreator : ISystemInitializer
             .Where(type => type.IsSubclassOf(typeof(Preset)) && !type.IsAbstract)
             .SortByDependencies()];
 
-        List<Preset> presets = await presetDatabase.GetDocumentsAsync();
+        List<Preset> presets = await presetDatabase.GetAllPresets(userId);
 
         foreach (Type presetType in presetTypes)
         {
@@ -36,7 +40,7 @@ internal class PresetCreator : ISystemInitializer
                 Preset preset = presets.FirstOrDefault(p => p.GetType() == presetType)
                     ?? (Preset)Activator.CreateInstance(presetType)!;
 
-                await preset.CreateAsync(_databaseFactory);
+                await preset.CreateAsync(_databaseFactory, userId);
 
                 await presetDatabase.SaveAsync(preset);
             }

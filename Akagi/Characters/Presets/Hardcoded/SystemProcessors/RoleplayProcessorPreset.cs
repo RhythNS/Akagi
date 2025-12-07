@@ -21,10 +21,10 @@ internal class RoleplayProcessorPreset : Preset
         set => SetProperty(ref _processorId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
         // TODO: Replace with a more suitable compiler if needed
-        DefaultCompilerPreset defaultCompiler = await Load<DefaultCompilerPreset>(databaseFactory);
+        DefaultCompilerPreset defaultCompiler = await Load<DefaultCompilerPreset>(databaseFactory, UserId);
 
         SystemProcessor processor = new()
         {

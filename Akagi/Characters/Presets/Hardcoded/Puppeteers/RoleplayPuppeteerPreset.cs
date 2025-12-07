@@ -16,9 +16,9 @@ internal class RoleplayPuppeteerPreset : Preset
         set => SetProperty(ref _puppeteerId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
-        RoleplayProcessorPreset roleplayProcessor = await Load<RoleplayProcessorPreset>(databaseFactory);
+        RoleplayProcessorPreset roleplayProcessor = await Load<RoleplayProcessorPreset>(databaseFactory, UserId);
 
         SinglePuppeteer singlePuppeteer = new()
         {

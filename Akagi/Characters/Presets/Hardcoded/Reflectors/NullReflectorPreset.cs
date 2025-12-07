@@ -13,7 +13,7 @@ internal class NullReflectorPreset : Preset
         set => SetProperty(ref reflectorId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
         NullReflector reflector = new()
         {

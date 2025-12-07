@@ -34,7 +34,6 @@ internal abstract class Message
 
     public required DateTime Time { get; set; }
     public required Type From { get; set; }
-    public required Type VisibleTo { get; set; }
 
     public abstract Message Copy();
 }

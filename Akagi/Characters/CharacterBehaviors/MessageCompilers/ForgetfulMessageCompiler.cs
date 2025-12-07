@@ -25,7 +25,7 @@ internal class ForgetfulMessageCompiler : MessageCompiler
             }
 
             foreach (Message message in conversation.Messages
-                .Where(x => (x.VisibleTo & ReadableMessages) != 0)
+                .Where(x => (x.From & ReadableMessages) != 0)
                 .OrderByDescending(x => x.Time))
             {
                 if (messages.Count >= MaxMessages)

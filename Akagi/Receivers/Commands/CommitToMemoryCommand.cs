@@ -8,8 +8,7 @@ internal class CommitToMemoryCommand : Command
 
     public override string Description => "Commit a thought to memory.";
 
-    public override Argument[] Arguments => _arguments;
-    private readonly Argument[] _arguments =
+    public override Argument[] GetDefaultArguments() =>
     [
         new Argument
         {
@@ -35,6 +34,10 @@ internal class CommitToMemoryCommand : Command
             Timestamp = DateTime.UtcNow
         };
         context.Character.Memory.ShortTerm.AddThought(singleFactThought);
+
+        string output = $"Committed thought to memory: \"{thought}\"";
+        context.Conversation.AddMessage(CreateCommandMessage(output));
+
         return Task.CompletedTask;
     }
 }

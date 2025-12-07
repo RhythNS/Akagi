@@ -16,9 +16,9 @@ internal class DefaultReflectorPreset : Preset
         set => SetProperty(ref reflectorId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
-        ConversationSummaryReflectionProcessorPreset preset = await Load<ConversationSummaryReflectionProcessorPreset>(databaseFactory);
+        ConversationSummaryReflectionProcessorPreset preset = await Load<ConversationSummaryReflectionProcessorPreset>(databaseFactory, UserId);
 
         DefaultReflector reflector = new()
         {

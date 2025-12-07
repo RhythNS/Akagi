@@ -8,8 +8,7 @@ internal class TextMessageCommand : MessageCommand
 
     public override string Description => "Command to save a text message.";
 
-    public override Argument[] Arguments => _arguments;
-    private readonly Argument[] _arguments =
+    public override Argument[] GetDefaultArguments() =>
     [
         new Argument
         {
@@ -17,13 +16,6 @@ internal class TextMessageCommand : MessageCommand
             Description = "The message to save.",
             IsRequired = true,
             ArgumentType = Argument.Type.String
-        },
-        new Argument
-        {
-            Name = "From",
-            Description = "Wheter the message was from the system or the character.",
-            IsRequired = true,
-            ArgumentType = Argument.Type.String,
         }
     ];
 
@@ -32,15 +24,14 @@ internal class TextMessageCommand : MessageCommand
     public override Task Execute(Context context)
     {
         string text = Arguments[0].Value;
-        Message.Type type = Enum.TryParse(Arguments[1].Value, true, out Message.Type parsedType) ? parsedType : Message.Type.Character;
-        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, Message.Type.Character, type);
+        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, From);
         return Task.CompletedTask;
     }
 
-    public void SetMessage(string message, Message.Type type)
+    public void SetMessage(string message)
     {
+        Arguments = GetDefaultArguments();
         Arguments[0].Value = message;
-        Arguments[1].Value = type.ToString();
     }
 
     public override Message GetMessage()

@@ -1,14 +1,31 @@
 ﻿using Akagi.Data;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters.Presets;
 
 internal abstract class Preset : Savable
 {
-    public abstract Task CreateAsync(IDatabaseFactory databaseFactory);
+    private string _userId = string.Empty;
 
-    protected static async Task<T> Load<T>(IDatabaseFactory databaseFactory) where T : Preset
+    [BsonRepresentation(BsonType.ObjectId)]
+    public string UserId
     {
-        return await databaseFactory.GetDatabase<IPresetDatabase>().GetPreset<T>()
+        get => _userId;
+        set => SetProperty(ref _userId, value);
+    }
+
+    public Task CreateAsync(IDatabaseFactory databaseFactory, string userId)
+    {
+        UserId = userId;
+        return CreateInnerAsync(databaseFactory);
+    }
+
+    protected abstract Task CreateInnerAsync(IDatabaseFactory databaseFactory);
+
+    protected static async Task<T> Load<T>(IDatabaseFactory databaseFactory, string userId) where T : Preset
+    {
+        return await databaseFactory.GetDatabase<IPresetDatabase>().GetPreset<T>(userId)
             ?? throw new InvalidOperationException($"{typeof(T).Name} not found");
     }
 

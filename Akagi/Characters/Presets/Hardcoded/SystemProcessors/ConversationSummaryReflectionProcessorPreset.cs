@@ -21,9 +21,9 @@ internal class ConversationSummaryReflectionProcessorPreset : Preset
         set => SetProperty(ref _processorId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
-        LatestCompletedConversationCompilerPreset compiler = await Load<LatestCompletedConversationCompilerPreset>(databaseFactory);
+        LatestCompletedConversationCompilerPreset compiler = await Load<LatestCompletedConversationCompilerPreset>(databaseFactory, UserId);
 
         SystemProcessor processor = new()
         {

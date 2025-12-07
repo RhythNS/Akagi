@@ -6,7 +6,7 @@ internal class StopExecutionCommand : Command
 
     public override string Description => "Stops the current conversation.";
 
-    public override Argument[] Arguments => [];
+    public override Argument[] GetDefaultArguments() => [];
 
     public override bool ContinueAfterExecution => false;
 

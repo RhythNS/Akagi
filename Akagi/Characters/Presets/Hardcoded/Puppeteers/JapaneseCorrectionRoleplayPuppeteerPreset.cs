@@ -16,10 +16,10 @@ internal class JapaneseCorrectionRoleplayPuppeteerPreset : Preset
         set => SetProperty(ref _puppeteerId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
-        RoleplayProcessorPreset roleplay = await Load<RoleplayProcessorPreset>(databaseFactory);
-        JapaneseCorrectionProcessorPreset japaneseCorrection = await Load<JapaneseCorrectionProcessorPreset>(databaseFactory);
+        RoleplayProcessorPreset roleplay = await Load<RoleplayProcessorPreset>(databaseFactory, UserId);
+        JapaneseCorrectionProcessorPreset japaneseCorrection = await Load<JapaneseCorrectionProcessorPreset>(databaseFactory, UserId);
 
         LinePuppeteer puppeteer = new()
         {

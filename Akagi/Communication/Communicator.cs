@@ -41,7 +41,6 @@ internal abstract class Communicator : ICommunicator
             From = Message.Type.User,
             Text = message,
             Time = DateTime.UtcNow,
-            VisibleTo = Message.Type.Character | Message.Type.User | Message.Type.System
         };
         return RecieveMessage(user, character, textMessage);
     }

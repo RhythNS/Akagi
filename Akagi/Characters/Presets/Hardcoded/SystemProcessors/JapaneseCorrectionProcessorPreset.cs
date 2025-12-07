@@ -21,9 +21,9 @@ internal class JapaneseCorrectionProcessorPreset : Preset
         set => SetProperty(ref _processorId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
-        Forgetful5MessageCompilerPreset messageCompiler = await Load<Forgetful5MessageCompilerPreset>(databaseFactory);
+        Forgetful5MessageCompilerPreset messageCompiler = await Load<Forgetful5MessageCompilerPreset>(databaseFactory, UserId);
 
         SystemProcessor processor = new()
         {

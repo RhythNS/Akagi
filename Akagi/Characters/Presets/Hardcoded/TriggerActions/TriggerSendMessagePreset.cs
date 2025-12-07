@@ -16,7 +16,7 @@ internal class TriggerSendMessagePreset : Preset
         set => SetProperty(ref triggerId, value);
     }
 
-    public override async Task CreateAsync(IDatabaseFactory databaseFactory)
+    protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
     {
         TriggerSendMessage trigger = new()
         {

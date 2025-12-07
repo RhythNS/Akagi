@@ -6,7 +6,8 @@ namespace Akagi.Characters.Presets;
 
 internal interface IPresetDatabase : IDatabase<Preset>
 {
-    public Task<T?> GetPreset<T>() where T : Preset;
+    public Task<T?> GetPreset<T>(string userId) where T : Preset;
+    public Task<List<Preset>> GetAllPresets(string userId);
 }
 
 internal class PresetDatabase : Database<Preset>, IPresetDatabase
@@ -15,9 +16,10 @@ internal class PresetDatabase : Database<Preset>, IPresetDatabase
     {
     }
 
-    public async Task<T?> GetPreset<T>() where T : Preset
+    public async Task<T?> GetPreset<T>(string userId) where T : Preset
     {
-        FilterDefinition<Preset> filter = Builders<Preset>.Filter.OfType<T>();
+        FilterDefinition<Preset> filter = Builders<Preset>.Filter.OfType<T>() &
+            Builders<Preset>.Filter.Eq(p => p.UserId, userId);
         List<Preset> existing = await GetDocumentsByPredicateAsync(filter);
 
         if (existing.Count > 0)
@@ -26,6 +28,12 @@ internal class PresetDatabase : Database<Preset>, IPresetDatabase
         }
 
         return null;
+    }
+
+    public Task<List<Preset>> GetAllPresets(string userId)
+    {
+        FilterDefinition<Preset> filter = Builders<Preset>.Filter.Eq(p => p.UserId, userId);
+        return GetDocumentsByPredicateAsync(filter);
     }
 
     public override bool CanSave(Savable savable)

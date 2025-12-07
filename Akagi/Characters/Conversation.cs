@@ -1,7 +1,5 @@
 ﻿using Akagi.Characters.Conversations;
 using Akagi.Data;
-using Akagi.Receivers.Commands;
-using Akagi.Receivers.Commands.Messages;
 
 namespace Akagi.Characters;
 
@@ -39,14 +37,13 @@ internal class Conversation : DirtyTrackable
         _messages.Add(message);
     }
 
-    public Message AddMessage(string text, DateTime time, Message.Type from, Message.Type visibleTo)
+    public Message AddMessage(string text, DateTime time, Message.Type from)
     {
         TextMessage message = new()
         {
             Text = text,
             From = from,
             Time = time,
-            VisibleTo = visibleTo
         };
 
         Dirty = true;
@@ -59,21 +56,6 @@ internal class Conversation : DirtyTrackable
     {
         Dirty = true;
         _messages.Insert(index, message);
-    }
-
-#pragma warning disable IDE0060 // Remove unused parameter TODO: fix this
-    public Message AddCommand(Command command, DateTime time, Message.Type from)
-#pragma warning restore IDE0060 // Remove unused parameter
-    {
-        if (command is MessageCommand messageCommand)
-        {
-            Message message = messageCommand.GetMessage();
-            Dirty = true;
-            _messages.Add(message);
-            return message;
-        }
-
-        throw new NotImplementedException();
     }
 
     public IReadOnlyList<Message> GetLastMessages(int count)

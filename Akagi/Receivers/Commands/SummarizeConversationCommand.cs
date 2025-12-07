@@ -9,8 +9,7 @@ internal class SummarizeConversationCommand : Command
 
     public override string Description => "Summarizes the conversation with a short consise summary and a slightly longer summary.";
 
-    public override Argument[] Arguments => _arguments;
-    private readonly Argument[] _arguments =
+    public override Argument[] GetDefaultArguments() =>
     [
         new Argument
         {
@@ -77,6 +76,12 @@ internal class SummarizeConversationCommand : Command
         };
 
         context.Character.Memory.Conversations.AddThought(thought);
+
+        string output = $"Conversation {id} summarized successfully: \n" +
+                        $"Short Summary: {shortSummary}\n" +
+                        $"Long Summary: {longSummary}";
+        context.Conversation.AddMessage(CreateCommandMessage(output));
+
         return Task.CompletedTask;
     }
 }

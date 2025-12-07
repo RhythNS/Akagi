@@ -7,8 +7,8 @@ internal class EndConversationCommand : Command
 
     public override string Description => "Ends the conversation on the specified message index.";
 
-    public override Argument[] Arguments => _arguments;
-    private readonly Argument[] _arguments = [
+    public override Argument[] GetDefaultArguments() =>
+    [
         new Argument
         {
             Name = "MessageIndex",
@@ -34,6 +34,9 @@ internal class EndConversationCommand : Command
         }
 
         context.Character.CompleteCurrentConversationAtIndex(index.Value);
+
+        string output = $"Conversation ended at message index {index.Value}.";
+        context.Conversation.AddMessage(CreateCommandMessage(output));
 
         return Task.CompletedTask;
     }

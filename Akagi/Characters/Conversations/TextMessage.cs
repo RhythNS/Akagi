@@ -24,7 +24,6 @@ internal class TextMessage : Message
         {
             Time = Time,
             From = From,
-            VisibleTo = VisibleTo,
             Text = Text
         };
     }

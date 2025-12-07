@@ -6,7 +6,7 @@ namespace Akagi.Communication.Commands.ActiveCharacters;
 
 internal class TriggerReflectCommand : TextCommand
 {
-    public override string Name => "TriggerReflect";
+    public override string Name => "/triggerReflect";
 
     public override string Description => "Command to trigger the reflect action for an active character. Usage: TriggerReflect <name>";
 

@@ -5,6 +5,7 @@ namespace Akagi.Characters.Conversations;
 internal class CommandMessage : Message
 {
     public required Command Command { get; set; }
+    public required string Output { get; set; }
 
     public override Message Copy()
     {
@@ -12,8 +13,8 @@ internal class CommandMessage : Message
         {
             Time = Time,
             From = From,
-            VisibleTo = VisibleTo,
-            Command = Command
+            Command = Command,
+            Output = Output,
         };
     }
 }
