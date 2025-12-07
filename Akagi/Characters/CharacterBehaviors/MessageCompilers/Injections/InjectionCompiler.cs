@@ -1,9 +1,10 @@
 ﻿using Akagi.Characters.Conversations;
 using Akagi.Receivers;
+using Telegram.Bot.Types.Enums;
 
-namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
+namespace Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections;
 
-internal class InjectionCompiler : MessageCompiler
+internal abstract class InjectionCompiler : MessageCompiler
 {
     public enum InjectionType
     {
@@ -17,15 +18,10 @@ internal class InjectionCompiler : MessageCompiler
         End
     }
 
-    private TextMessage? _injectionMessage;
     private InjectionType? _type;
     private InjectionPosition? _position;
+    private Message.Type? _messageType;
 
-    public TextMessage InjectionMessage
-    {
-        get => _injectionMessage ?? throw new InvalidOperationException("InjectionMessage has not been set.");
-        set => SetProperty(ref _injectionMessage, value);
-    }
     public InjectionType Type
     {
         get => _type ?? throw new InvalidOperationException("Type has not been set.");
@@ -36,10 +32,16 @@ internal class InjectionCompiler : MessageCompiler
         get => _position ?? throw new InvalidOperationException("Position has not been set.");
         set => SetProperty(ref _position, value);
     }
+    public Message.Type MessageType
+    {
+        get => _messageType ?? throw new InvalidOperationException("Message type has not been set.");
+        set => SetProperty(ref _messageType, value);
+    }
 
     public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
     {
-        if (_injectionMessage == null)
+        Message[] messages = GetInjectionMessages(context);
+        if (messages.Length == 0)
         {
             throw new InvalidOperationException("InjectionMessage must be set before compiling messages.");
         }
@@ -51,7 +53,7 @@ internal class InjectionCompiler : MessageCompiler
                 {
                     Id = 0,
                     Time = DateTime.UtcNow,
-                    Messages = [_injectionMessage]
+                    Messages = messages
                 };
                 switch (Position)
                 {
@@ -81,16 +83,23 @@ internal class InjectionCompiler : MessageCompiler
                 switch (Position)
                 {
                     case InjectionPosition.Beginning:
-                        filteredConversations[0].InsertMessage(0, _injectionMessage);
+                        for (int i = messages.Length - 1; i >= 0; i--)
+                        {
+                            filteredConversations[0].InsertMessage(0, messages[i]);
+                        }
                         break;
                     case InjectionPosition.End:
-                        filteredConversations[^1].AddMessage(_injectionMessage);
+                        for (int i = messages.Length - 1; i >= 0; i--)
+                        {
+                            filteredConversations[^1].AddMessage(messages[i]);
+                        }
                         break;
                     default:
                         throw new InvalidOperationException("Invalid InjectionPosition for Conversation type.");
                 }
                 break;
         }
-
     }
+
+    protected abstract Message[] GetInjectionMessages(Context context);
 }
