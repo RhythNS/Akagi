@@ -4,6 +4,7 @@ using Akagi.Characters.Conversations;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Data;
+using Akagi.Receivers.Commands;
 using Akagi.Utils.Attributes;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
@@ -38,6 +39,11 @@ internal static class RoleplayConversationEndedPresets
                 Output = Message.Type.System,
                 RunMode = LLMs.ILLM.RunMode.CommandsOnly,
                 MessageCompilerId = compiler.MessageCompilerId,
+                CommandNames =
+                [
+                    typeof(EndConversationCommand).FullName!,
+                    typeof(StopExecutionCommand).FullName!
+                ],
             };
 
             await Save(databaseFactory, processor, ProcessorId);
@@ -96,7 +102,7 @@ internal static class RoleplayConversationEndedPresets
             };
 
             await Save(databaseFactory, triggerReflect, TriggerActionId);
-            
+
             TriggerActionId = triggerReflect.Id!;
         }
     }

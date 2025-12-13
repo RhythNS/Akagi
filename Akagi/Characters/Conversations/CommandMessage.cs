@@ -17,4 +17,9 @@ internal class CommandMessage : Message
             Output = Output,
         };
     }
+
+    public override string ToString()
+    {
+        return $"{Time} {From}: [Command: {Command.Name}] Output: {Output}";
+    }
 }

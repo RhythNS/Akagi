@@ -23,4 +23,9 @@ internal class ConversationThought : Thought
         get => _longSummary;
         set => SetProperty(ref _longSummary, value);
     }
+
+    public override string ToString()
+    {
+        return $"ConversationThought(Timestamp={Timestamp}, ConversationId={ConversationId}, ShortSummary={ShortSummary}, LongSummary={LongSummary})";
+    }
 }

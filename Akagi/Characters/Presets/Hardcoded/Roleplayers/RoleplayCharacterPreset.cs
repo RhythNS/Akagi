@@ -49,14 +49,14 @@ internal class RoleplayCharacterPreset : Preset
             PuppeteerId = puppeteerPreset.PuppeteerId,
             ReflectorIds =
             [
-                conversationEndedReflectorPreset.ReflectorId,
+                // conversationEndedReflectorPreset.ReflectorId,
                 conversationSummaryReflectorPreset.ReflectorId,
                 reflectionReflectorPreset.ReflectorId
             ],
             UserId = UserId,
             TriggerPointIds =
             [
-                conversationEndedTriggerPreset.TriggerPointId,
+                // conversationEndedTriggerPreset.TriggerPointId,
                 conversationSummaryTriggerPreset.TriggerPointId,
                 reflectionTriggerPreset.TriggerPointId
             ]

@@ -27,10 +27,47 @@ internal class GeminiPayload
         public string Role { get; set; } = string.Empty;
     }
 
-    internal class Part
+    [JsonDerivedType(typeof(TextPart)),
+        JsonDerivedType(typeof(FunctionCallPart)),
+        JsonDerivedType(typeof(FunctionResponsePart))]
+    internal abstract class Part;
+
+    internal class TextPart : Part
     {
         [JsonPropertyName("text")]
-        public string Text { get; set; } = string.Empty;
+        public string? Text { get; set; } = null;
+    }
+
+    internal class FunctionCallPart : Part
+    {
+        [JsonPropertyName("function_call")]
+        public FunctionCall? FunctionCall { get; set; } = null;
+    }
+
+    internal class FunctionCall
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; } = null;
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+        [JsonPropertyName("args")]
+        public Dictionary<string, object>? Args { get; set; } = null;
+    }
+
+    internal class FunctionResponsePart : Part
+    {
+        [JsonPropertyName("function_response")]
+        public FunctionResponse? FunctionResponse { get; set; } = null;
+    }
+
+    internal class FunctionResponse
+    {
+        [JsonPropertyName("id")]
+        public string? Id { get; set; } = null;
+        [JsonPropertyName("name")]
+        public required string Name { get; set; }
+        [JsonPropertyName("response")]
+        public required Dictionary<string, object> Response { get; set; }
     }
 
     internal class ToolConfig

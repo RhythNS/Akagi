@@ -28,6 +28,7 @@ internal interface IReceiver
 internal class Receiver : IReceiver, ICleanable
 {
     private static readonly ConcurrentDictionary<(string userId, string characterId), SemaphoreSlim> _locks = new();
+    private static readonly ConcurrentDictionary<(string userId, string characterId), AsyncLocal<int>> _lockCounts = new();
 
     private readonly IPuppeteerDatabase _puppeteerDatabase;
     private readonly IReflectorDatabase _reflectorDatabase;
@@ -62,6 +63,8 @@ internal class Receiver : IReceiver, ICleanable
         LockCharacter(character, user);
         try
         {
+            _logger.LogInformation("Starting reflection for user {UserId} and character {CharacterId} with reflector name {ReflectorName}", user.Id, character.Id, name);
+
             ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (communicator == null)
             {
@@ -112,6 +115,8 @@ internal class Receiver : IReceiver, ICleanable
 
         try
         {
+            _logger.LogInformation("Starting system event {SystemEvent} for user {UserId} and character {CharacterId}", message, user.Id, character.Id);
+
             ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (communicator == null)
             {
@@ -251,6 +256,7 @@ internal class Receiver : IReceiver, ICleanable
             {
                 if (_locks.TryRemove(key, out _))
                 {
+                    _lockCounts.TryRemove(key, out _);
                     semaphore.Dispose();
                 }
                 else
@@ -264,30 +270,58 @@ internal class Receiver : IReceiver, ICleanable
     private static bool TryLockCharacter(Character character, User user)
     {
         (string, string) key = (user.Id!, character.Id!);
+        AsyncLocal<int> lockCount = _lockCounts.GetOrAdd(key, _ => new AsyncLocal<int>());
+
+        if (lockCount.Value > 0)
+        {
+            lockCount.Value++;
+            return true;
+        }
+
         SemaphoreSlim semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         if (!semaphore.Wait(0))
         {
             return false;
         }
+
+        lockCount.Value = 1;
         return true;
     }
 
     private static void LockCharacter(Character character, User user)
     {
         (string, string) key = (user.Id!, character.Id!);
+        AsyncLocal<int> lockCount = _lockCounts.GetOrAdd(key, _ => new AsyncLocal<int>());
+
+        if (lockCount.Value > 0)
+        {
+            lockCount.Value++;
+            return;
+        }
+
         SemaphoreSlim semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         if (semaphore.Wait(TimeSpan.FromMinutes(1)) == false)
         {
             throw new TimeoutException($"Timeout waiting for lock on character {character.Id} for user {user.Id}");
         }
+
+        lockCount.Value = 1;
     }
 
     private static void ReleaseLock(Character character, User user)
     {
         (string, string) key = (user.Id!, character.Id!);
-        if (_locks.TryGetValue(key, out SemaphoreSlim? semaphore))
+        if (_lockCounts.TryGetValue(key, out AsyncLocal<int>? lockCount))
         {
-            semaphore.Release();
+            lockCount.Value--;
+
+            if (lockCount.Value == 0)
+            {
+                if (_locks.TryGetValue(key, out SemaphoreSlim? semaphore))
+                {
+                    semaphore.Release();
+                }
+            }
         }
     }
 }

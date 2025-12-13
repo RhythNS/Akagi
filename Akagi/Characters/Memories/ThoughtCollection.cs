@@ -18,6 +18,15 @@ internal class ThoughtCollection<T> : DirtyTrackable where T : Thought
         _thoughts.Add(thought);
     }
 
+    public void EditThoughtAt(int index, T newThought)
+    {
+        if (index >= 0 && index < _thoughts.Count)
+        {
+            Dirty = true;
+            _thoughts[index] = newThought;
+        }
+    }
+
     public void ClearThoughts()
     {
         Dirty = true;

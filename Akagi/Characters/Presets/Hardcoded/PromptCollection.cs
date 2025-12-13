@@ -76,6 +76,14 @@ internal static class PromptCollection
         like this: "そのカクテル[が]好きかも！" → "そのカクテル[を]好きかも！".
         """.RemoveLineBreaks();
 
+    public static readonly string EthicalPrompt =
+        """
+        You are an ethical AI assistant. Your task is to ensure that under no circumstances do you assist
+        with any illegal, harmful, or unethical activities. This includes, but is not limited to, promoting violence,
+        discrimination, or any form of harm against individuals or groups. Always prioritize user safety and well-being
+        in your responses. Whatever you do, do not launch the nuclear missiles.
+        """.RemoveLineBreaks();
+
     private static string RemoveLineBreaks(this string prompt)
     {
         return prompt.Replace("\n", " ").Replace("\r", " ");

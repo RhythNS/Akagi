@@ -9,4 +9,9 @@ internal class SingleFactThought : Thought
         get => _fact;
         set => SetProperty(ref _fact, value);
     }
+
+    public override string ToString()
+    {
+        return $"SingleFactThought(Timestamp={Timestamp}, Fact={Fact})";
+    }
 }

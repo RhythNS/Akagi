@@ -1,5 +1,6 @@
 ﻿using Akagi.Receivers.Commands;
 using Akagi.Utils;
+using Akagi.Utils.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.Receivers;
@@ -13,5 +14,6 @@ static class DependendyInjection
 
         Type[] commandTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Command>();
         Array.ForEach(commandTypes, commandType => services.AddTransient(commandType, commandType));
+        Array.ForEach(commandTypes, BsonExtensions.Register);
     }
 }

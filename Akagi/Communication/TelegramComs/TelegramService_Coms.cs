@@ -78,14 +78,17 @@ internal partial class TelegramService : Communicator, IHostedService
 
     public override Task SendMessage(Users.User user, Characters.Conversations.Message message)
     {
-        if (message is TextMessage textMessage)
+        switch (message)
         {
-            return SendMessage(user, textMessage.Text);
-        }
-        else
-        {
-            _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
-            return Task.CompletedTask;
+            case TextMessage textMessage:
+                return SendMessage(user, textMessage.Text);
+
+            case CommandMessage commandMessage:
+                return SendMessage(user, $"[Command] {commandMessage.Output}");
+
+            default:
+                _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
+                return Task.CompletedTask;
         }
     }
 

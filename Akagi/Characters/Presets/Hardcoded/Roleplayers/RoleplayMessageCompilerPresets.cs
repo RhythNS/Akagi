@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters.CharacterBehaviors.MessageCompilers;
+using Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections;
 using Akagi.Data;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
@@ -81,4 +82,26 @@ internal static class RoleplayMessageCompilerPresets
             MessageCompilerId = compiler.Id!;
         }
     }
+
+    /*
+    internal class RoleplayMemoryInjectionCompilerPreset : Preset
+    {
+        private string _messageCompilerId = string.Empty;
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string MessageCompilerId
+        {
+            get => _messageCompilerId;
+            set => SetProperty(ref _messageCompilerId, value);
+        }
+        protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
+        {
+            MemoryInjectionCompiler compiler = new()
+            {
+                
+            };
+            await Save(databaseFactory, compiler, MessageCompilerId);
+            MessageCompilerId = compiler.Id!;
+        }
+    }
+     */
 }

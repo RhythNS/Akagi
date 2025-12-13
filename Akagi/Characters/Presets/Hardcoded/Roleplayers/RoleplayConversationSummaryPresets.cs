@@ -1,8 +1,10 @@
-﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+﻿using Akagi.Characters.CharacterBehaviors.Reflectors;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Data;
+using Akagi.Receivers.Commands;
 using Akagi.Utils.Attributes;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
@@ -37,6 +39,10 @@ internal static class RoleplayConversationSummaryPresets
                 Output = Message.Type.System,
                 RunMode = LLMs.ILLM.RunMode.CommandsOnly,
                 MessageCompilerId = compiler.MessageCompilerId,
+                CommandNames =
+                [
+                    typeof(SummarizeConversationCommand).FullName!,
+                ]
             };
 
             await Save(databaseFactory, processor, ProcessorId);
@@ -62,20 +68,15 @@ internal static class RoleplayConversationSummaryPresets
         protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
         {
             RoleplayConversationSummaryProcessorPreset preset = await Load<RoleplayConversationSummaryProcessorPreset>(databaseFactory, UserId);
-            SystemProcessor processor = new()
+            SingleReflector reflector = new()
             {
                 Name = ReflectorName,
-                Description = "A reflector that summarizes the conversation for roleplaying characters.",
-                SystemInstruction = PromptCollection.ConversationSummaryPrompt,
-                ReadableMessages = Message.Type.User | Message.Type.Character,
-                Output = Message.Type.Character,
-                RunMode = LLMs.ILLM.RunMode.CommandsOnly,
-                MessageCompilerId = preset.ProcessorId,
+                SystemProcessorId = preset.ProcessorId,
             };
 
-            await Save(databaseFactory, processor, ReflectorId);
+            await Save(databaseFactory, reflector, ReflectorId);
 
-            ReflectorId = processor.Id!;
+            ReflectorId = reflector.Id!;
         }
     }
 

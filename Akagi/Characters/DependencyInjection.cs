@@ -8,6 +8,7 @@ using Akagi.Characters.Presets;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Utils;
+using Akagi.Utils.Extensions;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson.Serialization;
 
@@ -34,17 +35,17 @@ static class DependencyInjection
 
     private static void RegisterDBClasses()
     {
-        BsonClassMap.RegisterClassMap<TextMessage>();
-        BsonClassMap.RegisterClassMap<CommandMessage>();
+        Type[] messages = TypeUtils.GetNonAbstractTypesExtendingFrom<Message>();
+        Array.ForEach(messages, BsonExtensions.Register);
 
         Type[] puppeteerTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Puppeteer>();
-        Array.ForEach(puppeteerTypes, Register);
+        Array.ForEach(puppeteerTypes, BsonExtensions.Register);
 
         Type[] reflectorTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Reflector>();
-        Array.ForEach(reflectorTypes, Register);
+        Array.ForEach(reflectorTypes, BsonExtensions.Register);
 
         Type[] messageCompilerTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<MessageCompiler>();
-        Array.ForEach(messageCompilerTypes, Register);
+        Array.ForEach(messageCompilerTypes, BsonExtensions.Register);
 
         BsonClassMap.RegisterClassMap<Preset>(classMap =>
         {
@@ -53,22 +54,12 @@ static class DependencyInjection
         });
 
         Type[] presetTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Preset>();
-        Array.ForEach(presetTypes, Register);
+        Array.ForEach(presetTypes, BsonExtensions.Register);
 
         Type[] triggerPointTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<TriggerPoint>();
-        Array.ForEach(triggerPointTypes, Register);
+        Array.ForEach(triggerPointTypes, BsonExtensions.Register);
 
         Type[] triggerActionTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<TriggerAction>();
-        Array.ForEach(triggerActionTypes, Register);
-    }
-
-    private static void Register(Type type)
-    {
-        if (!BsonClassMap.IsClassMapRegistered(type))
-        {
-            BsonClassMap classMap = new(type);
-            classMap.AutoMap();
-            BsonClassMap.RegisterClassMap(classMap);
-        }
+        Array.ForEach(triggerActionTypes, BsonExtensions.Register);
     }
 }

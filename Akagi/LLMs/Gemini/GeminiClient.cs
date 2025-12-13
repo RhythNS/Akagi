@@ -59,7 +59,7 @@ internal class GeminiClient : IGeminiClient
                     {
                         Parts =
                         [
-                            new GeminiPayload.Part
+                            new GeminiPayload.TextPart
                             {
                                 Text = message.From == Message.Type.System ? "SYSTEM MESSAGE: " + textMessage.Text : textMessage.Text
                             }
@@ -67,17 +67,47 @@ internal class GeminiClient : IGeminiClient
                         Role = role
                     });
                     break;
+
                 case CommandMessage commandMessage:
                     contents.Add(new GeminiPayload.Content
                     {
                         Parts =
                         [
-                            new GeminiPayload.Part
+                            new GeminiPayload.FunctionCallPart
                             {
-                                Text = message.From == Message.Type.System ? "SYSTEM MESSAGE: " + commandMessage.Output : commandMessage.Output
+                                FunctionCall = new GeminiPayload.FunctionCall
+                                {
+                                    Id = new DateTimeOffset(commandMessage.Time).ToUnixTimeMilliseconds().ToString(),
+                                    Name = commandMessage.Command.Name,
+                                    Args = commandMessage.Command.Arguments.ToDictionary(arg => arg.Name, arg => (object)new Dictionary<string, string>
+                                    {
+                                        { "Description", arg.Description },
+                                        { "Type", arg.ArgumentType.ToString() },
+                                        { "Value", arg.Value }
+                                    })
+                                }
                             }
                         ],
                         Role = role
+                    });
+                    contents.Add(new GeminiPayload.Content
+                    {
+                        Parts =
+                        [
+                            new GeminiPayload.FunctionResponsePart
+                        {
+                            FunctionResponse = new GeminiPayload.FunctionResponse
+                            {
+                                Id = new DateTimeOffset(commandMessage.Time).ToUnixTimeMilliseconds().ToString(),
+                                Name = commandMessage.Command.Name,
+                                Response = new Dictionary<string, object>
+                                {
+                                    ["result"] = commandMessage.Output
+                                }
+                            }
+                        }
+                        ],
+                        Role = "user"
                     });
                     break;
 
@@ -105,15 +135,23 @@ internal class GeminiClient : IGeminiClient
                 };
 
                 // If the argument is an array, set type and items accordingly  
-                if (argument.ArgumentType == Argument.Type.String)
+                switch (argument.ArgumentType)
                 {
-                    propertySchema["type"] = "array";
-                    propertySchema["items"] = new Dictionary<string, object> { ["type"] = "string" };
-                }
-                else if (argument.ArgumentType == Argument.Type.Float || argument.ArgumentType == Argument.Type.Int)
-                {
-                    propertySchema["type"] = "array";
-                    propertySchema["items"] = new Dictionary<string, object> { ["type"] = "number" };
+                    case Argument.Type.String:
+                        propertySchema["type"] = "array";
+                        propertySchema["items"] = new Dictionary<string, object> { ["type"] = "string" };
+                        break;
+                    case Argument.Type.Float:
+                    case Argument.Type.Int:
+                        propertySchema["type"] = "array";
+                        propertySchema["items"] = new Dictionary<string, object> { ["type"] = "number" };
+                        break;
+                    case Argument.Type.Bool:
+                        propertySchema["type"] = "array";
+                        propertySchema["items"] = new Dictionary<string, object> { ["type"] = "boolean" };
+                        break;
+                    default:
+                        throw new Exception($"Unsupported argument type: {argument.ArgumentType}");
                 }
 
                 properties[argument.Name] = propertySchema;
@@ -154,7 +192,7 @@ internal class GeminiClient : IGeminiClient
                 {
                     Parts =
                     [
-                        new GeminiPayload.Part
+                        new GeminiPayload.TextPart
                     {
                         Text = systemProcessor.CompileSystemPrompt(context.User, context.Character)
                     }
@@ -171,7 +209,7 @@ internal class GeminiClient : IGeminiClient
                 {
                     Parts =
                     [
-                        new GeminiPayload.Part
+                        new GeminiPayload.TextPart
                         {
                             Text = systemProcessor.CompileSystemPrompt(context.User, context.Character)
                         }
@@ -210,29 +248,18 @@ internal class GeminiClient : IGeminiClient
             throw new Exception("Gemini model is not set.");
         }
 
+        GeminiPayload payload = GetPayload(systemProcessor, context);
         HttpRequestMessage request = new(
             HttpMethod.Post,
             $"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={_apiKey}"
-        );
-
-        GeminiPayload payload = GetPayload(systemProcessor, context);
-
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-
-        int retries = 2;
-    retry:
-        HttpResponseMessage response = await httpClient.SendAsync(request);
-
-        if (!response.IsSuccessStatusCode)
+        )
         {
-            if (retries-- > 0 && response.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable)
-            {
-                _logger.LogWarning($"Received 503 Service Unavailable from Gemini API. Retrying...");
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
 
-                await Task.Delay(TimeSpan.FromSeconds(5));
-                goto retry;
-            }
-
+        HttpResponseMessage response = await httpClient.SendAsync(request);
+        if (response.IsSuccessStatusCode == false)
+        {
             throw new Exception($"Request failed with status code {response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         }
         string content = await response.Content.ReadAsStringAsync();
@@ -247,7 +274,6 @@ internal class GeminiClient : IGeminiClient
             _logger.LogError(ex, "Failed to deserialize Gemini response: {Content}", content);
             throw new Exception("Failed to deserialize Gemini response.", ex);
         }
-
         if (geminiResponse == null)
         {
             throw new Exception("Failed to deserialize Gemini response.");

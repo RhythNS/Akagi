@@ -1,9 +1,8 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
-using Akagi.Communication.Commands;
 using System.Text;
 
-namespace Akagi.Communication.TelegramComs.Commands;
+namespace Akagi.Communication.Commands.ActiveCharacters;
 
 internal class RecapCommand : TextCommand
 {

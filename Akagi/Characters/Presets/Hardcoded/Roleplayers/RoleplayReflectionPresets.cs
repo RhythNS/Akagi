@@ -4,6 +4,7 @@ using Akagi.Characters.Conversations;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Data;
+using Akagi.Receivers.Commands;
 using Akagi.Utils.Attributes;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
@@ -38,6 +39,13 @@ internal static class RoleplayReflectionPresets
                 Output = Message.Type.Character,
                 RunMode = LLMs.ILLM.RunMode.CommandsOnly,
                 MessageCompilerId = compiler.MessageCompilerId,
+                CommandNames =
+                [
+                    typeof(CommitToMemoryCommand).FullName!,
+                    typeof(EditMemoryCommand).FullName!,
+                    typeof(RemoveMemoryCommand).FullName!,
+                    typeof(StopExecutionCommand).FullName!
+                ]
             };
 
             await Save(databaseFactory, processor, ProcessorId);
@@ -95,6 +103,9 @@ internal static class RoleplayReflectionPresets
                 Description = "An action that triggers reflection to enhance roleplaying interactions.",
                 ReflectorName = RoleplayReflectionReflectorPreset.ReflectorName,
             };
+
+            await Save(databaseFactory, triggerReflect, ReflectorId);
+
             ReflectorId = triggerReflect.Id!;
         }
     }
@@ -121,6 +132,9 @@ internal static class RoleplayReflectionPresets
                 ActionId = reflectionActionPreset.ReflectorId,
                 Times = 20,
             };
+
+            await Save(databaseFactory, triggerAfterTimes, TriggerActionId);
+
             TriggerActionId = triggerAfterTimes.Id!;
         }
     }
