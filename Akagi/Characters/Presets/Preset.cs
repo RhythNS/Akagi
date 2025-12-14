@@ -36,11 +36,6 @@ internal abstract class Preset : Savable
             savable.Id = overwriteId;
         }
 
-        bool success = await databaseFactory.TrySave(savable);
-
-        if (!success)
-        {
-            throw new InvalidOperationException("Failed to save JapaneseCorrectionRoleplayPuppeteerPreset");
-        }
+        await databaseFactory.TrySave(savable);
     }
 }

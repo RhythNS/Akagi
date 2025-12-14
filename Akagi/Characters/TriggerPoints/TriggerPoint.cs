@@ -47,6 +47,7 @@ internal class TriggerPoint : Savable
         get => _triggerActions;
         set => SetProperty(ref _triggerActions, value);
     }
+    public override Savable[] ToTrack => _actions?.OfType<Savable>().ToArray() ?? [];
 
     protected TriggerContext Context
     {

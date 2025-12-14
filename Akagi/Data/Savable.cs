@@ -11,6 +11,8 @@ internal abstract class Savable : DirtyTrackable
 
     public bool New => string.IsNullOrEmpty(Id) || Id == ObjectId.Empty.ToString();
 
+    public virtual Savable[] ToTrack { get; } = [];
+
     public Task AfterLoad()
     {
         Dirty = false;

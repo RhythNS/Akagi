@@ -2,8 +2,8 @@
 
 internal interface IDatabaseFactory
 {
-    public Task<bool> TrySave(Savable savable);
-    public Task<bool> SaveIfDirty(Savable savable);
+    public Task TrySave(Savable savable);
+    public Task SaveIfDirty(Savable savable);
     public IDatabase GetDatabase(Savable savable);
     public T GetDatabase<T>() where T : IDatabase;
 }
@@ -37,24 +37,27 @@ internal class DatabaseFactory : IDatabaseFactory
         return (T)database;
     }
 
-    public Task<bool> SaveIfDirty(Savable savable)
+    public async Task SaveIfDirty(Savable savable)
     {
         if (savable.Dirty)
         {
-            return TrySave(savable);
+            await TrySave(savable);
         }
-
-        return Task.FromResult(false);
     }
 
-    public async Task<bool> TrySave(Savable savable)
+    public async Task TrySave(Savable savable)
     {
+        Task[] trackingTasks = [.. savable.ToTrack
+            .Where(s => s.Dirty)
+            .Select(SaveIfDirty)];
+
+        await Task.WhenAll(trackingTasks);
+
         IDatabase? database = _databases.FirstOrDefault(db => db.CanSave(savable));
         if (database == null)
         {
-            return false;
+            return;
         }
         await database.SaveAsync(savable);
-        return true;
     }
 }

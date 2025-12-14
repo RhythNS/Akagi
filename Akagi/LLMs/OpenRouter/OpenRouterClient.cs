@@ -81,6 +81,14 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
                             break;
                         }
                     }
+                    commandMessages.RemoveAll(cm => systemProcessor.CommandNames.Contains(cm.Command.GetType().FullName
+                        , StringComparer.Ordinal) == false);
+
+                    if (commandMessages.Count == 0)
+                    {
+                        break;
+                    }
+
                     List<ToolCall> toolCalls = [];
                     List<ToolResponseMessage> responseMessages = [];
                     foreach (CommandMessage cmdMsg in commandMessages)
@@ -181,7 +189,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         return payload;
     }
 
-    private async Task<Command[]> HandleResponse(SystemProcessor systemProcessor, OpenRouterResponse response)
+    private Command[] HandleResponse(SystemProcessor systemProcessor, OpenRouterResponse response)
     {
         if (response.Choices.Count == 0)
         {
@@ -323,6 +331,6 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
             throw new Exception("Failed to deserialize OpenRouter response.");
         }
 
-        return await HandleResponse(systemProcessor, openRouterResponse);
+        return HandleResponse(systemProcessor, openRouterResponse);
     }
 }
