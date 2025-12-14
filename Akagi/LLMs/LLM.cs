@@ -13,7 +13,7 @@ internal interface ILLM
     public enum LLMType
     {
         Gemini,
-        OpenAI
+        OpenRouter
     }
 
     public enum RunMode
@@ -22,4 +22,16 @@ internal interface ILLM
         CommandsOnly,
         Mixed
     }
+}
+
+internal abstract class LLM : ILLM
+{
+    protected string? Model { get; set; }
+
+    public void SetModel(string model)
+    {
+        Model = model;
+    }
+
+    public abstract Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context);
 }

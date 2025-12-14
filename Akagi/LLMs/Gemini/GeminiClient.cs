@@ -13,14 +13,13 @@ namespace Akagi.LLMs.Gemini;
 
 internal interface IGeminiClient : ILLM;
 
-internal class GeminiClient : IGeminiClient
+internal class GeminiClient : LLM, IGeminiClient
 {
     internal class Options
     {
         public string ApiKey { get; set; } = string.Empty;
     }
 
-    private string? _model;
     private readonly string _apiKey;
     private readonly ICommandFactory _commandFactory;
     private readonly ILogger<GeminiClient> _logger;
@@ -30,11 +29,6 @@ internal class GeminiClient : IGeminiClient
         _commandFactory = commandFactory;
         _apiKey = options.CurrentValue.ApiKey;
         _logger = logger;
-    }
-
-    public void SetModel(string model)
-    {
-        _model = model;
     }
 
     private GeminiPayload GetPayload(SystemProcessor systemProcessor, Context context)
@@ -235,7 +229,7 @@ internal class GeminiClient : IGeminiClient
         return payload;
     }
 
-    public async Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context)
+    public override async Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context)
     {
         using HttpClient httpClient = new();
 
@@ -243,7 +237,7 @@ internal class GeminiClient : IGeminiClient
         {
             throw new Exception("Gemini API key is not set.");
         }
-        if (string.IsNullOrEmpty(_model))
+        if (string.IsNullOrEmpty(Model))
         {
             throw new Exception("Gemini model is not set.");
         }
@@ -251,7 +245,7 @@ internal class GeminiClient : IGeminiClient
         GeminiPayload payload = GetPayload(systemProcessor, context);
         HttpRequestMessage request = new(
             HttpMethod.Post,
-            $"https://generativelanguage.googleapis.com/v1beta/models/{_model}:generateContent?key={_apiKey}"
+            $"https://generativelanguage.googleapis.com/v1beta/models/{Model}:generateContent?key={_apiKey}"
         )
         {
             Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
