@@ -2,7 +2,7 @@
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
 
-internal class ContextConversationCompiler : MessageCompiler
+internal class ContextOnlyConversationCompiler : MessageCompiler
 {
     public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
     {

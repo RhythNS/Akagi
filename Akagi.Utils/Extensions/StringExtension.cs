@@ -46,4 +46,25 @@ public static class StringExtension
         sb.Append($"{timeSpan.Seconds} second{(timeSpan.Seconds > 1 ? "s" : "")}");
         return sb.ToString().TrimEnd(',', ' ');
     }
+
+    public static int CountWords(this string text)
+    {
+        int wordCount = 0;
+        bool insideWord = false;
+
+        for (int i = 0; i < text.Length; i++)
+        {
+            if (char.IsWhiteSpace(text[i]))
+            {
+                insideWord = false;
+            }
+            else if (!insideWord)
+            {
+                wordCount++;
+                insideWord = true;
+            }
+        }
+
+        return wordCount;
+    }
 }

@@ -104,6 +104,12 @@ internal class Conversation : DirtyTrackable
         return true;
     }
 
+    public int CountWords(Message.Type filter)
+    {
+        return _messages.Where(x => x.From.HasFlag(filter))
+            .Sum(x => x.CountWords());
+    }
+
     public Bridge.Chat.Models.Conversation ToBridgeModel()
     {
         List<Bridge.Chat.Models.TextMessage> bridgeMessages = [];

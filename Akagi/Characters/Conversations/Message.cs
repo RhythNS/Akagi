@@ -7,7 +7,8 @@ internal abstract class Message
     {
         User = 1,
         Character = 2,
-        System = 4
+        System = 4,
+        All = User | Character | System,
     }
 
     public static Type FromBridgeType(Bridge.Chat.Models.TextMessage.Type type)
@@ -36,4 +37,6 @@ internal abstract class Message
     public required Type From { get; set; }
 
     public abstract Message Copy();
+
+    public virtual int CountWords() => 0;
 }

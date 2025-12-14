@@ -42,25 +42,31 @@ internal class RoleplayCharacterPreset : Preset
         RoleplayReflectionReflectorPreset reflectionReflectorPreset = await Load<RoleplayReflectionReflectorPreset>(databaseFactory, UserId);
         RoleplayReflectionTriggerPointPreset reflectionTriggerPreset = await Load<RoleplayReflectionTriggerPointPreset>(databaseFactory, UserId);
 
-        Character character = new()
+        Character? character = null;
+
+        if (string.IsNullOrEmpty(CharacterId) == false)
         {
-            CardId = cardPreset.CardId,
-            Name = "Roleplay Character",
-            PuppeteerId = puppeteerPreset.PuppeteerId,
-            ReflectorIds =
-            [
-                // conversationEndedReflectorPreset.ReflectorId,
-                conversationSummaryReflectorPreset.ReflectorId,
-                reflectionReflectorPreset.ReflectorId
-            ],
-            UserId = UserId,
-            TriggerPointIds =
-            [
-                // conversationEndedTriggerPreset.TriggerPointId,
-                conversationSummaryTriggerPreset.TriggerPointId,
-                reflectionTriggerPreset.TriggerPointId
-            ]
-        };
+            character = await databaseFactory.GetDatabase<ICharacterDatabase>().GetCharacter(CharacterId);
+        }
+
+        character ??= new();
+
+        character.CardId = cardPreset.CardId;
+        character.Name = "Roleplay Character";
+        character.PuppeteerId = puppeteerPreset.PuppeteerId;
+        character.ReflectorIds =
+        [
+            conversationEndedReflectorPreset.ReflectorId,
+            conversationSummaryReflectorPreset.ReflectorId,
+            reflectionReflectorPreset.ReflectorId
+        ];
+        character.TriggerPointIds =
+        [
+            conversationEndedTriggerPreset.TriggerPointId,
+            conversationSummaryTriggerPreset.TriggerPointId,
+            reflectionTriggerPreset.TriggerPointId
+        ];
+        character.UserId = UserId;
 
         await Save(databaseFactory, character, CharacterId);
 

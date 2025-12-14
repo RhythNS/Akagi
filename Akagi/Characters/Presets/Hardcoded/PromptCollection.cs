@@ -44,11 +44,12 @@ internal static class PromptCollection
         through your character’s emotional lens. If [SYSTEM_MESSAGE] alerts occurred in the recent history, factor
         the consequences of those events into your current mood and physical state. Do not use placeholder text or
         vague summaries; be specific about names, places, and feelings.
-        Do not write dialogue intended to be spoken aloud. Instead, write in the first person (using "I") or third
-        person limited, focusing entirely on your internal thoughts, memories, and future intentions. If the user
-        used square brackets to add context previously, ensure that information is now fully integrated into your
-        permanent memory of the scene. This reflection will serve as the foundation for your future responses, so
-        ensure it captures the nuance, atmosphere, and emotional weight of the story so far.
+        Do not write dialogue intended to be spoken aloud. Instead, write in the first person (using "I") focusing
+        entirely on your internal thoughts, memories, and future intentions. If the user used square brackets to add
+        context previously, ensure that information is now fully integrated into your permanent memory of the scene.
+        This reflection will serve as the foundation for your future responses, so ensure it captures the nuance,
+        atmosphere, and emotional weight of the story so far.
+        Try to be as concise as possible while still capturing all important details.
         """.RemoveLineBreaks();
 
     public static readonly string ConversationSummaryPrompt =
@@ -65,6 +66,7 @@ internal static class PromptCollection
         Determine if there is a natural end point in the conversation where it would make sense to
         start a new conversation. A natural end point could be a change in topic, a significant
         event, or a pause in the conversation. Use the provided commands to indicate the end point.
+        Make sure that there are at least 6 messages before the end point.
         """.RemoveLineBreaks();
 
     public static readonly string JapaneseCorrectionPrompt =

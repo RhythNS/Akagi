@@ -12,7 +12,7 @@ namespace Akagi.Characters.Presets.Hardcoded.Roleplayers;
 
 internal static class RoleplayPuppeteerPresets
 {
-    [DependsOn(typeof(RoleplayDefaultCompilerPreset))]
+    [DependsOn(typeof(RoleplayCompilerPreset))]
     internal class RoleplayProcessorPreset : Preset
     {
         private string _processorId = string.Empty;
@@ -26,7 +26,7 @@ internal static class RoleplayPuppeteerPresets
 
         protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
         {
-            RoleplayDefaultCompilerPreset roleplayCompiler = await Load<RoleplayDefaultCompilerPreset>(databaseFactory, UserId);
+            RoleplayCompilerPreset roleplayCompiler = await Load<RoleplayCompilerPreset>(databaseFactory, UserId);
 
             SystemProcessor processor = new()
             {

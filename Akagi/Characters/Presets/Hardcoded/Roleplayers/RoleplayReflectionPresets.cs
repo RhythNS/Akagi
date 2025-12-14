@@ -14,7 +14,7 @@ namespace Akagi.Characters.Presets.Hardcoded.Roleplayers;
 
 internal static class RoleplayReflectionPresets
 {
-    [DependsOn(typeof(RoleplayDefaultCompilerPreset))]
+    [DependsOn(typeof(RoleplayReflectionCompilerPreset))]
     internal class RoleplayReflectionProcessorPreset : Preset
     {
         private string _processorId = string.Empty;
@@ -28,7 +28,7 @@ internal static class RoleplayReflectionPresets
 
         protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
         {
-            RoleplayDefaultCompilerPreset compiler = await Load<RoleplayDefaultCompilerPreset>(databaseFactory, UserId);
+            RoleplayReflectionCompilerPreset compiler = await Load<RoleplayReflectionCompilerPreset>(databaseFactory, UserId);
 
             SystemProcessor processor = new()
             {
@@ -130,7 +130,7 @@ internal static class RoleplayReflectionPresets
                 Name = "Roleplay Reflection Trigger After Times Action",
                 Description = "An action that triggers reflection after a specified number of interactions.",
                 ActionId = reflectionActionPreset.ReflectorId,
-                Times = 20,
+                Times = 10,
             };
 
             await Save(databaseFactory, triggerAfterTimes, TriggerActionId);

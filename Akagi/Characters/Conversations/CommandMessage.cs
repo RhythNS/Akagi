@@ -1,4 +1,5 @@
 ﻿using Akagi.Receivers.Commands;
+using Akagi.Utils.Extensions;
 
 namespace Akagi.Characters.Conversations;
 
@@ -22,4 +23,6 @@ internal class CommandMessage : Message
     {
         return $"{Time} {From}: [Command: {Command.Name}] Output: {Output}";
     }
+
+    public override int CountWords() => Output.CountWords();
 }

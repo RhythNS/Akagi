@@ -1,4 +1,6 @@
-﻿namespace Akagi.Characters.Conversations;
+﻿using Akagi.Utils.Extensions;
+
+namespace Akagi.Characters.Conversations;
 
 internal class TextMessage : Message
 {
@@ -27,4 +29,6 @@ internal class TextMessage : Message
             Text = Text
         };
     }
+
+    public override int CountWords() => Text.CountWords();
 }
