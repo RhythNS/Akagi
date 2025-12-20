@@ -1,3 +1,4 @@
+using Akagi.Logging.Extensions;
 using Akagi.Web.Data;
 using Akagi.Web.Exporters;
 using Akagi.Web.Services;
@@ -7,6 +8,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OAuth;
 using Microsoft.Extensions.Caching.Memory;
+using Serilog;
 using System.Security.Claims;
 using System.Threading.RateLimiting;
 using TabBlazor;
@@ -18,13 +20,15 @@ public class Startup
     public Startup(IConfiguration configuration)
     {
         Configuration = configuration;
+
+        Log.Logger = AkagiLogging.CreateDefaultLogger(configuration);
     }
 
     public IConfiguration Configuration { get; private init; }
 
     public void ConfigureServices(IServiceCollection services)
     {
-        services.AddLogging();
+        services.AddDefaultLogger(Configuration);
         services.AddMemoryCache();
 
         services.AddRazorPages();
@@ -153,6 +157,8 @@ public class Startup
 
     public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
     {
+        app.UseSerilogRequestLogging();
+
         if (env.IsDevelopment())
         {
             app.UseDeveloperExceptionPage();

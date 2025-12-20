@@ -4,6 +4,7 @@ using Akagi.Connectors;
 using Akagi.Data;
 using Akagi.Flow;
 using Akagi.LLMs;
+using Akagi.Logging.Extensions;
 using Akagi.Receivers;
 using Akagi.Scheduling;
 using Akagi.Users;
@@ -18,6 +19,7 @@ internal class Program
     {
         HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
+        builder.Services.AddDefaultLogger(builder.Configuration);
         builder.Services.AddUtils();
         builder.Services.AddConnectors(builder.Configuration);
         builder.Services.AddData(builder.Configuration);

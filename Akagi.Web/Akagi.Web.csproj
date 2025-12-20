@@ -26,6 +26,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Akagi.Bridge\Akagi.Bridge.csproj" />
+    <ProjectReference Include="..\Akagi.Logging\Akagi.Logging.csproj" />
     <ProjectReference Include="..\Akagi.Utils\Akagi.Utils.csproj" />
   </ItemGroup>
 

@@ -111,6 +111,12 @@ internal class Receiver : IReceiver, ICleanable
 
     public async Task OnSystemEvent(Character character, User user, Message message)
     {
+        if (message.From != Message.Type.System)
+        {
+            _logger.LogWarning("Received non-system message in OnSystemEvent for user {UserId} and character {CharacterId}", user.Id, character.Id);
+            return;
+        }
+
         LockCharacter(character, user);
 
         try
