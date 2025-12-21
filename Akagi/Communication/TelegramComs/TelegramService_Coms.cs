@@ -12,22 +12,40 @@ namespace Akagi.Communication.TelegramComs;
 
 internal partial class TelegramService : Communicator, IHostedService
 {
-    public override Task SendMessage(Users.User user, Character character, Characters.Conversations.Message message)
+    public override async Task SendMessage(Users.User user, Character character, Characters.Conversations.Message message)
     {
-        if (message is TextMessage textMessage)
+        await SendInfoIfCharacterSwitched(user, character);
+
+        switch (message)
         {
-            return SendMessage(user, character, textMessage.Text);
-        }
-        else
-        {
-            _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
-            return Task.CompletedTask;
+            case TextMessage textMessage:
+                await SendMessage(user, character, textMessage.Text);
+                break;
+
+            default:
+                _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
+                break;
         }
     }
 
-    public override Task SendMessage(Users.User user, Character _, string message)
+    public override async Task SendMessage(Users.User user, Character character, string message)
     {
-        return SendMessage(user, message);
+        await SendInfoIfCharacterSwitched(user, character);
+        await SendMessage(user, message);
+    }
+
+    private async Task SendInfoIfCharacterSwitched(Users.User user, Character character)
+    {
+        if (user.TelegramUser!.CurrentCharacterId == character.Id)
+        {
+            return;
+        }
+
+        user.TelegramUser.CurrentCharacterId = character.Id;
+        await _userDatabase.SaveDocumentAsync(user);
+
+        string infoMessage = $"You have switched to character: {character.Name}";
+        await SendMessage(user, infoMessage);
     }
 
     public override async Task SendMessage(Users.User user, string message)

@@ -1,4 +1,5 @@
-﻿using Akagi.Characters.CharacterBehaviors.Reflectors;
+﻿using Akagi.Characters.CharacterBehaviors.MessageCompilers;
+using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.TriggerPoints;
@@ -14,10 +15,11 @@ namespace Akagi.Characters.Presets.Hardcoded.Roleplayers;
 
 internal static class RoleplayConversationEndedPresets
 {
-    [DependsOn(typeof(RoleplayCurrentConversationCompilerPreset))]
+    [DependsOn(typeof(RoleplayAddTimeStampCompilerPreset), typeof(RoleplayCurrentConversationCompilerPreset))]
     internal class RoleplayConversationEndedProcessorPreset : Preset
     {
         private string _processorId = string.Empty;
+        private string _compilerId = string.Empty;
 
         [BsonRepresentation(BsonType.ObjectId)]
         public string ProcessorId
@@ -26,9 +28,38 @@ internal static class RoleplayConversationEndedPresets
             set => SetProperty(ref _processorId, value);
         }
 
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string CompilerId
+        {
+            get => _compilerId;
+            set => SetProperty(ref _compilerId, value);
+        }
+
         protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
         {
-            RoleplayCurrentConversationCompilerPreset compiler = await Load<RoleplayCurrentConversationCompilerPreset>(databaseFactory, UserId);
+            RoleplayCurrentConversationCompilerPreset currentConversationCmpiler = await Load<RoleplayCurrentConversationCompilerPreset>(databaseFactory, UserId);
+            RoleplayAddTimeStampCompilerPreset timestampCompilerPreset = await Load<RoleplayAddTimeStampCompilerPreset>(databaseFactory, UserId);
+
+            LineMessageCompiler lineMessageCompiler = new()
+            {
+                Definitions =
+                [
+                    new LineMessageCompiler.Definition
+                    {
+                        MessageCompilerId = timestampCompilerPreset.MessageCompilerId,
+                    },
+                    new LineMessageCompiler.Definition
+                    {
+                        MessageCompilerId = currentConversationCmpiler.MessageCompilerId,
+                    }
+                ],
+                Name = currentConversationCmpiler.MessageCompilerId,
+                Description = currentConversationCmpiler.MessageCompilerId,
+            };
+
+            await Save(databaseFactory, lineMessageCompiler, CompilerId);
+
+            CompilerId = lineMessageCompiler.Id!;
 
             SystemProcessor processor = new()
             {
@@ -38,7 +69,7 @@ internal static class RoleplayConversationEndedPresets
                 ReadableMessages = Message.Type.User | Message.Type.Character,
                 Output = Message.Type.System,
                 RunMode = LLMs.ILLM.RunMode.CommandsOnly,
-                MessageCompilerId = compiler.MessageCompilerId,
+                MessageCompilerId = CompilerId,
                 CommandNames =
                 [
                     typeof(EndConversationCommand).FullName!,

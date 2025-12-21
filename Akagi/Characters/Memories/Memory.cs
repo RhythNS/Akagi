@@ -32,6 +32,15 @@ internal class Memory : DirtyTrackable
         set => SetProperty(ref _conversations, value);
     }
 
+    public void Clear()
+    {
+        Dirty = true;
+        _goals.ClearThoughts();
+        _shortTerm.ClearThoughts();
+        _longTerm.ClearThoughts();
+        _conversations.ClearThoughts();
+    }
+
     public override bool Dirty
     {
         get => base.Dirty || _goals.Dirty || _shortTerm.Dirty || _longTerm.Dirty || _conversations.Dirty;

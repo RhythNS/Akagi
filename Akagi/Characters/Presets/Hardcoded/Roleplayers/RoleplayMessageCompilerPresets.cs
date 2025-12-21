@@ -86,6 +86,32 @@ internal static class RoleplayMessageCompilerPresets
         }
     }
 
+    internal class RoleplayAddTimeStampCompilerPreset : Preset
+    {
+        private string _messageCompilerId = string.Empty;
+
+        [BsonRepresentation(BsonType.ObjectId)]
+        public string MessageCompilerId
+        {
+            get => _messageCompilerId;
+            set => SetProperty(ref _messageCompilerId, value);
+        }
+
+        protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
+        {
+            AddTimeStampCompiler compiler = new()
+            {
+                Name = "Roleplay Add TimeStamp Compiler",
+                Description = "A message compiler that adds timestamps to messages.",
+                Format = "[MM/dd/yy H:mm:ss]"
+            };
+
+            await Save(databaseFactory, compiler, MessageCompilerId);
+
+            MessageCompilerId = compiler.Id!;
+        }
+    }
+
     internal class RoleplayLastConversationCompilerPreset : Preset
     {
         private string _messageCompilerId = string.Empty;
@@ -171,7 +197,7 @@ internal static class RoleplayMessageCompilerPresets
         }
     }
 
-    [DependsOn(typeof(RoleplaySummarizedCompilerPreset))]
+    [DependsOn(typeof(RoleplaySummarizedCompilerPreset), typeof(RoleplayAddTimeStampCompilerPreset))]
     internal class RoleplayCompilerPreset : Preset
     {
         private string _messageCompilerId = string.Empty;
@@ -194,6 +220,7 @@ internal static class RoleplayMessageCompilerPresets
         protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
         {
             RoleplaySummarizedCompilerPreset summary = await Load<RoleplaySummarizedCompilerPreset>(databaseFactory, UserId);
+            RoleplayAddTimeStampCompilerPreset addTimeStamp = await Load<RoleplayAddTimeStampCompilerPreset>(databaseFactory, UserId);
 
             MemoryInjectionCompiler injection = new()
             {
@@ -216,6 +243,10 @@ internal static class RoleplayMessageCompilerPresets
                 Description = "A line message compiler that uses the summarized compiler for roleplaying characters.",
                 Definitions =
                 [
+                    new LineMessageCompiler.Definition
+                    {
+                        MessageCompilerId = addTimeStamp.MessageCompilerId,
+                    },
                     new LineMessageCompiler.Definition
                     {
                         MessageCompilerId = injection.Id!,

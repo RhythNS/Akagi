@@ -42,7 +42,7 @@ internal abstract class InjectionCompiler : MessageCompiler
         Message[] messages = GetInjectionMessages(context);
         if (messages.Length == 0)
         {
-            throw new InvalidOperationException("InjectionMessage must be set before compiling messages.");
+            return;
         }
 
         switch (Type)

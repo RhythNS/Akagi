@@ -7,7 +7,7 @@ internal class DeleteLastMessagesCommand : TextCommand
 {
     public override string Name => "/deleteLastMessages";
 
-    public override string Description => "Deletes the last messages from the current conversation. Usage: /deleteLastMessages <count>";
+    public override string Description => "Deletes the last messages from the current conversation. Usage: /deleteLastMessages <count> <safetyConfirm>";
 
     public override async Task ExecuteAsync(Context context, string[] args)
     {
@@ -20,6 +20,14 @@ internal class DeleteLastMessagesCommand : TextCommand
         {
             await Communicator.SendMessage(context.User, "Please provide a positive number of messages to delete.");
             return;
+        }
+        if (count > 2)
+        {
+            if (args.Length < 2 || string.Equals(args[1], "confirm", StringComparison.OrdinalIgnoreCase) == false)
+            {
+                await Communicator.SendMessage(context.User, "You are about to delete more than 2 messages. To confirm, please use the command again with 'confirm' as the second argument.");
+                return;
+            }
         }
         if (context.Character == null)
         {
