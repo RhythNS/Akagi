@@ -34,6 +34,7 @@ internal class DefaultProcessorPreset : Preset
             ReadableMessages = Message.Type.User | Message.Type.Character | Message.Type.System,
             Output = Message.Type.Character,
             RunMode = LLMs.ILLM.RunMode.Mixed,
+            Usage = LLMs.ILLM.LLMUsage.CommandsRoleplay,
             MessageCompilerId = defaultCompiler.MessageCompilerId,
             CommandNames = [typeof(RemindCommand).FullName!]
         };

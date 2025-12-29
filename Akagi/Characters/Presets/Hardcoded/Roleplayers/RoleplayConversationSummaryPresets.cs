@@ -38,6 +38,7 @@ internal static class RoleplayConversationSummaryPresets
                 ReadableMessages = Message.Type.User | Message.Type.Character,
                 Output = Message.Type.System,
                 RunMode = LLMs.ILLM.RunMode.CommandsOnly,
+                Usage = LLMs.ILLM.LLMUsage.CommandsRoleplay,
                 MessageCompilerId = compiler.MessageCompilerId,
                 CommandNames =
                 [
@@ -93,7 +94,6 @@ internal static class RoleplayConversationSummaryPresets
 
         protected override async Task CreateInnerAsync(IDatabaseFactory databaseFactory)
         {
-            RoleplayConversationSummaryProcessorPreset processorPreset = await Load<RoleplayConversationSummaryProcessorPreset>(databaseFactory, UserId);
             TriggerReflect triggerReflect = new()
             {
                 Name = "Roleplay Conversation Summary Reflection Action",

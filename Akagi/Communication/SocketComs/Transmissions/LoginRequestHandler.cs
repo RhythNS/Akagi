@@ -6,6 +6,7 @@ using Akagi.Users;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
+using System.Collections.ObjectModel;
 using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 
@@ -81,7 +82,7 @@ internal class LoginRequestHandler : SocketTransmissionHandler
                     Username = tokenInfo.Name ?? "User",
                     Name = tokenInfo.Name ?? "User",
                     LastUsedCommunicator = context.Service.Name,
-                    LLMDefinition = _llmDefinitions.Definitions[0],
+                    LLMPreferences = new ReadOnlyDictionary<string, LLMDefinition>(_llmDefinitions.ToDictionary()),
                     GoogleUser = new GoogleUser
                     {
                         Id = tokenInfo.Sub,

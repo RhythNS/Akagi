@@ -69,6 +69,7 @@ internal static class RoleplayConversationEndedPresets
                 ReadableMessages = Message.Type.User | Message.Type.Character,
                 Output = Message.Type.System,
                 RunMode = LLMs.ILLM.RunMode.CommandsOnly,
+                Usage = LLMs.ILLM.LLMUsage.CommandsRoleplay,
                 MessageCompilerId = CompilerId,
                 CommandNames =
                 [

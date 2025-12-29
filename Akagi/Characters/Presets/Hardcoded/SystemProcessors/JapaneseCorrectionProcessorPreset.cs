@@ -33,6 +33,7 @@ internal class JapaneseCorrectionProcessorPreset : Preset
             ReadableMessages = Message.Type.User | Message.Type.Character,
             Output = Message.Type.Character,
             RunMode = ILLM.RunMode.TextOnly,
+            Usage = ILLM.LLMUsage.TextRoleplay,
             MessageCompilerId = messageCompiler.Id!,
             CommandNames = []
         };

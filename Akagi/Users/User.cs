@@ -1,5 +1,6 @@
 ﻿using Akagi.Data;
 using Akagi.LLMs;
+using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace Akagi.Users;
@@ -13,7 +14,7 @@ internal class User : Savable
     private GoogleUser? _googleUser;
     private bool _valid = false;
     private bool _admin = false;
-    private LLMDefinition? _llmDefinition;
+    private ReadOnlyDictionary<string, LLMDefinition> _llmPreferences = new(new Dictionary<string, LLMDefinition>());
     private Dictionary<string, string> _configurations = [];
 
     public override bool Dirty
@@ -69,10 +70,10 @@ internal class User : Savable
         get => _admin;
         set => SetProperty(ref _admin, value);
     }
-    public LLMDefinition? LLMDefinition
+    public ReadOnlyDictionary<string, LLMDefinition> LLMPreferences
     {
-        get => _llmDefinition;
-        set => SetProperty(ref _llmDefinition, value);
+        get => _llmPreferences;
+        set => SetProperty(ref _llmPreferences, value);
     }
     public Dictionary<string, string> Configurations
     {
@@ -83,7 +84,7 @@ internal class User : Savable
     public T? GetConfig<T>() where T : class
     {
         string configKey = typeof(T).Name;
-        if (!Configurations.TryGetValue(configKey, out string? value))
+        if (Configurations.TryGetValue(configKey, out string? value) == false)
         {
             return null;
         }

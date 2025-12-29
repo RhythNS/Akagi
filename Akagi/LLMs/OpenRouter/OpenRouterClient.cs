@@ -227,6 +227,13 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
                         .FirstOrDefault(x => x.Name.Equals(function.Name, StringComparison.OrdinalIgnoreCase))
                         ?? throw new Exception($"Could not find {function.Name} command!");
 
+                    if (string.IsNullOrEmpty(function.Arguments))
+                    {
+                        command.Arguments = command.GetDefaultArguments();
+                        commands.Add(command);
+                        continue;
+                    }
+
                     Dictionary<string, object>? parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(function.Arguments);
                     if (parameters == null)
                     {

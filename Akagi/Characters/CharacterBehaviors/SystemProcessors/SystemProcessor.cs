@@ -22,6 +22,7 @@ internal class SystemProcessor : Savable
     private Message.Type _readableMessages = Message.Type.Character | Message.Type.User | Message.Type.System;
     private Message.Type _output = Message.Type.Character | Message.Type.User | Message.Type.System;
     private ILLM.RunMode _runMode = ILLM.RunMode.Mixed;
+    private ILLM.LLMUsage _usage = ILLM.LLMUsage.TextGeneral;
     private LLMDefinition? _specificLLM = null;
     private string _messageCompilerId = string.Empty;
     private string[] _commandNames = [];
@@ -57,6 +58,11 @@ internal class SystemProcessor : Savable
     {
         get => _runMode;
         set => SetProperty(ref _runMode, value);
+    }
+    public ILLM.LLMUsage Usage
+    {
+        get => _usage;
+        set => SetProperty(ref _usage, value);
     }
     public LLMDefinition? SpecificLLM
     {

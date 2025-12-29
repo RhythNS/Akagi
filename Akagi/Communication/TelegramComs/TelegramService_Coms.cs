@@ -1,9 +1,11 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
+using Akagi.LLMs;
 using Akagi.Users;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using MongoDB.Driver;
+using System.Collections.ObjectModel;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -149,7 +151,7 @@ internal partial class TelegramService : Communicator, IHostedService
                     Username = message.From.Username!,
                     Name = message.From.FirstName!,
                     LastUsedCommunicator = Name,
-                    LLMDefinition = _llmDefinitions.Definitions[0],
+                    LLMPreferences = new ReadOnlyDictionary<string, LLMDefinition>(_llmDefinitions.ToDictionary()),
                     TelegramUser = new TelegramUser
                     {
                         Id = message.From.Id,

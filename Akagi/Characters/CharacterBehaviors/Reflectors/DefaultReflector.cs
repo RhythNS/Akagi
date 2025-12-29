@@ -35,7 +35,7 @@ internal class DefaultReflector : Reflector
 
     protected virtual async Task ReflectConversations()
     {
-        ILLM llm = LLMFactory.Create(Context.User, _conversationSystemProccessor!.SpecificLLM);
+        ILLM llm = LLMFactory.Create(Context.User, _conversationSystemProccessor!.SpecificLLM, _conversationSystemProccessor!.Usage);
         List<Conversation> conversationsToReflect = GetConversationsToReflect();
         foreach (Conversation conversation in conversationsToReflect)
         {

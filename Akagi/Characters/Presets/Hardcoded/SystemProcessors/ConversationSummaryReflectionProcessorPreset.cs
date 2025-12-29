@@ -33,6 +33,7 @@ internal class ConversationSummaryReflectionProcessorPreset : Preset
             ReadableMessages = Message.Type.User | Message.Type.Character,
             Output = Message.Type.System,
             RunMode = LLMs.ILLM.RunMode.CommandsOnly,
+            Usage = LLMs.ILLM.LLMUsage.CommandsRoleplay,
             MessageCompilerId = compiler.MessageCompilerId,
             CommandNames = [typeof(SummarizeConversationCommand).FullName!]
         };

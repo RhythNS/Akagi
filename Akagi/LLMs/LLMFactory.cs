@@ -7,7 +7,7 @@ namespace Akagi.LLMs;
 
 internal interface ILLMFactory
 {
-    public ILLM Create(User user, LLMDefinition? overrideModel);
+    public ILLM Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType);
 }
 
 internal class LLMFactory : ILLMFactory
@@ -19,9 +19,9 @@ internal class LLMFactory : ILLMFactory
         _serviceProvider = serviceProvider;
     }
 
-    public ILLM Create(User user, LLMDefinition? overrideModel)
+    public ILLM Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType)
     {
-        LLMDefinition effectiveDefinition = overrideModel ?? user.LLMDefinition ?? throw new InvalidOperationException("No LLM definition provided.");
+        LLMDefinition effectiveDefinition = overrideModel ?? user.LLMPreferences[usageType.ToString()] ?? throw new InvalidOperationException("No LLM definition provided.");
 
         ILLM? lLM = effectiveDefinition.Type switch
         {

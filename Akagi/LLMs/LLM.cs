@@ -16,6 +16,14 @@ internal interface ILLM
         OpenRouter
     }
 
+    public enum LLMUsage
+    {
+        TextRoleplay,
+        TextGeneral,
+        CommandsRoleplay,
+        CommandsGeneral
+    }
+
     public enum RunMode
     {
         TextOnly,

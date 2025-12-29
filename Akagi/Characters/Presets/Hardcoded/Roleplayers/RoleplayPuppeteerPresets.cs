@@ -2,7 +2,6 @@
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
 using Akagi.Data;
-using Akagi.Receivers.Commands;
 using Akagi.Utils.Attributes;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
@@ -35,9 +34,10 @@ internal static class RoleplayPuppeteerPresets
                 SystemInstruction = PromptCollection.RoleplayPrompt,
                 ReadableMessages = Message.Type.User | Message.Type.Character | Message.Type.System,
                 Output = Message.Type.Character,
-                RunMode = LLMs.ILLM.RunMode.Mixed,
+                RunMode = LLMs.ILLM.RunMode.TextOnly,
+                Usage = LLMs.ILLM.LLMUsage.TextRoleplay,
                 MessageCompilerId = roleplayCompiler.MessageCompilerId,
-                CommandNames = [typeof(RemindCommand).FullName!]
+                CommandNames = []
             };
 
             await Save(databaseFactory, processor, ProcessorId);

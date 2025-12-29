@@ -33,6 +33,15 @@ internal class EndConversationCommand : Command
             throw new ArgumentException("MessageIndex argument must be an integer.");
         }
 
+        if (index.Value < 1)
+        {
+            return Task.CompletedTask;
+        }
+        if (index.Value > context.Conversation.Messages.Count)
+        {
+            throw new ArgumentException("MessageIndex argument exceeds the number of messages in the conversation.");
+        }
+
         context.Character.CompleteCurrentConversationAtIndex(index.Value);
 
         string output = $"Conversation ended at message index {index.Value}.";

@@ -29,7 +29,7 @@ internal class SingleReflector : Reflector
             throw new InvalidOperationException($"System processor with ID {SystemProcessorId} not found.");
         }
 
-        ILLM llm = LLMFactory.Create(User, _systemProcessor.SpecificLLM);
+        ILLM llm = LLMFactory.Create(User, _systemProcessor.SpecificLLM, _systemProcessor.Usage);
         await DefaultNextSteps(llm, _systemProcessor);
     }
 }

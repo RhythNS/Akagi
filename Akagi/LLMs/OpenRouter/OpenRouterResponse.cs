@@ -63,15 +63,15 @@ public class Choice
 [JsonConverter(typeof(JsonStringEnumConverter))]
 public enum FinishReason
 {
-    [JsonPropertyName("tool_calls")]
+    [JsonStringEnumMemberName("tool_calls")]
     ToolCalls,
-    [JsonPropertyName("stop")]
+    [JsonStringEnumMemberName("stop")]
     Stop,
-    [JsonPropertyName("length")]
+    [JsonStringEnumMemberName("length")]
     Length,
-    [JsonPropertyName("content_filter")]
+    [JsonStringEnumMemberName("content_filter")]
     ContentFilter,
-    [JsonPropertyName("error")]
+    [JsonStringEnumMemberName("error")]
     Error
 }
 
@@ -117,7 +117,7 @@ public class FunctionCall
     public required string Name { get; set; }
 
     [JsonPropertyName("arguments")]
-    public required string Arguments { get; set; }
+    public string? Arguments { get; set; }
 }
 
 public class ResponseUsage

@@ -33,6 +33,7 @@ internal class EthicalProcessorPreset : Preset
             ReadableMessages = Message.Type.User | Message.Type.Character | Message.Type.System,
             Output = Message.Type.Character,
             RunMode = LLMs.ILLM.RunMode.CommandsOnly,
+            Usage = LLMs.ILLM.LLMUsage.CommandsRoleplay,
             MessageCompilerId = compiler.MessageCompilerId,
             CommandNames =
             [
