@@ -1,4 +1,5 @@
-﻿using Akagi.Characters.CharacterBehaviors.MessageCompilers;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Characters.CharacterBehaviors.MessageCompilers;
 using Akagi.Characters.Conversations;
 using Akagi.Data;
 using Akagi.LLMs;
@@ -14,6 +15,7 @@ internal interface ISystemProcessorDatabase : IDatabase<SystemProcessor>
     public Task<SystemProcessor> GetSystemProcessor(string id);
 }
 
+[GraphNode]
 internal class SystemProcessor : Savable
 {
     private string _name = string.Empty;
@@ -26,8 +28,6 @@ internal class SystemProcessor : Savable
     private LLMDefinition? _specificLLM = null;
     private string _messageCompilerId = string.Empty;
     private string[] _commandNames = [];
-
-    private MessageCompiler? messageCompiler;
 
     public string Name
     {
@@ -69,6 +69,7 @@ internal class SystemProcessor : Savable
         get => _specificLLM;
         set => SetProperty(ref _specificLLM, value);
     }
+    [NodeReference(typeof(MessageCompiler))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string MessageCompilerId
     {
@@ -82,11 +83,7 @@ internal class SystemProcessor : Savable
     }
 
     [BsonIgnore]
-    public MessageCompiler MessageCompiler
-    {
-        get => messageCompiler ?? throw new InvalidOperationException("MessageCompiler has not been initialized.");
-        set => messageCompiler = value ?? throw new ArgumentNullException(nameof(value), "MessageCompiler cannot be null.");
-    }
+    public MessageCompiler MessageCompiler { get; set; } = null!;
 
     [BsonIgnore]
     public Command[] Commands { get; set; } = [];

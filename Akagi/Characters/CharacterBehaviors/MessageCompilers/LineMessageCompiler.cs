@@ -1,4 +1,5 @@
-﻿using Akagi.Characters.Conversations;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Characters.Conversations;
 using Akagi.Receivers;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -6,8 +7,10 @@ namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
 
 internal class LineMessageCompiler : MessageCompiler
 {
+    [GraphNode]
     public class Definition
     {
+        [NodeReference(typeof(MessageCompiler))]
         [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
         public required string MessageCompilerId { get; set; }
         [BsonIgnore]
@@ -15,6 +18,8 @@ internal class LineMessageCompiler : MessageCompiler
     }
 
     private Definition[] _definitions = [];
+
+    [NodeReference(typeof(Definition))]
     public Definition[] Definitions
     {
         get => _definitions;

@@ -1,11 +1,17 @@
-﻿using Akagi.Characters.Cards;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Characters.Cards;
+using Akagi.Characters.CharacterBehaviors.Puppeteers;
+using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Memories;
+using Akagi.Characters.TriggerPoints;
 using Akagi.Data;
+using Akagi.Users;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters;
 
+[GraphNode]
 internal class Character : Savable
 {
     private List<Conversation> _conversations = [];
@@ -43,6 +49,7 @@ internal class Character : Savable
         get => _memory;
         set => SetProperty(ref _memory, value);
     }
+    [NodeReference(typeof(Card))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string CardId
     {
@@ -50,25 +57,30 @@ internal class Character : Savable
         set => SetProperty(ref _cardId, value);
     }
     public Card Card => _card ?? throw new InvalidOperationException("Card is not set. Ensure to set the Card property after retrieving the Character from the database.");
+    [NodeReference(typeof(Puppeteer))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string PuppeteerId
     {
         get => _puppeteerId;
         set => SetProperty(ref _puppeteerId, value);
     }
+    [NodeReference(typeof(Reflector))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string[] ReflectorIds
     {
         get => _reflectorIds;
         set => SetProperty(ref _reflectorIds, value);
     }
+    [NodeReference(typeof(TriggerPoint))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string[] TriggerPointIds
     {
         get => _triggerPointIds;
         set => SetProperty(ref _triggerPointIds, value);
     }
+    [NodeReference(typeof(User))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    [UserId]
     public string UserId
     {
         get => _userId;

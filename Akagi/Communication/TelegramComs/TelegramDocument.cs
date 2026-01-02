@@ -12,7 +12,17 @@ internal class TelegramDocument : Document, IDisposable
         this.fileBase = fileBase;
     }
 
-    public override string Name => fileBase.FileId;
+    public override string Name
+    {
+        get
+        {
+            if (fileBase is Telegram.Bot.Types.Document document && !string.IsNullOrEmpty(document.FileName))
+            {
+                return document.FileName;
+            }
+            return fileBase.FileId;
+        }
+    }
 
     public void Dispose()
     {

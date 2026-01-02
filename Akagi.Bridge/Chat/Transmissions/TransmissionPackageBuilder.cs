@@ -7,7 +7,7 @@ public class TransmissionPackageBuilder : IDisposable
     private static readonly int headerSize = 12;
     private static readonly int footerSize = 2;
     private static readonly int extraBytes = headerSize + footerSize;
-    private static readonly byte[] endMarkers = { 39, 42 };
+    private static readonly byte[] endMarkers = [39, 42];
 
     private readonly ConcurrentDictionary<int, TransmissionReceiver> _receivers = new();
     private readonly Timer _cleanupTimer;

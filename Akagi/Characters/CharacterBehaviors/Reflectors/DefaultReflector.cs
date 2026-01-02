@@ -1,4 +1,5 @@
-﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.LLMs;
 using Akagi.Receivers;
 using MongoDB.Bson.Serialization.Attributes;
@@ -9,6 +10,7 @@ internal class DefaultReflector : Reflector
 {
     private string _conversationSystemProccessorId = string.Empty;
 
+    [NodeReference(typeof(SystemProcessor))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string ConversationSystemProccessorId
     {

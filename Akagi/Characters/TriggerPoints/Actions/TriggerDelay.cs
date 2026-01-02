@@ -1,4 +1,5 @@
 ﻿
+using Akagi.Bridge.Attributes;
 using Akagi.Data;
 using Akagi.Flow;
 using Akagi.Scheduling;
@@ -68,6 +69,7 @@ internal class TriggerDelay : TriggerAction
         get => _minutes;
         set => SetProperty(ref _minutes, value);
     }
+    [NodeReference(typeof(TriggerAction))]
     [BsonRepresentation(BsonType.ObjectId)]
     public string TriggerActionId
     {

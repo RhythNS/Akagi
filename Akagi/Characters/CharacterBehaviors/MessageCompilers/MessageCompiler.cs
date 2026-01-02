@@ -1,10 +1,12 @@
-﻿using Akagi.Characters.Conversations;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Characters.Conversations;
 using Akagi.Data;
 using Akagi.Receivers;
 using System.Text.Json.Serialization;
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
 
+[GraphNode]
 internal abstract class MessageCompiler : Savable
 {
     private string _name = string.Empty;

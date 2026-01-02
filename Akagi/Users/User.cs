@@ -1,10 +1,12 @@
-﻿using Akagi.Data;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Data;
 using Akagi.LLMs;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 
 namespace Akagi.Users;
 
+[GraphNode]
 internal class User : Savable
 {
     private string _name = string.Empty;

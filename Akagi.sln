@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
-VisualStudioVersion = 18.3.11312.210 d18.3
+VisualStudioVersion = 18.3.11312.210
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akagi", "Akagi\Akagi.csproj", "{390EB882-82C5-43A4-93E5-F3FDDB4B4FF0}"
 EndProject
@@ -17,6 +17,8 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akagi.Utils", "Akagi.Utils\Akagi.Utils.csproj", "{22916F82-B224-4CA3-A679-E0D856DE8024}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akagi.Logging", "Akagi.Logging\Akagi.Logging.csproj", "{B8B6AB6E-7CC5-48E6-B960-2F8B4C8C32A3}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akagi.CharacterEditor", "Akagi.CharacterEditor\Akagi.CharacterEditor.csproj", "{9C2D444C-409D-4EC6-8B8B-10826C762177}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -44,6 +46,10 @@ Global
 		{B8B6AB6E-7CC5-48E6-B960-2F8B4C8C32A3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B8B6AB6E-7CC5-48E6-B960-2F8B4C8C32A3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B8B6AB6E-7CC5-48E6-B960-2F8B4C8C32A3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9C2D444C-409D-4EC6-8B8B-10826C762177}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9C2D444C-409D-4EC6-8B8B-10826C762177}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9C2D444C-409D-4EC6-8B8B-10826C762177}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9C2D444C-409D-4EC6-8B8B-10826C762177}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

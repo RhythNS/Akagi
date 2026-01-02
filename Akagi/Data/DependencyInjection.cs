@@ -1,4 +1,5 @@
-﻿using Akagi.Utils;
+﻿using Akagi.Graphs;
+using Akagi.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,6 +12,7 @@ static class DependencyInjection
         services.Configure<DatabaseOptions>(configuration.GetSection("MongoDB"));
         services.AddSingleton<IFileDatabase, FileDatabase>();
         services.AddTransient<IDatabaseFactory, DatabaseFactory>();
+        services.AddSingleton<IGraphInstanceDatabase, GraphInstanceDatabase>();
 
         Type[] databaseTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<IDatabase>();
         foreach (Type? type in databaseTypes)

@@ -4,13 +4,11 @@ using Akagi.Characters.CharacterBehaviors.Puppeteers;
 using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
-using Akagi.Characters.Presets;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Utils;
 using Akagi.Utils.Extensions;
 using Microsoft.Extensions.DependencyInjection;
-using MongoDB.Bson.Serialization;
 
 namespace Akagi.Characters;
 
@@ -24,11 +22,8 @@ static class DependencyInjection
         services.AddSingleton<IPuppeteerDatabase, PuppeteerDatabase>();
         services.AddSingleton<IReflectorDatabase, ReflectorDatabase>();
         services.AddSingleton<IMessageCompilerDatabase, MessageCompilerDatabase>();
-        services.AddSingleton<IPresetDatabase, PresetDatabase>();
         services.AddSingleton<ITriggerPointDatabase, TriggerPointDatabase>();
         services.AddSingleton<ITriggerActionDatabase, TriggerActionDatabase>();
-
-        services.AddScoped<IPresetCreator, PresetCreator>();
 
         RegisterDBClasses();
     }
@@ -46,15 +41,6 @@ static class DependencyInjection
 
         Type[] messageCompilerTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<MessageCompiler>();
         Array.ForEach(messageCompilerTypes, BsonExtensions.Register);
-
-        BsonClassMap.RegisterClassMap<Preset>(classMap =>
-        {
-            classMap.AutoMap();
-            classMap.SetIsRootClass(true);
-        });
-
-        Type[] presetTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Preset>();
-        Array.ForEach(presetTypes, BsonExtensions.Register);
 
         Type[] triggerPointTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<TriggerPoint>();
         Array.ForEach(triggerPointTypes, BsonExtensions.Register);

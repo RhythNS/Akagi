@@ -17,23 +17,23 @@ internal abstract class InjectionCompiler : MessageCompiler
         End
     }
 
-    private InjectionType? _type;
-    private InjectionPosition? _position;
-    private Message.Type? _messageType;
+    private InjectionType _type = InjectionType.Message;
+    private InjectionPosition _position = InjectionPosition.Beginning;
+    private Message.Type _messageType = Message.Type.Character;
 
     public InjectionType Type
     {
-        get => _type ?? throw new InvalidOperationException("Type has not been set.");
+        get => _type;
         set => SetProperty(ref _type, value);
     }
     public InjectionPosition Position
     {
-        get => _position ?? throw new InvalidOperationException("Position has not been set.");
+        get => _position;
         set => SetProperty(ref _position, value);
     }
     public Message.Type MessageType
     {
-        get => _messageType ?? throw new InvalidOperationException("Message type has not been set.");
+        get => _messageType;
         set => SetProperty(ref _messageType, value);
     }
 

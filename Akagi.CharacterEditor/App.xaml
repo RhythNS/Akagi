@@ -1,0 +1,10 @@
+﻿<Application x:Class="Akagi.CharacterEditor.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Akagi.CharacterEditor"
+             xmlns:nodify="clr-namespace:Nodify;assembly=Nodify"
+             StartupUri="MainWindow.xaml">
+    <Application.Resources>
+        <ResourceDictionary Source="pack://application:,,,/Nodify;component/Themes/Dark.xaml" />
+    </Application.Resources>
+</Application>

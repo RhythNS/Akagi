@@ -1,7 +1,9 @@
-﻿using Akagi.Data;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Data;
 
 namespace Akagi.Characters.TriggerPoints.Actions;
 
+[GraphNode]
 internal abstract class TriggerAction : Savable
 {
     private string _name = string.Empty;

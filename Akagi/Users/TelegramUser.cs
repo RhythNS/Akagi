@@ -1,4 +1,6 @@
-﻿using Akagi.Data;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Characters;
+using Akagi.Data;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Users;
@@ -19,6 +21,7 @@ internal class TelegramUser : DirtyTrackable
         get => _userName;
         set => SetProperty(ref _userName, value);
     }
+    [NodeReference(typeof(Character))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string? CurrentCharacterId
     {

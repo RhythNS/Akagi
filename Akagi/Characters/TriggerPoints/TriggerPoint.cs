@@ -1,9 +1,11 @@
-﻿using Akagi.Characters.TriggerPoints.Actions;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Data;
 using Akagi.Users;
 
 namespace Akagi.Characters.TriggerPoints;
 
+[GraphNode]
 internal class TriggerPoint : Savable
 {
     public class TriggerContext : ContextBase
@@ -21,8 +23,10 @@ internal class TriggerPoint : Savable
         ReflectionCompleted
     }
 
+    [GraphNode]
     public class TriggerActionEntry
     {
+        [NodeReference(typeof(TriggerAction))]
         public required string Id { get; init; }
         public required TriggerType OnTrigger { get; init; }
     }
@@ -42,6 +46,8 @@ internal class TriggerPoint : Savable
         get => _description;
         set => SetProperty(ref _description, value);
     }
+
+    [NodeReference(typeof(TriggerActionEntry))]
     public TriggerActionEntry[] TriggerActions
     {
         get => _triggerActions;

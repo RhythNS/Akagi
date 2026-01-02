@@ -1,9 +1,12 @@
-﻿using Akagi.Data;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Data;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters.Cards;
 
+[GraphNode]
+[NodeDocu("Represents a character card with various attributes and metadata.")]
 internal class Card : Savable
 {
     private string _name = string.Empty;

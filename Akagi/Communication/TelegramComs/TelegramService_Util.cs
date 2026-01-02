@@ -24,6 +24,7 @@ internal partial class TelegramService : Communicator, IHostedService
 
         MemoryStream stream = new();
         await _client.DownloadFile(file.FilePath, stream);
+        stream.Position = 0;
         return stream;
     }
 }

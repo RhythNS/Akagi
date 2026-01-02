@@ -1,4 +1,5 @@
 ﻿
+using Akagi.Bridge.Attributes;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters.TriggerPoints.Actions;
@@ -9,6 +10,7 @@ internal class TriggerAfterTimes : TriggerAction
     private int _times = 1;
     private int _currentTimes = 1;
 
+    [NodeReference(typeof(TriggerAction))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string ActionId
     {

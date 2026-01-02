@@ -1,4 +1,5 @@
-﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+﻿using Akagi.Bridge.Attributes;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.LLMs;
 using MongoDB.Bson.Serialization.Attributes;
 
@@ -6,8 +7,10 @@ namespace Akagi.Characters.CharacterBehaviors.Puppeteers;
 
 internal class LinePuppeteer : Puppeteer
 {
+    [GraphNode]
     public class Definition
     {
+        [NodeReference(typeof(SystemProcessor))]
         [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
         public required string SystemProcessorId { get; set; }
         [BsonIgnore]
@@ -15,6 +18,7 @@ internal class LinePuppeteer : Puppeteer
     }
 
     private Definition[] _definitions = [];
+    [NodeReference(typeof(Definition))]
     public Definition[] Definitions
     {
         get => _definitions;

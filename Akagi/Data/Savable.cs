@@ -1,10 +1,12 @@
-﻿using MongoDB.Bson;
+﻿using Akagi.Bridge.Attributes;
+using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Data;
 
 internal abstract class Savable : DirtyTrackable
 {
+    [NodeIgnore]
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
     public string? Id { get; set; }
