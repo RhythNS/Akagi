@@ -7,7 +7,9 @@ internal interface ITriggerActionDatabase : IDatabase<TriggerAction>;
 
 internal class TriggerActionDatabase : Database<TriggerAction>, ITriggerActionDatabase
 {
-    public TriggerActionDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "triggerAction")
+    public override string CollectionName => "trigger_actions";
+
+    public TriggerActionDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options)
     {
     }
 

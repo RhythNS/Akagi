@@ -13,9 +13,11 @@ internal interface ICardDatabase : IDatabase<Card>
 
 internal class CardDatabase : Database<Card>, ICardDatabase
 {
+    public override string CollectionName => "cards";
+
     private readonly IFileDatabase fileDatabase;
 
-    public CardDatabase(IFileDatabase fileDatabase, IOptionsMonitor<DatabaseOptions> options) : base(options, "cards")
+    public CardDatabase(IFileDatabase fileDatabase, IOptionsMonitor<DatabaseOptions> options) : base(options)
     {
         this.fileDatabase = fileDatabase;
     }

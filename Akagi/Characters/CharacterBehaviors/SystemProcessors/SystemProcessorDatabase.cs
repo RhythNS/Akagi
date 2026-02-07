@@ -10,12 +10,14 @@ namespace Akagi.Characters.CharacterBehaviors.SystemProcessors;
 
 internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProcessorDatabase
 {
+    public override string CollectionName => "system_processors";
+
     private readonly ICommandFactory _commandFactory;
     private readonly IMessageCompilerDatabase _compilerDatabase;
 
     public SystemProcessorDatabase(IOptionsMonitor<DatabaseOptions> options,
                                    ICommandFactory commandFactory,
-                                   IMessageCompilerDatabase compilerDatabase) : base(options, "system_processor")
+                                   IMessageCompilerDatabase compilerDatabase) : base(options)
     {
         _commandFactory = commandFactory;
         _compilerDatabase = compilerDatabase;

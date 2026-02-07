@@ -8,9 +8,15 @@ internal class UploadGraphCommand : DocumentCommand
 {
     public override string Name => "/uploadGraph";
 
-    public override string Description => "Uploads a graph JSON file and creates all objects in the database. Usage: /uploadGraph <json file>";
+    public override string Description => "Uploads a graph JSON file and creates all objects in the database. Usage: /uploadGraph <json file> [operation] [name]";
 
     private readonly IDatabaseFactory _databaseFactory;
+
+    private enum OperationType
+    {
+        Update,
+        Create
+    }
 
     public UploadGraphCommand(IDatabaseFactory databaseFactory)
     {
@@ -24,8 +30,27 @@ internal class UploadGraphCommand : DocumentCommand
             await Communicator.SendMessage(context.User, "Please upload a valid JSON graph file.");
             return;
         }
+        if (args.Length == 0)
+        {
+            await Communicator.SendMessage(context.User, "Please specify an operation: New or Update.");
+            return;
+        }
+        if (Enum.TryParse(args[0], true, out OperationType operation) == false)
+        {
+            await Communicator.SendMessage(context.User, "Invalid operation specified. Please use New or Update.");
+            return;
+        }
+        string? graphName = null;
+        if (args.Length > 1)
+        {
+            graphName = args[1];
+        }
+        if (operation == OperationType.Create && string.IsNullOrWhiteSpace(graphName))
+        {
+            await Communicator.SendMessage(context.User, "Please specify a name for the new graph.");
+            return;
+        }
 
-        GraphLoader loader = new(_databaseFactory);
         List<string> successNames = [];
         List<string> errorMessages = [];
 
@@ -49,8 +74,15 @@ internal class UploadGraphCommand : DocumentCommand
 
                 stream.Position = 0;
 
-                List<Savable> createdObjects = await loader.LoadGraphFromStreamForUser(stream, context.User.Id);
-
+                GraphLoader loader = new(_databaseFactory);
+                await loader.LoadGraphFromStream(stream);
+                List<Savable> createdObjects = [];
+                createdObjects = operation switch
+                {
+                    OperationType.Update => await loader.Update(context.User.Id!, graphName),
+                    OperationType.Create => await loader.Create(context.User.Id!, graphName!),
+                    _ => throw new InvalidOperationException("Unsupported operation"),
+                };
                 if (createdObjects.Count > 0)
                 {
                     successNames.Add($"{document.Name} ({createdObjects.Count} objects)");

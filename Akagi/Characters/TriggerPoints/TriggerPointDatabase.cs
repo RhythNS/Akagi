@@ -7,7 +7,9 @@ internal interface ITriggerPointDatabase : IDatabase<TriggerPoint>;
 
 internal class TriggerPointDatabase : Database<TriggerPoint>, ITriggerPointDatabase
 {
-    public TriggerPointDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "triggerPoint")
+    public override string CollectionName => "trigger_points";
+
+    public TriggerPointDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options)
     {
     }
 

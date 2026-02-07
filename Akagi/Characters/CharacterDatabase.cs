@@ -15,9 +15,11 @@ internal interface ICharacterDatabase : IDatabase<Character>
 
 internal class CharacterDatabase : Database<Character>, ICharacterDatabase
 {
+    public override string CollectionName => "characters";
+
     private readonly ICardDatabase _cardDatabase;
 
-    public CharacterDatabase(IOptionsMonitor<DatabaseOptions> options, ICardDatabase cardDatabase) : base(options, "characters")
+    public CharacterDatabase(IOptionsMonitor<DatabaseOptions> options, ICardDatabase cardDatabase) : base(options)
     {
         _cardDatabase = cardDatabase;
         options.OnChange(OnOptionsChange);

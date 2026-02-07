@@ -7,6 +7,8 @@ namespace Akagi.Data;
 
 internal interface IDatabase
 {
+    public string CollectionName { get; }
+
     public bool CanSave(Savable savable);
     public Task SaveAsync(Savable savable);
 }
@@ -39,10 +41,12 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
     private string _collectionName = string.Empty;
     private IMongoDatabase _mongoDatabase = default!;
 
-    public Database(IOptionsMonitor<DatabaseOptions> options, string collectionName)
+    public abstract string CollectionName { get; }
+
+    public Database(IOptionsMonitor<DatabaseOptions> options)
     {
-        options.OnChange((options, _) => OnOptionsChange(options, collectionName));
-        OnOptionsChange(options.CurrentValue, collectionName);
+        options.OnChange((options, _) => OnOptionsChange(options, CollectionName));
+        OnOptionsChange(options.CurrentValue, CollectionName);
     }
 
     private void OnOptionsChange(DatabaseOptions options, string collectionName)

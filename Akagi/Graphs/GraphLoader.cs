@@ -1,112 +1,203 @@
-using System.Reflection;
-using System.Text;
-using System.Text.Json;
 using Akagi.Bridge.Attributes;
 using Akagi.Data;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
+using System.Reflection;
+using System.Text;
+using System.Text.Json;
 
 namespace Akagi.Graphs;
 
 internal class GraphLoader
 {
+    private readonly IGraphInstanceDatabase _graphInstanceDb;
     private readonly IDatabaseFactory _databaseFactory;
+    private GraphData? _graphData = null;
 
     public GraphLoader(IDatabaseFactory databaseFactory)
     {
         _databaseFactory = databaseFactory;
+        _graphInstanceDb = databaseFactory.GetDatabase<IGraphInstanceDatabase>();
     }
 
-    public async Task<List<Savable>> LoadGraphFromStreamForUser(Stream stream, string? userId = null)
+    public async Task LoadGraphFromStream(Stream stream)
     {
         using StreamReader reader = new(stream, Encoding.UTF8);
         string json = await reader.ReadToEndAsync();
-        return await LoadGraphFromJsonForUser(json, userId);
-    }
-
-    public async Task<List<Savable>> LoadGraphFromJsonForUser(string json, string? userId = null)
-    {
-        GraphData? graphData = JsonSerializer.Deserialize<GraphData>(json);
-        if (graphData == null)
+        _graphData = JsonSerializer.Deserialize<GraphData>(json);
+        if (_graphData == null)
         {
             throw new InvalidDataException("Failed to deserialize graph data");
         }
+    }
 
-        GraphInstance? existingGraph = null;
-        if (!string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(graphData.GraphId))
+    public async Task<List<Savable>> Create(string userId, string name)
+    {
+        if (_graphData == null)
         {
-            IGraphInstanceDatabase graphInstanceDb = _databaseFactory.GetDatabase<IGraphInstanceDatabase>();
-            existingGraph = await graphInstanceDb.GetByGraphIdAndUserId(graphData.GraphId, userId);
+            throw new InvalidOperationException("Graph data is not loaded.");
+        }
+
+        bool exists = await _graphInstanceDb.Exists(_graphData!.GraphId, name, userId);
+        if (exists)
+        {
+            throw new InvalidOperationException("Graph instance already exists for the user.");
         }
 
         List<object> nodeInstances = [];
-        Dictionary<int, string> nodeIndexToExistingId = [];
+        List<Savable> allSavables = [];
 
-        if (existingGraph != null)
+        await CreateInstances(nodeInstances);
+        allSavables.AddRange(await SetupNodeReferencesAndProperties(nodeInstances, userId));
+        await SaveGraphInstance(allSavables, userId, name);
+
+        return allSavables;
+    }
+
+    public async Task<List<Savable>> Update(string userId, string? name = null)
+    {
+        if (_graphData == null)
         {
-            for (int i = 0; i < graphData.Nodes.Count; i++)
+            throw new InvalidOperationException("Graph data is not loaded.");
+        }
+
+        GraphInstance[] existingGraphs;
+        if (name == null)
+        {
+            existingGraphs = await _graphInstanceDb.GetGraphs(_graphData.GraphId, userId);
+            if (existingGraphs.Length == 0)
             {
-                NodeData nodeData = graphData.Nodes[i];
-                Type? nodeType = Type.GetType(nodeData.TypeName);
-                if (nodeType == null)
-                {
-                    throw new InvalidOperationException($"Type '{nodeData.TypeName}' could not be found.");
-                }
-
-                if (i < existingGraph.SavableIds.Length && typeof(Savable).IsAssignableFrom(nodeType))
-                {
-                    IDatabase database = _databaseFactory.GetDatabase(
-                        (Savable)Activator.CreateInstance(nodeType)!
-                    );
-
-                    MethodInfo? method = database.GetType().GetMethod("GetDocumentByIdAsync");
-                    if (method != null)
-                    {
-                        Task task = (Task)method.Invoke(database, [existingGraph.SavableIds[i]])!;
-                        await task.ConfigureAwait(false);
-                        PropertyInfo? resultProperty = task.GetType().GetProperty("Result");
-                        object? existingInstance = resultProperty?.GetValue(task);
-
-                        if (existingInstance != null)
-                        {
-                            nodeInstances.Add(existingInstance);
-                            nodeIndexToExistingId[i] = existingGraph.SavableIds[i];
-                            continue;
-                        }
-                    }
-                }
-
-                object? instance = Activator.CreateInstance(nodeType);
-                if (instance == null)
-                {
-                    throw new InvalidOperationException($"Failed to create instance of type '{nodeType.FullName}'.");
-                }
-                nodeInstances.Add(instance);
+                throw new InvalidOperationException("No graph instances exist for the user.");
             }
         }
         else
         {
-            foreach (NodeData nodeData in graphData.Nodes)
+            GraphInstance? toLoad = await _graphInstanceDb.GetGraph(_graphData.GraphId, userId, name);
+            if (toLoad == null)
             {
-                Type? nodeType = Type.GetType(nodeData.TypeName);
-                if (nodeType == null)
-                {
-                    throw new InvalidOperationException($"Type '{nodeData.TypeName}' could not be found.");
-                }
-
-                object? instance = Activator.CreateInstance(nodeType);
-                if (instance == null)
-                {
-                    throw new InvalidOperationException($"Failed to create instance of type '{nodeType.FullName}'.");
-                }
-
-                nodeInstances.Add(instance);
+                throw new InvalidOperationException("Graph instance does not exist for the user with the specified name.");
             }
+            existingGraphs = [toLoad];
         }
 
-        for (int i = 0; i < graphData.Nodes.Count; i++)
+        List<object> nodeInstances = [];
+        Dictionary<int, string> nodeIndexToExistingId = [];
+        List<Savable> allSavables = [];
+
+        foreach (GraphInstance existingGraph in existingGraphs)
         {
-            NodeData nodeData = graphData.Nodes[i];
+            await LoadOrCreateInstances(existingGraph, nodeInstances, nodeIndexToExistingId);
+            allSavables.AddRange(await SetupNodeReferencesAndProperties(nodeInstances, userId));
+            await SaveGraphInstance(allSavables, userId, existingGraph.Name, existingGraph);
+        }
+        return allSavables;
+    }
+
+    private async Task<GraphInstance> SaveGraphInstance(List<Savable> allSavables, string userId, string name, GraphInstance? graph = null)
+    {
+        if (_graphData == null)
+        {
+            throw new InvalidOperationException("Graph data is not loaded.");
+        }
+
+        graph ??= new GraphInstance
+        {
+            GraphId = _graphData.GraphId,
+            UserId = userId,
+            Name = name
+        };
+
+        graph.SavableInfos = [.. allSavables
+                    .Where(s => !string.IsNullOrEmpty(s.Id))
+                    .Select(s => new GraphInstance.SavableInfo { SavableId = s.Id!, CollectionName = _databaseFactory.GetDatabase(s).CollectionName })];
+
+        await _databaseFactory.TrySave(graph);
+        return graph;
+    }
+
+    private async Task CreateInstances(List<object> nodeInstances)
+    {
+        if (_graphData == null)
+        {
+            throw new InvalidOperationException("Graph data is not loaded.");
+        }
+
+        foreach (NodeData nodeData in _graphData.Nodes)
+        {
+            Type? nodeType = Type.GetType(nodeData.TypeName);
+            if (nodeType == null)
+            {
+                throw new InvalidOperationException($"Type '{nodeData.TypeName}' could not be found.");
+            }
+
+            object? instance = Activator.CreateInstance(nodeType);
+            if (instance == null)
+            {
+                throw new InvalidOperationException($"Failed to create instance of type '{nodeType.FullName}'.");
+            }
+
+            nodeInstances.Add(instance);
+        }
+    }
+
+    private async Task LoadOrCreateInstances(GraphInstance existingGraph, List<object> nodeInstances, Dictionary<int, string> nodeIndexToExistingId)
+    {
+        if (_graphData == null)
+        {
+            throw new InvalidOperationException("Graph data is not loaded.");
+        }
+
+        for (int i = 0; i < _graphData.Nodes.Count; i++)
+        {
+            NodeData nodeData = _graphData.Nodes[i];
+            Type? nodeType = Type.GetType(nodeData.TypeName);
+            if (nodeType == null)
+            {
+                throw new InvalidOperationException($"Type '{nodeData.TypeName}' could not be found.");
+            }
+
+            if (i < existingGraph.SavableInfos.Length && typeof(Savable).IsAssignableFrom(nodeType))
+            {
+                IDatabase database = _databaseFactory.GetDatabase(
+                    (Savable)Activator.CreateInstance(nodeType)!
+                );
+
+                MethodInfo? method = database.GetType().GetMethod("GetDocumentByIdAsync");
+                if (method != null)
+                {
+                    Task task = (Task)method.Invoke(database, [existingGraph.SavableInfos[i].SavableId])!;
+                    await task.ConfigureAwait(false);
+                    PropertyInfo? resultProperty = task.GetType().GetProperty("Result");
+                    object? existingInstance = resultProperty?.GetValue(task);
+
+                    if (existingInstance != null)
+                    {
+                        nodeInstances.Add(existingInstance);
+                        nodeIndexToExistingId[i] = existingGraph.SavableInfos[i].SavableId;
+                        continue;
+                    }
+                }
+            }
+
+            object? instance = Activator.CreateInstance(nodeType);
+            if (instance == null)
+            {
+                throw new InvalidOperationException($"Failed to create instance of type '{nodeType.FullName}'.");
+            }
+            nodeInstances.Add(instance);
+        }
+    }
+
+    private async Task<List<Savable>> SetupNodeReferencesAndProperties(List<object> nodeInstances, string? userId)
+    {
+        if (_graphData == null)
+        {
+            throw new InvalidOperationException("Graph data is not loaded.");
+        }
+
+        for (int i = 0; i < _graphData.Nodes.Count; i++)
+        {
+            NodeData nodeData = _graphData.Nodes[i];
             object instance = nodeInstances[i];
             Type nodeType = instance.GetType();
 
@@ -195,7 +286,7 @@ internal class GraphLoader
 
         Dictionary<int, List<(string PropertyName, int TargetNodeIndex, int ArrayIndex)>> nodeConnections = [];
 
-        foreach (ConnectionData connectionData in graphData.Connections)
+        foreach (ConnectionData connectionData in _graphData.Connections)
         {
             if (!nodeConnections.TryGetValue(connectionData.TargetNodeIndex, out List<(string PropertyName, int TargetNodeIndex, int ArrayIndex)>? value))
             {
@@ -329,31 +420,6 @@ internal class GraphLoader
         foreach (Savable savable in allSavables)
         {
             await _databaseFactory.TrySave(savable);
-        }
-
-        if (!string.IsNullOrEmpty(userId) && !string.IsNullOrEmpty(graphData.GraphId))
-        {
-            IGraphInstanceDatabase graphInstanceDb = _databaseFactory.GetDatabase<IGraphInstanceDatabase>();
-
-            GraphInstance graphInstance;
-            if (existingGraph != null)
-            {
-                graphInstance = existingGraph;
-            }
-            else
-            {
-                graphInstance = new GraphInstance
-                {
-                    GraphId = graphData.GraphId,
-                    UserId = userId
-                };
-            }
-
-            graphInstance.SavableIds = [.. allSavables
-                    .Where(s => !string.IsNullOrEmpty(s.Id))
-                    .Select(s => s.Id!)];
-
-            await _databaseFactory.TrySave(graphInstance);
         }
 
         return allSavables;

@@ -7,7 +7,9 @@ internal interface IPuppeteerDatabase : IDatabase<Puppeteer>;
 
 internal class PuppeteerDatabase : Database<Puppeteer>, IPuppeteerDatabase
 {
-    public PuppeteerDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "puppeteer")
+    public override string CollectionName => "puppeteers";
+
+    public PuppeteerDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options)
     {
     }
 

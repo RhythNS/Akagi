@@ -11,7 +11,9 @@ internal interface ITaskDatabase : IDatabase<BaseTask>
 
 internal class TaskDatabase : Database<BaseTask>, ITaskDatabase
 {
-    public TaskDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options, "tasks")
+    public override string CollectionName => "tasks";
+
+    public TaskDatabase(IOptionsMonitor<DatabaseOptions> options) : base(options)
     {
         options.OnChange(OnOptionsChange);
         OnOptionsChange(options.CurrentValue);

@@ -14,10 +14,12 @@ internal interface IUserDatabase : IDatabase<User>
 
 internal class UserDatabase : Database<User>, IUserDatabase
 {
+    public override string CollectionName => "users";
+
     private readonly ILogger<UserDatabase> _logger;
 
     public UserDatabase(IOptionsMonitor<DatabaseOptions> options,
-                        ILogger<UserDatabase> logger) : base(options, "user")
+                        ILogger<UserDatabase> logger) : base(options)
     {
         _logger = logger;
     }

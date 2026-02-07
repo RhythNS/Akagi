@@ -5,7 +5,9 @@ internal interface IDatabaseFactory
     public Task TrySave(Savable savable);
     public Task SaveIfDirty(Savable savable);
     public IDatabase GetDatabase(Savable savable);
+    public IDatabase GetDatabase(string collectionName);
     public T GetDatabase<T>() where T : IDatabase;
+    public IDatabase<T> GetDatabase<T>(Type savableType) where T : Savable;
 }
 
 internal class DatabaseFactory : IDatabaseFactory
@@ -35,6 +37,38 @@ internal class DatabaseFactory : IDatabaseFactory
             throw new InvalidOperationException($"No database of type {typeof(T).Name} found.");
         }
         return (T)database;
+    }
+
+    public IDatabase<T> GetDatabase<T>(Type savableType) where T : Savable
+    {
+        IDatabase? database = _databases.FirstOrDefault(db =>
+        {
+            Type dbType = db.GetType();
+            Type[] interfaces = dbType.GetInterfaces();
+            foreach (Type iface in interfaces)
+            {
+                if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IDatabase<>))
+                {
+                    Type genericArg = iface.GetGenericArguments()[0];
+                    if (genericArg == savableType)
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        });
+        if (database == null)
+        {
+            throw new InvalidOperationException($"No database found that can save type {savableType.Name}.");
+        }
+        return (IDatabase<T>)database;
+    }
+
+    public IDatabase GetDatabase(string collectionName)
+    {
+        return _databases.FirstOrDefault(db => string.Equals(collectionName, db.CollectionName, StringComparison.OrdinalIgnoreCase))
+            ?? throw new InvalidOperationException($"No database found with collection name '{collectionName}'.");
     }
 
     public async Task SaveIfDirty(Savable savable)
