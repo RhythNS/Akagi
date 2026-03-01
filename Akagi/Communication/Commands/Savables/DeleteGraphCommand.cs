@@ -42,7 +42,7 @@ internal class DeleteGraphCommand : TextCommand
 
             System.Reflection.MethodInfo deleteMethod = typeof(IDatabase<>)
                 .MakeGenericType(savableType)
-                .GetMethod(nameof(IDatabase<Savable>.DeleteDocumentByIdAsync))!;
+                .GetMethod(nameof(IDatabase<>.DeleteDocumentByIdAsync))!;
 
             Task deleteTask = (Task)deleteMethod.Invoke(savableDatabase, [savableInfo.SavableId])!;
             await deleteTask;

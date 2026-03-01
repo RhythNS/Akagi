@@ -31,13 +31,11 @@ internal interface IDatabase<T> : IDatabase where T : Savable
 internal class DatabaseOptions
 {
     public string ConnectionString { get; set; } = string.Empty;
-    public string DatabaseName { get; set; } = string.Empty;
 }
 
 internal abstract class Database<T> : IDatabase<T> where T : Savable
 {
     private string _connectionString = string.Empty;
-    private string _databaseName = string.Empty;
     private string _collectionName = string.Empty;
     private IMongoDatabase _mongoDatabase = default!;
 
@@ -52,7 +50,6 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
     private void OnOptionsChange(DatabaseOptions options, string collectionName)
     {
         _connectionString = options.ConnectionString;
-        _databaseName = options.DatabaseName;
         _collectionName = collectionName;
 
         InitializeMongoDatabase();
@@ -60,13 +57,14 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
 
     private void InitializeMongoDatabase()
     {
-        if (string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(_databaseName) || string.IsNullOrWhiteSpace(_collectionName))
+        if (string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(_collectionName))
         {
-            throw new InvalidOperationException("ConnectionString, DatabaseName, and CollectionName must be provided.");
+            throw new InvalidOperationException("ConnectionString and CollectionName must be provided.");
         }
 
         MongoClient client = new(_connectionString);
-        _mongoDatabase = client.GetDatabase(_databaseName);
+        MongoUrl mongoUrl = MongoUrl.Create(_connectionString);
+        _mongoDatabase = client.GetDatabase(mongoUrl.DatabaseName);
     }
 
     private IMongoCollection<T> GetCollection()

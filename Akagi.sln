@@ -20,6 +20,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akagi.Logging", "Akagi.Logg
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akagi.CharacterEditor", "Akagi.CharacterEditor\Akagi.CharacterEditor.csproj", "{9C2D444C-409D-4EC6-8B8B-10826C762177}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Akagi.Aspire", "Akagi.Aspire\Akagi.Aspire.csproj", "{43A4CC88-D985-DFAC-61B3-519FA87A4365}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -50,6 +52,10 @@ Global
 		{9C2D444C-409D-4EC6-8B8B-10826C762177}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{9C2D444C-409D-4EC6-8B8B-10826C762177}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{9C2D444C-409D-4EC6-8B8B-10826C762177}.Release|Any CPU.Build.0 = Release|Any CPU
+		{43A4CC88-D985-DFAC-61B3-519FA87A4365}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{43A4CC88-D985-DFAC-61B3-519FA87A4365}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{43A4CC88-D985-DFAC-61B3-519FA87A4365}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{43A4CC88-D985-DFAC-61B3-519FA87A4365}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

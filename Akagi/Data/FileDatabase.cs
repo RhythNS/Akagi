@@ -20,7 +20,6 @@ internal class FileDatabase : IFileDatabase
     protected GridFSBucket _gridFS = default!;
 
     private string _connectionString = string.Empty;
-    private string _databaseName = string.Empty;
     private readonly string _collectionName = "files";
 
     public FileDatabase(IOptionsMonitor<DatabaseOptions> options)
@@ -32,20 +31,20 @@ internal class FileDatabase : IFileDatabase
     private void OnOptionsChange(DatabaseOptions options)
     {
         _connectionString = options.ConnectionString;
-        _databaseName = options.DatabaseName;
 
         InitializeMongoDatabase();
     }
 
     private void InitializeMongoDatabase()
     {
-        if (string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(_databaseName) || string.IsNullOrWhiteSpace(_collectionName))
+        if (string.IsNullOrWhiteSpace(_connectionString) || string.IsNullOrWhiteSpace(_collectionName))
         {
-            throw new InvalidOperationException("ConnectionString, DatabaseName, and CollectionName must be provided.");
+            throw new InvalidOperationException("ConnectionString and CollectionName must be provided.");
         }
 
         MongoClient client = new(_connectionString);
-        _database = client.GetDatabase(_databaseName);
+        MongoUrl mongoUrl = MongoUrl.Create(_connectionString);
+        _database = client.GetDatabase(mongoUrl.DatabaseName);
         _gridFS = new GridFSBucket(_database);
     }
 

@@ -47,7 +47,7 @@ internal class GraphLoader
         List<object> nodeInstances = [];
         List<Savable> allSavables = [];
 
-        await CreateInstances(nodeInstances);
+        CreateInstances(nodeInstances);
         allSavables.AddRange(await SetupNodeReferencesAndProperties(nodeInstances, userId));
         await SaveGraphInstance(allSavables, userId, name);
 
@@ -115,7 +115,7 @@ internal class GraphLoader
         return graph;
     }
 
-    private async Task CreateInstances(List<object> nodeInstances)
+    private void CreateInstances(List<object> nodeInstances)
     {
         if (_graphData == null)
         {

@@ -69,7 +69,7 @@ internal class FileRequestHandler : SocketTransmissionHandler
 
                             using Stream stream = await _fileDatabase.DownloadFileAsync(ObjectId.Parse(card.ImageId));
                             byte[] data = new byte[stream.Length];
-                            await stream.ReadAsync(data);
+                            await stream.ReadExactlyAsync(data);
                             /*
                             byte[] data = new byte[9000];
                             for (int i = 0; i < data.Length; i++)
