@@ -4,7 +4,6 @@ using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.LLMs;
 using Akagi.Users;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using System.Collections.ObjectModel;
 using System.Net.Http.Json;
@@ -17,18 +16,18 @@ internal class LoginRequestHandler : SocketTransmissionHandler
     private readonly IUserDatabase _userDatabase;
     private readonly ILogger<LoginRequestHandler> _logger;
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly LLMDefinitions _llmDefinitions;
+    private readonly ILLMDefinitionDatabase _lLMDefinitionDatabase;
 
     public LoginRequestHandler(
         IUserDatabase userDatabase,
         ILogger<LoginRequestHandler> logger,
         IHttpClientFactory httpClientFactory,
-        IOptions<LLMDefinitions> llmDefinitions)
+        ILLMDefinitionDatabase lLMDefinitionDatabase)
     {
         _userDatabase = userDatabase;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
-        _llmDefinitions = llmDefinitions.Value;
+        _lLMDefinitionDatabase = lLMDefinitionDatabase;
     }
 
     public override string HandlesType => nameof(LoginRequestTransmission);
@@ -77,12 +76,14 @@ internal class LoginRequestHandler : SocketTransmissionHandler
 
             if (user == null)
             {
+                string llmDefinitionsId = await _lLMDefinitionDatabase.GetDefaultIdAsync() ?? throw new InvalidOperationException("No default llm found");
+
                 user = new User
                 {
                     Username = tokenInfo.Name ?? "User",
                     Name = tokenInfo.Name ?? "User",
                     LastUsedCommunicator = context.Service.Name,
-                    LLMPreferences = new ReadOnlyDictionary<string, LLMDefinition>(_llmDefinitions.ToDictionary()),
+                    LLMPreferences = new ReadOnlyDictionary<string, string>(LLMDefinition.CreateDummyDictionary(llmDefinitionsId)),
                     GoogleUser = new GoogleUser
                     {
                         Id = tokenInfo.Sub,

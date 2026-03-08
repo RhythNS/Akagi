@@ -27,9 +27,9 @@ internal partial class TelegramService : Communicator, IHostedService
     private readonly IUserDatabase _userDatabase;
     private readonly ICharacterDatabase _characterDatabase;
     private readonly IDatabaseFactory _databaseFactory;
+    private readonly ILLMDefinitionDatabase _lLMDefinitionDatabase;
     private readonly TextCommand[] _textCommands = [];
     private readonly DocumentCommand[] _documentCommands = [];
-    private readonly LLMDefinitions _llmDefinitions;
 
     private TelegramBotClient? _client;
     private Telegram.Bot.Types.User? _me;
@@ -39,7 +39,7 @@ internal partial class TelegramService : Communicator, IHostedService
                            IUserDatabase userDatabase,
                            ICharacterDatabase characterDatabase,
                            IDatabaseFactory databaseFactory,
-                           IOptions<LLMDefinitions> llmDefinitions,
+                           ILLMDefinitionDatabase llmDefinitionsDatabase,
                            IEnumerable<Command> commands,
                            ILogger<TelegramService> logger) : base(receiver)
     {
@@ -48,7 +48,7 @@ internal partial class TelegramService : Communicator, IHostedService
         _characterDatabase = characterDatabase;
         _databaseFactory = databaseFactory;
         _userDatabase = userDatabase;
-        _llmDefinitions = llmDefinitions.Value;
+        _lLMDefinitionDatabase = llmDefinitionsDatabase;
 
         Command[] validCommands = [..commands.Where(x => x.CompatibleFor
                                              .All(y => typeof(TelegramService).IsAssignableTo(y)))];

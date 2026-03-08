@@ -1,17 +1,29 @@
-﻿using static Akagi.LLMs.ILLM;
+﻿using Akagi.Data;
+using static Akagi.LLMs.ILLM;
 
 namespace Akagi.LLMs;
 
-internal class LLMDefinitions
+internal class LLMDefinition : Savable
 {
-    public required LLMDefinition[] Definitions { get; init; }
+    private LLMType _type;
+    private string _model = string.Empty;
 
-    public Dictionary<string, LLMDefinition> ToDictionary()
+    public LLMType Type
     {
-        Dictionary<string, LLMDefinition> dict = [];
-        Array.ForEach(Enum.GetValues<LLMUsage>(), x => dict[x.ToString()] = Definitions[0]);
+        get => _type;
+        set => SetProperty(ref _type, value);
+    }
+
+    public string Model
+    {
+        get => _model;
+        set => SetProperty(ref _model, value);
+    }
+
+    public static Dictionary<string, string> CreateDummyDictionary(string id)
+    {
+        Dictionary<string, string> dict = [];
+        Array.ForEach(Enum.GetValues<LLMUsage>(), x => dict[x.ToString()] = id);
         return dict;
     }
 }
-
-internal record LLMDefinition(LLMType Type, string Model);

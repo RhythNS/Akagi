@@ -7,21 +7,37 @@ namespace Akagi.LLMs;
 
 internal interface ILLMFactory
 {
-    public ILLM Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType);
+    public Task<ILLM> Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType);
 }
 
 internal class LLMFactory : ILLMFactory
 {
     private readonly IServiceProvider _serviceProvider;
+    private readonly ILLMDefinitionDatabase _definitionDatabase;
 
-    public LLMFactory(IServiceProvider serviceProvider)
+    public LLMFactory(IServiceProvider serviceProvider, ILLMDefinitionDatabase definitionDatabase)
     {
         _serviceProvider = serviceProvider;
+        _definitionDatabase = definitionDatabase;
     }
 
-    public ILLM Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType)
+    public async Task<ILLM> Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType)
     {
-        LLMDefinition effectiveDefinition = overrideModel ?? user.LLMPreferences[usageType.ToString()] ?? throw new InvalidOperationException("No LLM definition provided.");
+        LLMDefinition effectiveDefinition;
+
+        if (overrideModel != null)
+        {
+            effectiveDefinition = overrideModel;
+        }
+        else if (user.LLMPreferences.TryGetValue(usageType.ToString(), out string? modelId))
+        {
+            effectiveDefinition = await _definitionDatabase.GetDocumentByIdAsync(modelId)
+                ?? throw new Exception($"User {user.Id} does not have a llm set for {usageType}!");
+        }
+        else
+        {
+            throw new InvalidOperationException("No LLMDefinition could be deduced!");
+        }
 
         ILLM? lLM = effectiveDefinition.Type switch
         {

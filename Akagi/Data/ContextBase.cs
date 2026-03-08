@@ -8,12 +8,11 @@ internal abstract class ContextBase : IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        foreach (Savable savable in ToTrack.OfType<Savable>())
+        foreach (Savable savable in ToTrack
+            .OfType<Savable>()
+            .Where(x => x.Dirty))
         {
-            if (savable.Dirty)
-            {
-                await DatabaseFactory.TrySave(savable);
-            }
+            await DatabaseFactory.TrySave(savable);
         }
     }
 }

@@ -1,6 +1,5 @@
 ﻿
 using Akagi.LLMs;
-using Microsoft.Extensions.Options;
 
 namespace Akagi.Communication.Commands.Lists;
 
@@ -10,20 +9,20 @@ internal class ListLLMDefinitions : ListCommand
 
     public override string Description => "Lists all available LLM definitions.";
 
-    private readonly LLMDefinitions _llmDefinitions;
+    private readonly ILLMDefinitionDatabase _llmDefinitionDatabase;
 
-    public ListLLMDefinitions(IOptions<LLMDefinitions> llmDefinitions)
+    public ListLLMDefinitions(ILLMDefinitionDatabase llmDefinitionDatabase)
     {
-        _llmDefinitions = llmDefinitions.Value;
+        _llmDefinitionDatabase = llmDefinitionDatabase;
     }
 
-    public override Task ExecuteAsync(Context context, string[] args)
+    public override async Task ExecuteAsync(Context context, string[] args)
     {
-        LLMDefinition[] definitions = _llmDefinitions.Definitions;
+        List<LLMDefinition> definitions = await _llmDefinitionDatabase.GetDocumentsAsync();
 
-        string[] ids = [.. definitions.Select((_, index) => index.ToString())];
+        string[] ids = [.. definitions.Select((def) => def.Id!)];
         string[] names = [.. definitions.Select(def => $"{def.Type}:{def.Model}")];
         string choices = GetIdList(ids, names);
-        return Communicator.SendMessage(context.User, $"Available LLM Definitions:\n{choices}");
+        await Communicator.SendMessage(context.User, $"Available LLM Definitions:\n{choices}");
     }
 }

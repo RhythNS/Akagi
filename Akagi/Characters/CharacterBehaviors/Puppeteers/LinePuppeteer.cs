@@ -38,7 +38,7 @@ internal class LinePuppeteer : Puppeteer
     {
         foreach (Definition definition in Definitions)
         {
-            ILLM llm = LLMFactory.Create(User, definition.SystemProcessor!.SpecificLLM, definition.SystemProcessor!.Usage);
+            ILLM llm = await LLMFactory.Create(User, definition.SystemProcessor!.SpecificLLM, definition.SystemProcessor!.Usage);
             await DefaultNextSteps(llm, definition.SystemProcessor!);
         }
     }

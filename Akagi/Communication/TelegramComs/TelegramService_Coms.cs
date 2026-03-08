@@ -146,12 +146,14 @@ internal partial class TelegramService : Communicator, IHostedService
         {
             if (message.From != null && message.Text != null && message.Text.StartsWith("/hello", StringComparison.InvariantCultureIgnoreCase))
             {
+                string llmDefinitionsId = await _lLMDefinitionDatabase.GetDefaultIdAsync() ?? throw new InvalidOperationException("No default llm found");
+
                 user = new()
                 {
                     Username = message.From.Username!,
                     Name = message.From.FirstName!,
                     LastUsedCommunicator = Name,
-                    LLMPreferences = new ReadOnlyDictionary<string, LLMDefinition>(_llmDefinitions.ToDictionary()),
+                    LLMPreferences = new ReadOnlyDictionary<string, string>(LLMDefinition.CreateDummyDictionary(llmDefinitionsId)),
                     TelegramUser = new TelegramUser
                     {
                         Id = message.From.Id,

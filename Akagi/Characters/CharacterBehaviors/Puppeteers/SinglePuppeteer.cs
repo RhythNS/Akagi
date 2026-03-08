@@ -31,7 +31,7 @@ internal class SinglePuppeteer : Puppeteer
             throw new InvalidOperationException($"System processor with ID {SystemProcessorId} not found.");
         }
 
-        ILLM llm = LLMFactory.Create(User, _systemProcessor.SpecificLLM, _systemProcessor.Usage);
+        ILLM llm = await LLMFactory.Create(User, _systemProcessor.SpecificLLM, _systemProcessor.Usage);
         await DefaultNextSteps(llm, _systemProcessor);
     }
 }

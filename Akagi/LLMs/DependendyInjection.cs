@@ -12,8 +12,7 @@ static class DependendyInjection
             .BindConfiguration("Gemini");
         services.AddOptions<OpenRouterClient.Options>()
             .BindConfiguration("OpenRouter");
-        services.AddOptions<LLMDefinitions>()
-            .BindConfiguration("LLMDefinitions");
+        services.AddSingleton<ILLMDefinitionDatabase, LLMDefinitionDatabase>();
         services.AddSingleton<IGeminiClient, GeminiClient>();
         services.AddSingleton<IOpenRouterClient, OpenRouterClient>();
         services.AddScoped<ILLMFactory, LLMFactory>();

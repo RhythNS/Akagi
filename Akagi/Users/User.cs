@@ -1,6 +1,5 @@
 ﻿using Akagi.Bridge.Attributes;
 using Akagi.Data;
-using Akagi.LLMs;
 using System.Collections.ObjectModel;
 using System.Text.Json;
 
@@ -16,7 +15,7 @@ internal class User : Savable
     private GoogleUser? _googleUser;
     private bool _valid = false;
     private bool _admin = false;
-    private ReadOnlyDictionary<string, LLMDefinition> _llmPreferences = new(new Dictionary<string, LLMDefinition>());
+    private ReadOnlyDictionary<string, string> _llmPreferences = new(new Dictionary<string, string>());
     private Dictionary<string, string> _configurations = [];
 
     public override bool Dirty
@@ -72,7 +71,7 @@ internal class User : Savable
         get => _admin;
         set => SetProperty(ref _admin, value);
     }
-    public ReadOnlyDictionary<string, LLMDefinition> LLMPreferences
+    public ReadOnlyDictionary<string, string> LLMPreferences
     {
         get => _llmPreferences;
         set => SetProperty(ref _llmPreferences, value);
