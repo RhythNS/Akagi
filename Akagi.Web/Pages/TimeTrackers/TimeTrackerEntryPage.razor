@@ -41,76 +41,95 @@
 						<label class="form-label">
 							@item.Name
 						</label>
-						@{
-							switch (item.Type)
-							{
-								case FieldType.Boolean:
-									bool boolThing = Convert.ToBoolean(_entry.Values[item.Name]);
-									<InputCheckbox class="form-check-input"
-												   Value="Convert.ToBoolean(_entry.Values[item.Name])"
-												   ValueChanged="@(x => _entry.Values[item.Name] = x)"
-												   ValueExpression="() => boolThing" />
-									break;
-								case FieldType.Int:
-									int intThing = Convert.ToInt32(_entry.Values[item.Name]);
-									<InputNumber class="form-control"
-												 TValue="int"
-												 Value="Convert.ToInt32(_entry.Values[item.Name])"
-												 ValueChanged="@(x => _entry.Values[item.Name] = x)"
-												 ValueExpression="() => intThing" />
-									break;
-								case FieldType.Float:
-									float floatThing = Convert.ToSingle(_entry.Values[item.Name]);
-									<InputNumber class="form-control"
-												 TValue="float"
-												 Value="Convert.ToSingle(_entry.Values[item.Name])"
-												 ValueChanged="@(x => _entry.Values[item.Name] = x)"
-												 ValueExpression="() => floatThing" />
-									break;
-								case FieldType.Text:
-									string stringThing = Convert.ToString(_entry.Values[item.Name]) ?? "";
-									var listId = $"list-{item.Name.Replace(" ", "-")}";
-									<InputText class="form-control"
-											   list="@listId"
-											   Value=@(Convert.ToString(_entry.Values[item.Name]))
-											   ValueChanged="x => _entry.Values[item.Name] = x"
-											   ValueExpression="() => stringThing" />
-									<datalist id="@listId">
-										@if (_textFieldSuggestions.TryGetValue(item.Name, out var options))
-										{
-											foreach (var opt in options.Distinct(StringComparer.OrdinalIgnoreCase))
+						<div class="d-flex align-items-center gap-2">
+							@{
+								switch (item.Type)
+								{
+									case FieldType.Boolean:
+										bool boolThing = Convert.ToBoolean(_entry.Values[item.Name]);
+										<InputCheckbox class="form-check-input"
+													   Value="Convert.ToBoolean(_entry.Values[item.Name])"
+													   ValueChanged="@(x => _entry.Values[item.Name] = x)"
+													   ValueExpression="() => boolThing" />
+										break;
+									case FieldType.Int:
+										int intThing = Convert.ToInt32(_entry.Values[item.Name]);
+										<InputNumber class="form-control"
+													 TValue="int"
+													 Value="Convert.ToInt32(_entry.Values[item.Name])"
+													 ValueChanged="@(x => _entry.Values[item.Name] = x)"
+													 ValueExpression="() => intThing" />
+										break;
+									case FieldType.Float:
+										float floatThing = Convert.ToSingle(_entry.Values[item.Name]);
+										<InputNumber class="form-control"
+													 TValue="float"
+													 Value="Convert.ToSingle(_entry.Values[item.Name])"
+													 ValueChanged="@(x => _entry.Values[item.Name] = x)"
+													 ValueExpression="() => floatThing" />
+										break;
+									case FieldType.Text:
+										string stringThing = Convert.ToString(_entry.Values[item.Name]) ?? "";
+										var listId = $"list-{item.Name.Replace(" ", "-")}";
+										<InputText class="form-control"
+												   list="@listId"
+												   Value=@(Convert.ToString(_entry.Values[item.Name]))
+												   ValueChanged="x => _entry.Values[item.Name] = x"
+												   ValueExpression="() => stringThing" />
+										<datalist id="@listId">
+											@if (_textFieldSuggestions.TryGetValue(item.Name, out var options))
 											{
-												<option value="@opt"></option>
+												foreach (var opt in options.Distinct(StringComparer.OrdinalIgnoreCase))
+												{
+													<option value="@opt"></option>
+												}
 											}
-										}
-									</datalist>
-									break;
-								case FieldType.DateTime:
-									DateTime dateTimeThing = Convert.ToDateTime(_entry.Values[item.Name]);
-									<DateTimepicker Label="@item.Name"
-													TValue="DateTime"
-													Value=@((DateTime)_entry.Values[item.Name])
-													ValueChanged="x => _entry.Values[item.Name] = x"
-													ValueExpression="() => dateTimeThing" />
-									break;
-								case FieldType.Date:
-									DateOnly dateOnlyThing = (DateOnly)_entry.Values[item.Name];
-									<Blazority.Datepicker Label="@item.Name"
-														  TValue="DateOnly"
-														  Value=@((DateOnly)_entry.Values[item.Name])
-														  ValueChanged="x => _entry.Values[item.Name] = x"
-														  ValueExpression="() => dateOnlyThing" />
-									break;
-								case FieldType.Time:
-									TimeOnly timeOnlyThing = (TimeOnly)_entry.Values[item.Name];
-									<Timepicker Label="@item.Name"
-												TValue="TimeOnly"
+										</datalist>
+										break;
+									case FieldType.DateTime:
+										DateTime dateTimeThing = Convert.ToDateTime(_entry.Values[item.Name]);
+										<DateTimepicker TValue="DateTime"
+														Value=@((DateTime)_entry.Values[item.Name])
+														ValueChanged="x => _entry.Values[item.Name] = x"
+														ValueExpression="() => dateTimeThing" />
+										break;
+									case FieldType.Date:
+										DateOnly dateOnlyThing = (DateOnly)_entry.Values[item.Name];
+										<Blazority.Datepicker TValue="DateOnly"
+															  Value=@((DateOnly)_entry.Values[item.Name])
+															  ValueChanged="x => _entry.Values[item.Name] = x"
+															  ValueExpression="() => dateOnlyThing" />
+										break;
+									case FieldType.Time:
+										TimeOnly timeOnlyThing = (TimeOnly)_entry.Values[item.Name];
+										<Timepicker TValue="TimeOnly"
 												Value=@((TimeOnly)_entry.Values[item.Name])
 												ValueChanged="x => _entry.Values[item.Name] = x"
-												ValueExpression="() => timeOnlyThing" />
-									break;
+													ValueExpression="() => timeOnlyThing" />
+										<button type="button" class="btn btn-secondary btn-sm"
+												@onclick="() => _entry.Values[item.Name] = TimeOnly.FromDateTime(DateTime.Now)">
+											Now
+										</button>
+										<button type="button" class="btn btn-secondary btn-sm"
+												@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(-5)">
+											-5m
+										</button>
+										<button type="button" class="btn btn-secondary btn-sm"
+												@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(-1)">
+											-1m
+										</button>
+										<button type="button" class="btn btn-secondary btn-sm"
+												@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(1)">
+											+1m
+										</button>
+										<button type="button" class="btn btn-secondary btn-sm"
+												@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(5)">
+											+5m
+										</button>
+										break;
+								}
 							}
-						}
+						</div>
 					</div>
 				}
 
