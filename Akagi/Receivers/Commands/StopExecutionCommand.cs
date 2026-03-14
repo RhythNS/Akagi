@@ -10,11 +10,11 @@ internal class StopExecutionCommand : Command
 
     public override bool ContinueAfterExecution => false;
 
-    public override Task Execute(Context context)
+    public override Task<Command[]> Execute(Context context)
     {
         string output = "Stopped execution!";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
-        return Task.CompletedTask;
+        return Task.FromResult(Array.Empty<Command>());
     }
 }

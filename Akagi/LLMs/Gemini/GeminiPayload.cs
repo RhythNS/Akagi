@@ -11,7 +11,7 @@ internal class GeminiPayload
     [JsonPropertyName("tool_config")]
     public ToolConfig ToolConf { get; set; } = new();
     [JsonPropertyName("tools")]
-    public Tool[] Tools { get; set; } = [];
+    public Tool[]? Tools { get; set; } = [];
 
     internal class SystemInstruction
     {

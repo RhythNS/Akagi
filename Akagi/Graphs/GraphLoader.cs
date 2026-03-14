@@ -72,7 +72,7 @@ internal class GraphLoader
         }
         else
         {
-            GraphInstance? toLoad = await _graphInstanceDb.GetGraph(_graphData.GraphId, userId, name);
+            GraphInstance? toLoad = await _graphInstanceDb.GetGraph(_graphData.GraphId, name, userId);
             if (toLoad == null)
             {
                 throw new InvalidOperationException("Graph instance does not exist for the user with the specified name.");

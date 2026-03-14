@@ -28,7 +28,7 @@ internal class RemoveMemoryCommand : Command
 
     public override bool ContinueAfterExecution => true;
 
-    public override Task Execute(Context context)
+    public override Task<Command[]> Execute(Context context)
     {
         if (Arguments.Length < 2 ||
             string.IsNullOrWhiteSpace(Arguments[0].Value) ||
@@ -62,6 +62,6 @@ internal class RemoveMemoryCommand : Command
         string output = $"Removed {(isLongTerm.Value ? "long-term" : "short-term")} memory with ID {index}. Thought: \"{deletedThought.Fact}\".";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
-        return Task.CompletedTask;
+        return Task.FromResult(Array.Empty<Command>());
     }
 }

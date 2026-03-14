@@ -8,6 +8,12 @@ using MongoDB.Driver;
 
 namespace Akagi.Characters.CharacterBehaviors.SystemProcessors;
 
+internal interface ISystemProcessorDatabase : IDatabase<SystemProcessor>
+{
+    public Task<SystemProcessor[]> GetSystemProcessor(string[] ids);
+    public Task<SystemProcessor> GetSystemProcessor(string id);
+}
+
 internal class SystemProcessorDatabase : Database<SystemProcessor>, ISystemProcessorDatabase
 {
     public override string CollectionName => "system_processors";

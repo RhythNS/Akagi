@@ -7,6 +7,7 @@ using Akagi.LLMs;
 using Akagi.Logging.Extensions;
 using Akagi.Receivers;
 using Akagi.Scheduling;
+using Akagi.TTSs;
 using Akagi.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -27,6 +28,7 @@ internal class Program
         builder.Services.AddCharacter();
         builder.Services.AddUsers();
         builder.Services.AddLLMs();
+        builder.Services.AddTTSs();
         builder.Services.AddCommunications(builder.Configuration);
         builder.Services.AddScheduling();
 

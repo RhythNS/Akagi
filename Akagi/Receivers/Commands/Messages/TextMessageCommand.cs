@@ -1,6 +1,4 @@
-﻿using Akagi.Characters.Conversations;
-
-namespace Akagi.Receivers.Commands.Messages;
+﻿namespace Akagi.Receivers.Commands.Messages;
 
 internal class TextMessageCommand : MessageCommand
 {
@@ -19,23 +17,16 @@ internal class TextMessageCommand : MessageCommand
         }
     ];
 
-    private Message? _message;
-
-    public override Task Execute(Context context)
+    public override Task<Command[]> Execute(Context context)
     {
         string text = Arguments[0].Value;
         _message = context.Conversation.AddMessage(text, DateTime.UtcNow, From);
-        return Task.CompletedTask;
+        return Task.FromResult(Array.Empty<Command>());
     }
 
     public void SetMessage(string message)
     {
         Arguments = GetDefaultArguments();
         Arguments[0].Value = message;
-    }
-
-    public override Message GetMessage()
-    {
-        return _message ?? throw new InvalidOperationException("Message not set.");
     }
 }

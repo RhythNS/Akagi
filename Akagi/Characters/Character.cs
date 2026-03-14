@@ -1,5 +1,6 @@
 ﻿using Akagi.Bridge.Attributes;
 using Akagi.Characters.Cards;
+using Akagi.Characters.CharacterBehaviors.Interceptors;
 using Akagi.Characters.CharacterBehaviors.Puppeteers;
 using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.Conversations;
@@ -20,9 +21,13 @@ internal class Character : Savable
     private Card? _card;
     private string _puppeteerId = string.Empty;
     private string[] _reflectorIds = [];
+    private string[] _interceptorIds = [];
     private string _userId = string.Empty;
     private string[] _triggerPointIds = [];
     private bool _allowAutomaticProcessing = true;
+    private bool _allowVoice = false;
+    private string _voiceId = string.Empty;
+    private string _voiceModelId = string.Empty;
     private string _name = string.Empty;
 
     public override bool Dirty
@@ -78,6 +83,13 @@ internal class Character : Savable
         get => _triggerPointIds;
         set => SetProperty(ref _triggerPointIds, value);
     }
+    [NodeReference(typeof(Interceptor))]
+    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    public string[] InterceptorIds
+    {
+        get => _interceptorIds;
+        set => SetProperty(ref _interceptorIds, value);
+    }
     [NodeReference(typeof(User))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     [UserId]
@@ -90,6 +102,21 @@ internal class Character : Savable
     {
         get => _allowAutomaticProcessing;
         set => SetProperty(ref _allowAutomaticProcessing, value);
+    }
+    public bool AllowVoice
+    {
+        get => _allowVoice;
+        set => SetProperty(ref _allowVoice, value);
+    }
+    public string VoiceId
+    {
+        get => _voiceId;
+        set => SetProperty(ref _voiceId, value);
+    }
+    public string VoiceModelId
+    {
+        get => _voiceModelId;
+        set => SetProperty(ref _voiceModelId, value);
     }
     public string Name
     {

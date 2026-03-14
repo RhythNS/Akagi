@@ -99,17 +99,31 @@ internal abstract class CharacterBehavior : Savable
                 return;
             }
 
-            foreach (Command command in commands)
-            {
-                await command.Execute(Context);
-
-                if (command is MessageCommand response)
-                {
-                    await Communicator.SendMessage(User, Character, response.GetMessage());
-                }
-
-                shouldContinue &= command.ContinueAfterExecution;
-            }
+            shouldContinue = await ExecuteCommandsAsync(commands);
         } while (shouldContinue);
+    }
+
+    private async Task<bool> ExecuteCommandsAsync(Command[] commands)
+    {
+        bool shouldContinue = true;
+
+        foreach (Command command in commands)
+        {
+            Command[] next = await command.Execute(Context);
+
+            if (command is MessageCommand response)
+            {
+                await Communicator.SendMessage(User, Character, response.GetMessage());
+            }
+
+            shouldContinue &= command.ContinueAfterExecution;
+
+            if (next.Length > 0)
+            {
+                shouldContinue &= await ExecuteCommandsAsync(next);
+            }
+        }
+
+        return shouldContinue;
     }
 }

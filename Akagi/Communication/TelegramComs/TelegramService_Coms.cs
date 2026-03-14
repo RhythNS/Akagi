@@ -1,5 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.VoiceClips;
 using Akagi.LLMs;
 using Akagi.Users;
 using Microsoft.Extensions.Hosting;
@@ -23,6 +24,19 @@ internal partial class TelegramService : Communicator, IHostedService
             case TextMessage textMessage:
                 await SendMessage(user, character, textMessage.Text);
                 break;
+            case VoiceMessage voiceMessage:
+                {
+
+                    VoiceClip? voiceClip = await _voiceClipsDatabase.GetDocumentByIdAsync(voiceMessage.VoiceId);
+                    if (voiceClip == null)
+                    {
+                        _logger.LogWarning("Voice clip with ID {VoiceId} not found", voiceMessage.VoiceId);
+                        return;
+                    }
+                    using Stream stream = await _voiceClipsDatabase.LoadFileAsync(voiceClip);
+                    await SendAudio(user, stream, voiceClip.Id!);
+                    break;
+                }
 
             default:
                 _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
@@ -110,6 +124,29 @@ internal partial class TelegramService : Communicator, IHostedService
                 _logger.LogWarning("Unknown message type: {MessageType}", message.GetType());
                 return Task.CompletedTask;
         }
+    }
+
+    public override async Task SendAudio(Users.User user, Character character, Stream stream, string fileName)
+    {
+        await SendInfoIfCharacterSwitched(user, character);
+
+        await SendAudio(user, stream, fileName);
+    }
+
+    public override async Task SendAudio(Users.User user, Stream stream, string fileName)
+    {
+        if (user.TelegramUser == null)
+        {
+            _logger.LogWarning("User {UserId} does not have a Telegram user", user.Id);
+            return;
+        }
+        if (_client == null)
+        {
+            _logger.LogWarning("Telegram client is not initialized");
+            return;
+        }
+
+        await _client.SendAudio(user.TelegramUser.Id, stream, fileName);
     }
 
     private async Task HandleUpdate(ITelegramBotClient botClient, Update update, CancellationToken cancellationToken)
@@ -207,8 +244,6 @@ internal partial class TelegramService : Communicator, IHostedService
             return;
         }
 
-        _logger.LogInformation("Received text '{Text}' in chat {ChatId}", message.Text, message.Chat.Id);
-
         Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
         if (character == null)
         {
@@ -218,10 +253,12 @@ internal partial class TelegramService : Communicator, IHostedService
                 await _userDatabase.SaveDocumentAsync(user);
             }
 
+            _logger.LogInformation("Received text '{Text}' in chat {ChatId} where user had no character selected.", message.Text, message.Chat.Id);
             await _client!.SendMessage(message.Chat.Id, "You do not have a current character. Please select one first!", cancellationToken: cancellationToken);
             return;
         }
 
+        _logger.LogInformation("Received text '{Text}' in chat {ChatId}", message.Text, message.Chat.Id);
         try
         {
             await RecieveMessage(user, character, message.Text);
@@ -230,6 +267,10 @@ internal partial class TelegramService : Communicator, IHostedService
         {
             _logger.LogError(ex, "Failed to process message '{Text}' from user {UserId}", message.Text, user.Id);
             await _client!.SendMessage(message.Chat.Id, "Failed to process message", cancellationToken: cancellationToken);
+        }
+        finally
+        {
+            _logger.LogInformation("Finished chat {ChatId} message", message.Chat.Id);
         }
     }
 }

@@ -29,7 +29,7 @@ internal class LaunchNukesCommand : Command
 
     public override bool ContinueAfterExecution => false;
 
-    public override Task Execute(Context context)
+    public override Task<Command[]> Execute(Context context)
     {
         if (Arguments.Length < 2 ||
             string.IsNullOrWhiteSpace(Arguments[0].Value) ||
@@ -51,6 +51,6 @@ internal class LaunchNukesCommand : Command
         string output = $"Nuclear missiles have been launched at {target} with {warheadCount} warheads.";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
-        return Task.CompletedTask;
+        return Task.FromResult(Array.Empty<Command>());
     }
 }

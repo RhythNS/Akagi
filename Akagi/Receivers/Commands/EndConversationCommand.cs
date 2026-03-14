@@ -20,7 +20,7 @@ internal class EndConversationCommand : Command
 
     public override bool ContinueAfterExecution => true;
 
-    public override Task Execute(Context context)
+    public override Task<Command[]> Execute(Context context)
     {
         if (Arguments.Length < 1)
         {
@@ -35,7 +35,7 @@ internal class EndConversationCommand : Command
 
         if (index.Value < 1)
         {
-            return Task.CompletedTask;
+            return Task.FromResult(Array.Empty<Command>());
         }
         if (index.Value > context.Conversation.Messages.Count)
         {
@@ -47,6 +47,6 @@ internal class EndConversationCommand : Command
         string output = $"Conversation ended at message index {index.Value}.";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
-        return Task.CompletedTask;
+        return Task.FromResult(Array.Empty<Command>());
     }
 }

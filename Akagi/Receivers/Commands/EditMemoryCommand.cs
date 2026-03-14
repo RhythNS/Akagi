@@ -35,7 +35,7 @@ internal class EditMemoryCommand : Command
 
     public override bool ContinueAfterExecution => true;
 
-    public override Task Execute(Context context)
+    public override Task<Command[]> Execute(Context context)
     {
         if (Arguments.Length < 3 ||
             string.IsNullOrWhiteSpace(Arguments[0].Value) ||
@@ -74,6 +74,6 @@ internal class EditMemoryCommand : Command
         string output = $"Edited {(isLongTerm.Value ? "long-term" : "short-term")} memory at index {index}. Previous thought: \"{previousThought.Fact}\". New thought: \"{newThought.Fact}\".";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
-        return Task.CompletedTask;
+        return Task.FromResult(Array.Empty<Command>());
     }
 }

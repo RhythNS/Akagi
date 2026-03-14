@@ -36,7 +36,7 @@ internal class SummarizeConversationCommand : Command
 
     public override bool ContinueAfterExecution => true;
 
-    public override Task Execute(Context context)
+    public override Task<Command[]> Execute(Context context)
     {
         if (Arguments.Length < 3)
         {
@@ -82,6 +82,6 @@ internal class SummarizeConversationCommand : Command
                         $"Long Summary: {longSummary}";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
-        return Task.CompletedTask;
+        return Task.FromResult(Array.Empty<Command>());
     }
 }

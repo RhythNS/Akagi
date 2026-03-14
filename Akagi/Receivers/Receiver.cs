@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.CharacterBehaviors.Interceptors;
 using Akagi.Characters.CharacterBehaviors.Puppeteers;
 using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
@@ -32,6 +33,7 @@ internal class Receiver : IReceiver, ICleanable
 
     private readonly IPuppeteerDatabase _puppeteerDatabase;
     private readonly IReflectorDatabase _reflectorDatabase;
+    private readonly IInterceptorDatabase _interceptorDatabase;
     private readonly ISystemProcessorDatabase _systemProcessorDatabase;
     private readonly ILLMFactory _llmFactory;
     private readonly IDatabaseFactory _databaseFactory;
@@ -39,6 +41,7 @@ internal class Receiver : IReceiver, ICleanable
 
     public Receiver(IPuppeteerDatabase puppeteerDatabase,
                     IReflectorDatabase reflectorDatabase,
+                    IInterceptorDatabase interceptorDatabase,
                     ISystemProcessorDatabase systemProcessorDatabase,
                     ILLMFactory llmFactory,
                     IDatabaseFactory databaseFactory,
@@ -46,6 +49,7 @@ internal class Receiver : IReceiver, ICleanable
     {
         _puppeteerDatabase = puppeteerDatabase;
         _reflectorDatabase = reflectorDatabase;
+        _interceptorDatabase = interceptorDatabase;
         _systemProcessorDatabase = systemProcessorDatabase;
         _llmFactory = llmFactory;
         _databaseFactory = databaseFactory;
@@ -208,8 +212,25 @@ internal class Receiver : IReceiver, ICleanable
 
     private async Task ProcessCharacterMessageAsync(Context context)
     {
+        if (context.Character.InterceptorIds.Length > 0)
+        {
+            ILogger interceptorLogger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Interceptor>>();
+            List<Interceptor> interceptors = [];
+
+            foreach (string id in context.Character.InterceptorIds)
+            {
+                Interceptor interceptor = await _interceptorDatabase.GetDocumentByIdAsync(id)
+                    ?? throw new Exception($"Interceptor with ID {id} not found for character {context.Character.Id}");
+
+                await interceptor.Init(interceptorLogger, context, _systemProcessorDatabase);
+                interceptors.Add(interceptor);
+            }
+
+            context.Communicator = new InterceptingCommunicator(context.Communicator, [.. interceptors]);
+        }
+
         Puppeteer puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(context.Character.PuppeteerId)
-                    ?? throw new Exception($"Puppeteer with ID {context.Character.PuppeteerId} not found for character {context.Character.Id}");
+            ?? throw new Exception($"Puppeteer with ID {context.Character.PuppeteerId} not found for character {context.Character.Id}");
 
         ILogger logger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Puppeteer>>();
 
@@ -234,6 +255,11 @@ internal class Receiver : IReceiver, ICleanable
 
     private async Task TriggerForCharacter(TriggerType type, Character character, User user)
     {
+        if (character.AllowAutomaticProcessing == false)
+        {
+            return;
+        }
+
         foreach (string triggerId in character.TriggerPointIds)
         {
             TriggerPoint triggerPoint = await _databaseFactory.GetDatabase<ITriggerPointDatabase>().GetDocumentByIdAsync(triggerId)

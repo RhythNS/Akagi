@@ -6,5 +6,10 @@ internal abstract class MessageCommand : Command
 {
     public override bool ContinueAfterExecution => false;
 
-    public abstract Message GetMessage();
+    protected Message? _message;
+
+    public Message GetMessage()
+    {
+        return _message ?? throw new InvalidOperationException("Message not set.");
+    }
 }

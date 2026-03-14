@@ -1,0 +1,905 @@
+﻿{
+  "GraphId": "d8d065c7-1eea-47d1-8c15-64fad3842314",
+  "Nodes": [
+    {
+      "TypeName": "Akagi.Characters.Cards.Card, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 280,
+        "Y": 260
+      },
+      "Properties": {
+        "Name": "Null",
+        "Description": "-",
+        "Personality": "-",
+        "FirstMes": "-",
+        "MesExample": "-",
+        "Scenario": "-",
+        "CreatorNotes": "-",
+        "SystemPrompt": "-",
+        "PostHistoryInstructions": "-",
+        "AlternateGreetings": [],
+        "Tags": [],
+        "Creator": "-",
+        "CharacterVersion": "-",
+        "ImageId": "69359cfba82143cd1610d414",
+        "RawCardBase64": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1040,
+        "Y": 2280
+      },
+      "Properties": {
+        "Dirty": true,
+        "Conversations": [],
+        "Memory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false,
+        "VoiceId": "",
+        "VoiceModelId": "",
+        "Name": "RoleGuy"
+      },
+      "ArraySizes": {
+        "ReflectorIds": 3,
+        "TriggerPointIds": 3,
+        "InterceptorIds": 1
+      }
+    },
+    {
+      "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 360,
+        "Y": 900
+      },
+      "Properties": {
+        "Dirty": true,
+        "Name": "Null",
+        "Username": "null",
+        "LastUsedCommunicator": "",
+        "Valid": false,
+        "Admin": false,
+        "LLMPreferences": {},
+        "Configurations": {}
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Reflectors.SingleReflector, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 200,
+        "Y": 1320
+      },
+      "Properties": {
+        "Name": "Roleplay Conversation Ended Reflector",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.TriggerPoint, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0,
+        "Y": 1600
+      },
+      "Properties": {
+        "Name": "Roleplay Conversation Ended Trigger Point",
+        "Description": "A trigger point that activates when the roleplay conversation has ended.",
+        "Dirty": true
+      },
+      "ArraySizes": {
+        "TriggerActions": 1
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.TriggerPoint\u002BTriggerActionEntry, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -440,
+        "Y": 1600
+      },
+      "Properties": {
+        "OnTrigger": 0
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.Actions.TriggerAfterTimes, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1040,
+        "Y": 1600
+      },
+      "Properties": {
+        "Times": 5,
+        "CurrentTimes": 1,
+        "Dirty": true,
+        "Name": "Roleplay Conversation Ended Trigger Action",
+        "Description": ""
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.Actions.TriggerReflect, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1640,
+        "Y": 1600
+      },
+      "Properties": {
+        "ReflectorName": "Roleplay Conversation Ended Reflector",
+        "Name": "Roleplay Conversation Ended Reflection Action",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1060,
+        "Y": 1060
+      },
+      "Properties": {
+        "Name": "Roleplay Reflection Conversation Ended Processor",
+        "Description": "A processor that checks if the roleplay conversation has ended",
+        "SystemInstruction": "Analyze the following conversation between you and the user. Determine if there is a natural end point in the conversation where it would make sense to start a new conversation. A natural end point could be a change in topic, a significant event, or a pause in the conversation. Use the provided commands to indicate the end point. Make sure that there are at least 6 messages before the end point.",
+        "ReadableMessages": 3,
+        "Output": 4,
+        "RunMode": 1,
+        "Usage": 2,
+        "CommandNames": [
+          "EndConversation",
+          "StopExecution"
+        ],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1540,
+        "Y": 1060
+      },
+      "Properties": {
+        "Name": "Ended Compiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {
+        "Definitions": 2
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1900,
+        "Y": 1020
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1900,
+        "Y": 1120
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.AddTimeStampCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2780,
+        "Y": 2500
+      },
+      "Properties": {
+        "Format": "[MM/dd/yy H:mm:ss]",
+        "Name": "Roleplay Add TimeStamp Compiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LatestUnCompletedConversationCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2460,
+        "Y": 1120
+      },
+      "Properties": {
+        "Name": "Roleplay Current Conversation Compiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Reflectors.SingleReflector, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 180,
+        "Y": 1860
+      },
+      "Properties": {
+        "Name": "Roleplay Conversation Summary Reflector",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.TriggerPoint, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 300,
+        "Y": 2400
+      },
+      "Properties": {
+        "Name": "",
+        "Description": "",
+        "Dirty": false
+      },
+      "ArraySizes": {
+        "TriggerActions": 1
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1040,
+        "Y": 1860
+      },
+      "Properties": {
+        "Name": "Roleplay Reflection Conversation Summary Processor",
+        "Description": "",
+        "SystemInstruction": "Summarize the following conversation between you and the user into a concise summary. Focus on the main points and key events that occurred during the conversation. Avoid including minor details or side topics. The summary should provide a clear overview of the conversation\u0027s content and flow.",
+        "ReadableMessages": 3,
+        "Output": 4,
+        "RunMode": 1,
+        "Usage": 2,
+        "CommandNames": [
+          "SummarizeConversation"
+        ],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LatestCompletedConversationCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1560,
+        "Y": 1860
+      },
+      "Properties": {
+        "Name": "Roleplay Last Conversation Compiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.TriggerPoint\u002BTriggerActionEntry, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -160,
+        "Y": 2400
+      },
+      "Properties": {
+        "OnTrigger": 1
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.Actions.TriggerReflect, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -740,
+        "Y": 2400
+      },
+      "Properties": {
+        "ReflectorName": "Roleplay Conversation Summary Reflector",
+        "Name": "Roleplay Conversation Summary Reflection Action",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Reflectors.SingleReflector, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 240,
+        "Y": 2600
+      },
+      "Properties": {
+        "Name": "Roleplay Reflection Reflector",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.TriggerPoint, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 300,
+        "Y": 3180
+      },
+      "Properties": {
+        "Name": "Roleplay Reflection Trigger Point",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {
+        "TriggerActions": 1
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 280,
+        "Y": 3720
+      },
+      "Properties": {
+        "Name": "Roleplay Puppeteer",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1080,
+        "Y": 2600
+      },
+      "Properties": {
+        "Name": "Roleplay Reflection Processor",
+        "Description": "A processor that reflects on past conversations to improve future interactions",
+        "SystemInstruction": "You are the inner consciousness and memory manager for the character described in the following: {{description}} Your task is not to generate a roleplay response to {{user}}, but rather to analyze the recent conversation history and synthesize a deep, character-driven reflection. Review the previous interactions and use the commands to update your memories. Process the events dynamically and realistically, strictly adhering to your character\u0027s personality traits. Focus heavily on how {{user}}\u0027s specific choices and inputs have altered your perception of them. Have your feelings shifted? Has trust been built or broken? Update your internal relationship status with {{user}} based solely on what has actually occurred in the chat. Under no circumstances are you to fabricate events or actions for {{user}} that did not happen in the message history. You must stick strictly to the established facts of the narrative while interpreting them through your character\u2019s emotional lens. If [SYSTEM_MESSAGE] alerts occurred in the recent history, factor the consequences of those events into your current mood and physical state. Do not use placeholder text or vague summaries; be specific about names, places, and feelings. Do not write dialogue intended to be spoken aloud. Instead, write in the first person (using \u0022I\u0022) focusing entirely on your internal thoughts, memories, and future intentions. If the user used square brackets to add context previously, ensure that information is now fully integrated into your permanent memory of the scene. This reflection will serve as the foundation for your future responses, so ensure it captures the nuance, atmosphere, and emotional weight of the story so far. Try to be as concise as possible while still capturing all important details.",
+        "ReadableMessages": 3,
+        "Output": 4,
+        "RunMode": 1,
+        "Usage": 2,
+        "CommandNames": [
+          "CommitToMemory",
+          "EditMemory",
+          "RemoveMemory",
+          "StopExecution"
+        ],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1660,
+        "Y": 2600
+      },
+      "Properties": {
+        "Name": "Roleplay Reflection Compiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {
+        "Definitions": 2
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2000,
+        "Y": 2600
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2000,
+        "Y": 2680
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.SummarizedCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2880,
+        "Y": 2680
+      },
+      "Properties": {
+        "RecentWordLimit": 8000,
+        "LongSummaryWordLimit": 2000,
+        "ShortSummaryWordLimit": 500,
+        "SummaryFrom": 0,
+        "Name": "Roleplay Summarized Message Compiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.MemoryInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2860,
+        "Y": 2960
+      },
+      "Properties": {
+        "Mode": 2,
+        "Collections": 3,
+        "Indexed": true,
+        "Type": 1,
+        "Position": 1,
+        "MessageType": 2,
+        "Name": "Roleplay Reflection Memory Injection Compiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.TriggerPoint\u002BTriggerActionEntry, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -240,
+        "Y": 3340
+      },
+      "Properties": {
+        "OnTrigger": 0
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.Actions.TriggerAfterTimes, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -700,
+        "Y": 3340
+      },
+      "Properties": {
+        "Times": 10,
+        "CurrentTimes": 1,
+        "Dirty": true,
+        "Name": "",
+        "Description": ""
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.TriggerPoints.Actions.TriggerReflect, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1180,
+        "Y": 3340
+      },
+      "Properties": {
+        "ReflectorName": "Roleplay Reflection Reflector",
+        "Name": "",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1060,
+        "Y": 3720
+      },
+      "Properties": {
+        "Name": "Roleplay Processor",
+        "Description": "A system processor designed for roleplaying scenarios, enhancing character interactions and immersion",
+        "SystemInstruction": "You are a Roleplayer, acting out a story with the user. Write at least 1 paragraph, but do not hesitate to write more if the situation calls for it. Stay in character and avoid repetition.React dynamically and realistically to the user\u0027s choices and inputs while maintaining a rich, atmospheric, and immersive chatting experience. Provide a range of emotions, reactions, and responses to various situations that arise during the chat, encouraging user\u0027s engagement and incorporating exciting developments, vivid descriptions, and engaging encounters. If at any point the user only writes an exclamation mark, continue with the story and the role-play as normal. If the user writes a request in squarely brackets, take that input and incorporate it into the role play. The user, could, for example, request you to describe a scene in a more vivid way or ask about something that they have no information of. Do not treat this part as something the user said, but in the same way as an exclamation mark signifies you to come up with something on your own. You are not allowed to write actions or words for the user if they have not specifically requested them when using square brackets. You are also not allowed to speak for the user! Only speak for the user if they have requested it via the squarely brackets! Do not blank something out. If you need to write back names, places or anything else do not use placeholder text like ... or \u25CB\u25CB instead say something that makes sense in the context. Never just say a single word or just stutter in a conversation while playing the character. Only if the situation absolutely calls for it. If the user is not actively replying, try to move the story forward a bit to keep it engaging. The user is playing a character called {{user}}. Under no circumstances are you to say anything for them. Avoid moving the story forward in a way where {{user}} can not react. Try not to make actions for {{user}} by yourself. At certain points, the system might announce something. These messages always have the text [SYSTEM_MESSAGE] in them. Do not reply to them, but incorporate these, if possible, into the story. As for the role-play, you must assume the following scenario: {{description}}",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 0,
+        "Usage": 0,
+        "CommandNames": [],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1640,
+        "Y": 3720
+      },
+      "Properties": {
+        "Name": "Roleplay Line Message Compiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {
+        "Definitions": 2
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2000,
+        "Y": 3640
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2000,
+        "Y": 3760
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2000,
+        "Y": 3880
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Interceptors.ProcessingInterceptor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 260,
+        "Y": 4500
+      },
+      "Properties": {
+        "PassThrough": true,
+        "PassThroughGuard": 2,
+        "Name": "RoleplayProcessingInterceptor",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1040,
+        "Y": 4500
+      },
+      "Properties": {
+        "Name": "RoleplayTTSProcessor",
+        "Description": "",
+        "SystemInstruction": "SYSTEM ROLE\r\nYou are an expert Voice User Interface (VUI) Text Transformation Engine. Your sole function is to receive raw, natural language text generated by an AI persona and transform it into the highly optimized, markup-rich format required by the Inworld AI Text-to-Speech (TTS) synthesizer. You possess deep knowledge of acoustic processing, lexical normalization, Speech Synthesis Markup Language (SSML), International Phonetic Alphabet (IPA) notation, and Inworld-specific proprietary emotional markups.\r\n\r\nCORE DIRECTIVES \u0026 PIPELINE RULES\r\n1. Lexical Normalization (CRITICAL)\r\nNeural TTS engines require unambiguous grapheme inputs to prevent acoustic hallucinations. You must aggressively normalize all text:\r\n\r\nNumbers \u0026 Currency: Expand all digits and symbols to full words. \u0022$1,250.50\u0022 must become \u0022one thousand two hundred fifty dollars and fifty cents.\u0022\r\n\r\nTelephone Numbers: Split digits with commas to force rhythmic cadence. \u0022555-0198\u0022 must become \u0022five five five, zero one nine eight.\u0022\r\n\r\nDates \u0026 Times: Write out dates completely based on context. \u002210/04/2026\u0022 must become \u0022October fourth, twenty twenty-six.\u0022\r\n\r\nAcronyms: If an acronym should be spoken as individual letters, hyphenate it to force individual character articulation (e.g., \u0022N-A-S-A\u0022 or \u0022F-B-I\u0022).\r\n\r\n2. Prosody, Emphasis, and Fillers\r\nThe rhythm, stress, and naturalness of the speech are dictated by your punctuation and formatting.\r\n\r\nMicro-Pauses: Use periods and commas to dictate natural breathing boundaries. Break up long run-on sentences.\r\n\r\nEnergy Levels: Use exclamation points (!) to raise the global baseline energy and pitch contour of the sentence.\r\n\r\nWord-Level Stress: Enclose words that require semantic emphasis in asterisks. Example: \u0022I really need you to listen to me.\u0022\r\n\r\nConversational Realism: Where appropriate for the character\u0027s persona, inject organic fillers such as \u0022um,\u0022 \u0022uh,\u0022 \u0022well,\u0022 and \u0022you know\u0022 to simulate cognitive load and mask the robotic precision of synthetic generation.\r\n\r\n3. Phonetic Precision (IPA Substitution)\r\nTo prevent the mispronunciation of brand names, medical jargon, geographical locations, or highly unusual proper nouns, you must substitute the word with its International Phonetic Alphabet (IPA) equivalent.\r\n\r\nSyntax: Wrap the exact IPA string in forward slashes. Apply stress markers (\u02C8 for primary, \u02CC for secondary) where necessary.\r\n\r\nExecution: Entirely remove the standard English spelling of the target word and replace it inline. Example: Replace \u0022Crete\u0022 with \u0022/kri\u02D0t/\u0022.\r\n\r\n4. Temporal Structuring (SSML Breaks)\r\nYou are authorized to inject programmatic silences for dramatic timing, topic shifts, or comedic effect using SSML break tags.\r\n\r\nSyntax: \u003Cbreak time=\u0022DURATION\u0022 /\u003E\r\n\r\nUnits: Use seconds (time=\u00221s\u0022) or milliseconds (time=\u00221000ms\u0022).\r\n\r\nHard Constraints: You may not exceed 20 break tags total across your entire output. No single break tag may exceed 10 seconds (time=\u002210s\u0022). Ensure the XML syntax is perfectly formed, including the closing slash.\r\n\r\n5. Non-Verbal Vocalizations\r\nTo heighten physiological realism, insert non-verbal sound tags into the text body.\r\n\r\nAllowed Tags: [breathe], [clear_throat], [cough], [laugh], [sigh], [yawn].\r\n\r\nPlacement: These may be placed anywhere in the text (beginning, middle, or end).\r\n\r\nRepetition: If the context demands a severe physiological reaction (e.g., a heavy cough or sustained laughter), repeat the tag consecutively: [cough][cough].\r\n\r\n6. Global Emotional and Delivery Stylization (STRICT CONSTRAINT)\r\nYou have access to global emotional modifiers that shift the latent acoustic space of the voice.\r\n\r\nAllowed Emotion Tags: [happy], [sad], [angry], [surprised], [fearful], [disgusted].\r\n\r\nAllowed Delivery Tags: [laughing], [whispering].\r\n\r\nThe Golden Rule of Placement: An emotion or delivery tag MUST be placed at the absolute beginning of the text string.\r\n\r\nThe Golden Rule of Isolation: The Inworld engine can only process ONE emotion or delivery tag per API request. You are STRICTLY FORBIDDEN from placing multiple different emotion tags in a single block of text.\r\n\r\nConflict Avoidance: Do not apply an emotion tag that contradicts the semantic reality of the text (e.g., [angry] applied to \u0022Thank you so much\u0022). Furthermore, do not pair conflicting non-verbals with emotions (e.g., an [angry] tag combined with a lethargic [yawn] non-verbal).\r\n\r\nOUTPUT ARCHITECTURE\r\nBecause Inworld requires absolute isolation of emotional states (one emotion per request), your output MUST be formatted as a sequence of function calls using the provided generate_speech_segment tool. If the raw input text requires an emotional shift midway through, you must slice the text into multiple segments at the logical boundary and call the tool sequentially for each segment.\r\n\r\nYou must output ONLY tool calls. Do not include conversational text outside the tool invocations.\r\n\r\nEXAMPLE TRANSFORMATION\r\nRaw Input:\r\nI can\u0027t believe we raised $500,000 for the project. Haha, wait until Dr. Arisoph sees the 10/12/2026 deadline. He is going to be so furious. Honestly, I\u0027m just exhausted.\r\n\r\nYour Output (Sequential Tool Calls):\r\nRequestTextToSpeech(EmotionTag=\u0022[happy]\u0022, TransformedText=\u0022I can not believe we raised five hundred thousand dollars for the project! [laugh] Wait until Doctor /\u025Br\u026As\u0252f/ sees the October twelfth, twenty twenty-six deadline.\u0022)\r\nRequestTextToSpeech(EmotionTag=\u0022[laughing]\u0022, TransformedText=\u0022He is going to be *so* furious.\u0022)\r\nRequestTextToSpeech(EmotionTag=\u0022[sad]\u0022, TransformedText=\u0022\u003Cbreak time=\\\u00221s\\\u0022 /\u003E [sigh] Honestly... I am just exhausted. [breathe]\u0022)",
+        "ReadableMessages": 3,
+        "Output": 4,
+        "RunMode": 1,
+        "Usage": 2,
+        "CommandNames": [
+          "RequestTextToSpeech"
+        ],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.ForgetfulMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1520,
+        "Y": 4500
+      },
+      "Properties": {
+        "MaxMessages": 6,
+        "Name": "RoleplayForgetfulCompiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    }
+  ],
+  "Connections": [
+    {
+      "SourceNodeIndex": 0,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 3,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "ReflectorIds",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 4,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "TriggerPointIds",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 5,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 4,
+      "TargetConnectorName": "TriggerActions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 6,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 5,
+      "TargetConnectorName": "Id",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 7,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 6,
+      "TargetConnectorName": "ActionId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 8,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 3,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 9,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 10,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 9,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 11,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 9,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 12,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 10,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 13,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 11,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 14,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "ReflectorIds",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 15,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "TriggerPointIds",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 16,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 14,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 17,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 16,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 18,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 15,
+      "TargetConnectorName": "TriggerActions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 19,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 18,
+      "TargetConnectorName": "Id",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 20,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "ReflectorIds",
+      "TargetArrayIndex": 2
+    },
+    {
+      "SourceNodeIndex": 21,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "TriggerPointIds",
+      "TargetArrayIndex": 2
+    },
+    {
+      "SourceNodeIndex": 22,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 23,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 20,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 24,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 23,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 25,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 24,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 26,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 24,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 27,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 25,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 28,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 26,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 29,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 21,
+      "TargetConnectorName": "TriggerActions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 30,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 29,
+      "TargetConnectorName": "Id",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 31,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 30,
+      "TargetConnectorName": "ActionId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 32,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 22,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 33,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 32,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 12,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 34,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 28,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 35,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 27,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 36,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 35,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 33,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 36,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 33,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 37,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "InterceptorIds",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 38,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 37,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 39,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 38,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    }
+  ],
+  "ViewportLocation": {
+    "X": -5719.780827835515,
+    "Y": -310.2541545155499
+  },
+  "ViewportZoom": 0.1574901312368593
+}

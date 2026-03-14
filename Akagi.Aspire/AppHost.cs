@@ -19,6 +19,11 @@ var openRouterApiKey = builder.AddParameter("OpenRouterApiKey", true);
 var openRouterBaseUrl = builder.AddParameter("OpenRouterBaseUrl", "https://openrouter.ai/api/v1/", false);
 var openRouterResponsePath = builder.AddParameter("OpenRouterResponsePath", "chat/completions", false);
 
+var inworldApiKey = builder.AddParameter("InworldApiKey", true);
+var inworldBaseUrl = builder.AddParameter("InworldBaseUrl", "https://api.inworld.ai", false);
+var inworldSampleRateHertz = builder.AddParameter("InworldSampleRateHertz", "48000", false);
+var inworldAudioEncoding = builder.AddParameter("AudioEncoding", "MP3", false);
+
 var tatoebaUrl = builder.AddParameter("TatoebaUrl", "https://api.tatoeba.org/unstable", false);
 
 var socketServerIp = builder.AddParameter("SocketServerIp", "127.0.0.1", false);
@@ -36,6 +41,10 @@ var akagi = builder.AddProject<Akagi>("Akagi")
                    .WithEnvironment("OpenRouter__apikey", openRouterApiKey)
                    .WithEnvironment("OpenRouter__baseUrl", openRouterBaseUrl)
                    .WithEnvironment("OpenRouter__ResponsePath", openRouterResponsePath)
+                   .WithEnvironment("InworldTTS__ApiKey", inworldApiKey)
+                   .WithEnvironment("InworldTTS__BaseUrl", inworldBaseUrl)
+                   .WithEnvironment("InworldTTS__SampleRateHertz", inworldSampleRateHertz)
+                   .WithEnvironment("InworldTTS__AudioEncoding", inworldAudioEncoding)
                    .WithEnvironment("Tatoeba__url", tatoebaUrl)
                    .WithEnvironment("Socket__Ip", socketServerIp)
                    .WithEnvironment("Socket__Port", socketServerPort)

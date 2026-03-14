@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text;
 using System.Text.Json;
+using static Akagi.LLMs.Gemini.GeminiPayload;
 
 namespace Akagi.LLMs.Gemini;
 
@@ -53,7 +54,7 @@ internal class GeminiClient : LLM, IGeminiClient
                     {
                         Parts =
                         [
-                            new GeminiPayload.TextPart
+                            new TextPart
                             {
                                 Text = message.From == Message.Type.System ? "SYSTEM MESSAGE: " + textMessage.Text : textMessage.Text
                             }
@@ -67,7 +68,7 @@ internal class GeminiClient : LLM, IGeminiClient
                     {
                         Parts =
                         [
-                            new GeminiPayload.FunctionCallPart
+                            new FunctionCallPart
                             {
                                 FunctionCall = new GeminiPayload.FunctionCall
                                 {
@@ -88,9 +89,9 @@ internal class GeminiClient : LLM, IGeminiClient
                     {
                         Parts =
                         [
-                            new GeminiPayload.FunctionResponsePart
+                            new FunctionResponsePart
                         {
-                            FunctionResponse = new GeminiPayload.FunctionResponse
+                            FunctionResponse = new FunctionResponse
                             {
                                 Id = new DateTimeOffset(commandMessage.Time).ToUnixTimeMilliseconds().ToString(),
                                 Name = commandMessage.Command.Name,
@@ -111,9 +112,9 @@ internal class GeminiClient : LLM, IGeminiClient
             }
         }
 
-        GeminiPayload.FunctionCallingMode functionCallingMode = systemProcessor.RunMode.ToFunctionCallingMode();
+        FunctionCallingMode functionCallingMode = systemProcessor.RunMode.ToFunctionCallingMode();
 
-        List<GeminiPayload.FunctionDeclaration> declarations = [];
+        List<FunctionDeclaration> declarations = [];
         foreach (Command command in systemProcessor.Commands)
         {
             Dictionary<string, object> properties = [];
@@ -163,7 +164,7 @@ internal class GeminiClient : LLM, IGeminiClient
                 ["required"] = required
             };
 
-            GeminiPayload.FunctionDeclaration declaration = new()
+            FunctionDeclaration declaration = new()
             {
                 Name = command.Name,
                 Description = command.Description,
@@ -176,50 +177,58 @@ internal class GeminiClient : LLM, IGeminiClient
 
         if (declarations.Count == 0)
         {
-            if (functionCallingMode == GeminiPayload.FunctionCallingMode.ANY)
+            if (functionCallingMode == FunctionCallingMode.ANY)
             {
                 throw new Exception("Function calling mode is ANY but there are no function declarations.");
             }
             payload = new()
             {
-                Instruction = new GeminiPayload.SystemInstruction
+                Instruction = new SystemInstruction
                 {
                     Parts =
                     [
-                        new GeminiPayload.TextPart
+                        new TextPart
                     {
                         Text = systemProcessor.CompileSystemPrompt(context.User, context.Character)
                     }
                     ]
                 },
-                Contents = [.. contents]
+                Contents = [.. contents],
+                ToolConf = new ()
+                {
+                     FunctionCalling = new ()
+                     {
+                         Mode = FunctionCallingMode.NONE
+                     }
+                },
+                Tools = null
             };
         }
         else
         {
             payload = new()
             {
-                Instruction = new GeminiPayload.SystemInstruction
+                Instruction = new SystemInstruction
                 {
                     Parts =
                     [
-                        new GeminiPayload.TextPart
+                        new TextPart
                         {
                             Text = systemProcessor.CompileSystemPrompt(context.User, context.Character)
                         }
                     ]
                 },
                 Contents = [.. contents],
-                ToolConf = new GeminiPayload.ToolConfig
+                ToolConf = new ToolConfig
                 {
-                    FunctionCalling = new GeminiPayload.FunctionCallingConfig
+                    FunctionCalling = new FunctionCallingConfig
                     {
                         Mode = functionCallingMode
                     }
                 },
                 Tools =
                 [
-                    new GeminiPayload.Tool
+                    new Tool
                     {
                         FunctionDeclarations = [.. declarations]
                     }

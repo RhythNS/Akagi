@@ -12,7 +12,7 @@ internal abstract class Command
 
     public abstract Argument[] GetDefaultArguments();
 
-    public abstract Task Execute(Context context);
+    public abstract Task<Command[]> Execute(Context context);
 
     protected CommandMessage CreateCommandMessage(string output)
     {

@@ -15,6 +15,9 @@ internal interface ICommunicator
     public Task SendMessage(User user, Character character, Message message);
     public Task SendMessage(User user, string message);
     public Task SendMessage(User user, Message message);
+
+    public Task SendAudio(User user, Character character, Stream stream, string fileName);
+    public Task SendAudio(User user, Stream stream, string fileName);
 }
 
 internal abstract class Communicator : ICommunicator
@@ -33,6 +36,9 @@ internal abstract class Communicator : ICommunicator
     public abstract Task SendMessage(User user, Character character, Message message);
     public abstract Task SendMessage(User user, string message);
     public abstract Task SendMessage(User user, Message message);
+
+    public abstract Task SendAudio(User user, Character character, Stream stream, string fileName);
+    public abstract Task SendAudio(User user, Stream stream, string fileName);
 
     protected Task RecieveMessage(User user, Character character, string message)
     {

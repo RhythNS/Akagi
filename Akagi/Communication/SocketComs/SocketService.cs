@@ -262,4 +262,16 @@ internal class SocketService : Communicator, IHostedService
     {
         return [.. _sessions.Where(session => session.User?.Id == user.Id)];
     }
+
+    public override Task SendAudio(User user, Character character, Stream stream, string fileName)
+    {
+        // TODO: Implement
+        throw new NotImplementedException();
+    }
+
+    public override Task SendAudio(User user, Stream stream, string fileName)
+    {
+        // TODO: Implement
+        throw new NotImplementedException();
+    }
 }
