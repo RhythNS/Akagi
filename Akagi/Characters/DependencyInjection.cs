@@ -4,6 +4,7 @@ using Akagi.Characters.CharacterBehaviors.MessageCompilers;
 using Akagi.Characters.CharacterBehaviors.Puppeteers;
 using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+using Akagi.Characters.Checkpoints;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
@@ -19,6 +20,7 @@ static class DependencyInjection
     public static void AddCharacter(this IServiceCollection services)
     {
         services.AddSingleton<ICharacterDatabase, CharacterDatabase>();
+        services.AddSingleton<ICheckpointDatabase, CheckpointDatabase>();
         services.AddSingleton<ICardDatabase, CardDatabase>();
         services.AddSingleton<IVoiceClipsDatabase, VoiceClipsDatabase>();
         services.AddSingleton<ISystemProcessorDatabase, SystemProcessorDatabase>();

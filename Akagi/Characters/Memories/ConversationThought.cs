@@ -1,6 +1,6 @@
 ﻿namespace Akagi.Characters.Memories;
 
-internal class ConversationThought : Thought
+internal class ConversationThought : CopyableThought<ConversationThought>
 {
     private int _conversationId = -1;
     private string _shortSummary = string.Empty;
@@ -22,6 +22,17 @@ internal class ConversationThought : Thought
     {
         get => _longSummary;
         set => SetProperty(ref _longSummary, value);
+    }
+
+    public override ConversationThought Copy()
+    {
+        return new ConversationThought()
+        {
+            Timestamp = Timestamp,
+            _conversationId = _conversationId,
+            _shortSummary = _shortSummary,
+            _longSummary = _longSummary,
+        };
     }
 
     public override string ToString()

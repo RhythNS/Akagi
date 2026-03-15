@@ -1,6 +1,6 @@
 ﻿namespace Akagi.Characters.Memories;
 
-internal class SingleFactThought : Thought
+internal class SingleFactThought : CopyableThought<SingleFactThought>
 {
     public string _fact = string.Empty;
 
@@ -8,6 +8,15 @@ internal class SingleFactThought : Thought
     {
         get => _fact;
         set => SetProperty(ref _fact, value);
+    }
+
+    public override SingleFactThought Copy()
+    {
+        return new SingleFactThought()
+        {
+            Timestamp = Timestamp,
+            _fact = _fact,
+        };
     }
 
     public override string ToString()

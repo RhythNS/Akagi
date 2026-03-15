@@ -41,6 +41,17 @@ internal class Memory : DirtyTrackable
         _conversations.ClearThoughts();
     }
 
+    public Memory Copy()
+    {
+        return new Memory
+        {
+            Goals = _goals.Copy(),
+            ShortTerm = _shortTerm.Copy(),
+            LongTerm = _longTerm.Copy(),
+            Conversations = _conversations.Copy()
+        };
+    }
+
     public override bool Dirty
     {
         get => base.Dirty || _goals.Dirty || _shortTerm.Dirty || _longTerm.Dirty || _conversations.Dirty;

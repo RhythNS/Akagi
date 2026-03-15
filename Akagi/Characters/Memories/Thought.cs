@@ -12,3 +12,8 @@ internal class Thought : DirtyTrackable
         set => SetProperty(ref _timestamp, value);
     }
 }
+
+internal abstract class CopyableThought<T> : Thought where T : Thought, new()
+{
+    public abstract T Copy();
+}

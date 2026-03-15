@@ -2,7 +2,7 @@
 
 namespace Akagi.Characters.Memories;
 
-internal class ThoughtCollection<T> : DirtyTrackable where T : Thought
+internal class ThoughtCollection<T> : DirtyTrackable where T : CopyableThought<T>, new()
 {
     private List<T> _thoughts = [];
 
@@ -48,6 +48,16 @@ internal class ThoughtCollection<T> : DirtyTrackable where T : Thought
             Dirty = true;
             _thoughts.RemoveAt(index);
         }
+    }
+
+    public ThoughtCollection<T> Copy()
+    {
+        ThoughtCollection<T> copy = new ThoughtCollection<T>();
+        foreach (T thought in _thoughts)
+        {
+            copy.AddThought(thought.Copy());
+        }
+        return copy;
     }
 
     public override bool Dirty

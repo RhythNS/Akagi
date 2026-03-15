@@ -67,7 +67,7 @@ internal abstract class Database<T> : IDatabase<T> where T : Savable
         _mongoDatabase = client.GetDatabase(mongoUrl.DatabaseName);
     }
 
-    private IMongoCollection<T> GetCollection()
+    protected IMongoCollection<T> GetCollection()
     {
         if (_mongoDatabase == null)
         {

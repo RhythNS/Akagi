@@ -4,7 +4,7 @@ namespace Akagi.Communication.Commands.ActiveCharacters;
 
 internal class PrintMemoryCommand : TextCommand
 {
-    public override string Name => "/printMemoryCommand";
+    public override string Name => "/printMemory";
 
     public override string Description => "Prints the entire memory of the active character.";
 
