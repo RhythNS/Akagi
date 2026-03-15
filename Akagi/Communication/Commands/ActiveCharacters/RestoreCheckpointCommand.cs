@@ -15,18 +15,18 @@ internal class RestoreCheckpointCommand : TextCommand
         _checkpointDatabase = checkpointDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
         {
             await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
-            return;
+            return CommandResult.Fail("No active character.");
         }
 
         if (args.Length != 1)
         {
             await Communicator.SendMessage(context.User, "Usage: /restoreCheckpoint <checkpointId>");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
 
         string checkpointId = args[0];
@@ -34,16 +34,17 @@ internal class RestoreCheckpointCommand : TextCommand
         if (checkpoint == null)
         {
             await Communicator.SendMessage(context.User, $"Checkpoint with ID '{checkpointId}' not found.");
-            return;
+            return CommandResult.Fail($"Checkpoint '{checkpointId}' not found.");
         }
 
         if (checkpoint.CharacterId != context.Character.Id)
         {
             await Communicator.SendMessage(context.User, $"Checkpoint '{checkpointId}' does not belong to the active character.");
-            return;
+            return CommandResult.Fail($"Checkpoint '{checkpointId}' does not belong to active character.");
         }
 
         checkpoint.ApplyToCharacter(context.Character);
         await Communicator.SendMessage(context.User, $"Checkpoint '{checkpointId}' restored.");
+        return CommandResult.Ok;
     }
 }

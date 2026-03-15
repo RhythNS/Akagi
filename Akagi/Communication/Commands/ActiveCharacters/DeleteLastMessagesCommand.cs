@@ -9,7 +9,7 @@ internal class DeleteLastMessagesCommand : TextCommand
 
     public override string Description => "Deletes the last messages from the current conversation. Usage: /deleteLastMessages <count> <safetyConfirm>";
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         int count = 0;
         if (args.Length > 0 && int.TryParse(args[0], out int parsedCount))
@@ -19,20 +19,20 @@ internal class DeleteLastMessagesCommand : TextCommand
         if (count < 0)
         {
             await Communicator.SendMessage(context.User, "Please provide a positive number of messages to delete.");
-            return;
+            return CommandResult.Fail("Negative count.");
         }
         if (count > 2)
         {
             if (args.Length < 2 || string.Equals(args[1], "confirm", StringComparison.OrdinalIgnoreCase) == false)
             {
                 await Communicator.SendMessage(context.User, "You are about to delete more than 2 messages. To confirm, please use the command again with 'confirm' as the second argument.");
-                return;
+                return CommandResult.Fail("Confirmation required.");
             }
         }
         if (context.Character == null)
         {
             await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
-            return;
+            return CommandResult.Fail("No active character.");
         }
         Conversation conversation = context.Character.GetCurrentConversation();
         for (int i = conversation.Messages.Count - 1; i >= 0; i--)
@@ -62,5 +62,6 @@ internal class DeleteLastMessagesCommand : TextCommand
         }
 
         await Communicator.SendMessage(context.User, context.Character, toReturn);
+        return CommandResult.Ok;
     }
 }

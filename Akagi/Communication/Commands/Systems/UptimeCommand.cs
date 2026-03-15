@@ -16,12 +16,13 @@ internal class UptimeCommand : TextCommand
         _applicationInformation = applicationInformation;
     }
 
-    public override Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         TimeSpan uptime = _applicationInformation.Uptime;
 
         string message = $"Application has been running for {uptime.StringifyPrecise()}.";
 
-        return Communicator.SendMessage(context.User, message);
+        await Communicator.SendMessage(context.User, message);
+        return CommandResult.Ok;
     }
 }

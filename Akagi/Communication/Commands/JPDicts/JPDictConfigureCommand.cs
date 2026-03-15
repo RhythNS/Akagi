@@ -6,12 +6,12 @@ internal class JPDictConfigureCommand : TextCommand
 {
     public override string Name => "/jpDictConfigure";
     public override string Description => "Configures the JPDict commands.";
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length != 2)
         {
             await Communicator.SendMessage(context.User, "Usage: /jpDictConfigure <defaultPrint> <language>");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
 
         string defaultPrint = args[0].ToLowerInvariant();
@@ -26,5 +26,6 @@ internal class JPDictConfigureCommand : TextCommand
         context.User.SetConfig(userConfig);
 
         await Communicator.SendMessage(context.User, $"JPDict configuration updated: Default Print = {defaultPrint}, Language = {language}");
+        return CommandResult.Ok;
     }
 }

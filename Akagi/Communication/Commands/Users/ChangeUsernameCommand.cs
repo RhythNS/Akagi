@@ -15,31 +15,32 @@ internal class ChangeUsernameCommand : TextCommand
         _userDatabase = userDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length < 1)
         {
             await Communicator.SendMessage(context.User, "Please provide a new username.");
-            return;
+            return CommandResult.Fail("No username provided.");
         }
         string newUsername = string.Join(" ", args);
         if (newUsername.Length < 3 || newUsername.Length > 20)
         {
             await Communicator.SendMessage(context.User, "Username must be between 3 and 20 characters long.");
-            return;
+            return CommandResult.Fail("Invalid username length.");
         }
         if (!newUsername.All(char.IsLetterOrDigit))
         {
             await Communicator.SendMessage(context.User, "Username can only contain letters and digits.");
-            return;
+            return CommandResult.Fail("Invalid username characters.");
         }
         if (await _userDatabase.GetByUsername(newUsername) != null)
         {
             await Communicator.SendMessage(context.User, "This username is already taken. Please choose another one.");
-            return;
+            return CommandResult.Fail("Username taken.");
         }
         context.User.Username = newUsername;
 
         await Communicator.SendMessage(context.User, $"Your username has been changed to {newUsername}.");
+        return CommandResult.Ok;
     }
 }

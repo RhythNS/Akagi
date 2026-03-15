@@ -23,22 +23,22 @@ internal class UploadGraphCommand : DocumentCommand
         _databaseFactory = databaseFactory;
     }
 
-    public override async Task ExecuteAsync(Context context, Document[] documents, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, Document[] documents, string[] args)
     {
         if (documents.Length == 0)
         {
             await Communicator.SendMessage(context.User, "Please upload a valid JSON graph file.");
-            return;
+            return CommandResult.Fail("No documents provided.");
         }
         if (args.Length == 0)
         {
             await Communicator.SendMessage(context.User, "Please specify an operation: New or Update.");
-            return;
+            return CommandResult.Fail("No operation specified.");
         }
         if (Enum.TryParse(args[0], true, out OperationType operation) == false)
         {
             await Communicator.SendMessage(context.User, "Invalid operation specified. Please use New or Update.");
-            return;
+            return CommandResult.Fail("Invalid operation.");
         }
         string? graphName = null;
         if (args.Length > 1)
@@ -48,7 +48,7 @@ internal class UploadGraphCommand : DocumentCommand
         if (operation == OperationType.Create && string.IsNullOrWhiteSpace(graphName))
         {
             await Communicator.SendMessage(context.User, "Please specify a name for the new graph.");
-            return;
+            return CommandResult.Fail("No graph name specified.");
         }
 
         List<string> successNames = [];
@@ -128,5 +128,6 @@ internal class UploadGraphCommand : DocumentCommand
         }
 
         await Communicator.SendMessage(context.User, response.ToString().TrimEnd());
+        return successNames.Count > 0 ? CommandResult.Ok : CommandResult.Fail("No graphs uploaded successfully.");
     }
 }

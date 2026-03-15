@@ -16,7 +16,7 @@ internal class ListLLMDefinitions : ListCommand
         _llmDefinitionDatabase = llmDefinitionDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         List<LLMDefinition> definitions = await _llmDefinitionDatabase.GetDocumentsAsync();
 
@@ -24,5 +24,6 @@ internal class ListLLMDefinitions : ListCommand
         string[] names = [.. definitions.Select(def => $"{def.Type}:{def.Model}")];
         string choices = GetIdList(ids, names);
         await Communicator.SendMessage(context.User, $"Available LLM Definitions:\n{choices}");
+        return CommandResult.Ok;
     }
 }

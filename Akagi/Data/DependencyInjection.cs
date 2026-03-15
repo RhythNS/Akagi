@@ -1,4 +1,5 @@
-﻿using Akagi.Graphs;
+﻿using Akagi.Communication.Commands.Macros;
+using Akagi.Graphs;
 using Akagi.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +17,7 @@ static class DependencyInjection
         services.AddSingleton<IFileDatabase, FileDatabase>();
         services.AddTransient<IDatabaseFactory, DatabaseFactory>();
         services.AddSingleton<IGraphInstanceDatabase, GraphInstanceDatabase>();
+        services.AddSingleton<IMacroDatabase, MacroDatabase>();
 
         Type[] databaseTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<IDatabase>();
         foreach (Type? type in databaseTypes)

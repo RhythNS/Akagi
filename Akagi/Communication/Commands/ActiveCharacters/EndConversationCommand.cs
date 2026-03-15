@@ -6,7 +6,7 @@ internal class EndConversationCommand : TextCommand
 
     public override string Description => "Ends the current conversation with the active character. Usage: /endConversation";
 
-    public override Task ExecuteAsync(Context context, string[] args)
+    public override Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
         {
@@ -14,6 +14,6 @@ internal class EndConversationCommand : TextCommand
         }
 
         context.Character.StartNewConversation();
-        return Task.CompletedTask;
+        return Task.FromResult(CommandResult.Ok);
     }
 }

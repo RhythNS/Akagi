@@ -19,17 +19,17 @@ internal class UploadLLMDefinitionCommand : TextCommand
         _lLMDefinitionDatabase = lLMDefinitionDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length != 2)
         {
             await Communicator.SendMessage(context.User, "Expected LLMProvider and Model as arguments!");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
         if (Enum.TryParse(args[0], out LLMType result) == false)
         {
             await Communicator.SendMessage(context.User, $"Unknown LLMProvider. Valid options are {string.Join(",", Enum.GetValues<LLMType>())}");
-            return;
+            return CommandResult.Fail("Unknown LLM provider.");
         }
         string model = args[1];
 
@@ -42,7 +42,7 @@ internal class UploadLLMDefinitionCommand : TextCommand
         if (existingDefinitions.Count != 0)
         {
             await Communicator.SendMessage(context.User, $"This LLM already exists with id {existingDefinitions[0].Id}!");
-            return;
+            return CommandResult.Fail("LLM definition already exists.");
         }
 
         LLMDefinition definition = new()
@@ -53,5 +53,6 @@ internal class UploadLLMDefinitionCommand : TextCommand
         await _lLMDefinitionDatabase.SaveDocumentAsync(definition);
 
         await Communicator.SendMessage(context.User, $"LLMDefinition created with id {definition.Id!}");
+        return CommandResult.Ok;
     }
 }

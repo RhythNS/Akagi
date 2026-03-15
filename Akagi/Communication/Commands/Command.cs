@@ -4,12 +4,19 @@ using Akagi.Users;
 
 namespace Akagi.Communication.Commands;
 
+internal record CommandResult(bool Success, string? Error = null)
+{
+    public static CommandResult Ok => new(true);
+    public static CommandResult Fail(string error) => new(false, error);
+}
+
 internal abstract class Command
 {
     public class Context : ContextBase
     {
         public Character? Character { get; init; }
         public required User User { get; init; }
+        public Dictionary<string, string> Variables { get; init; } = [];
         protected override Savable?[] ToTrack => [Character, User];
     }
 
@@ -72,5 +79,24 @@ internal abstract class Command
         }
 
         return [.. args];
+    }
+
+    public static string[] ResolveVariables(string[] args, Dictionary<string, string> variables)
+    {
+        if (variables.Count == 0)
+        {
+            return args;
+        }
+        string[] resolved = new string[args.Length];
+        for (int i = 0; i < args.Length; i++)
+        {
+            string arg = args[i];
+            foreach (KeyValuePair<string, string> variable in variables)
+            {
+                arg = arg.Replace($"${variable.Key}", variable.Value, StringComparison.Ordinal);
+            }
+            resolved[i] = arg;
+        }
+        return resolved;
     }
 }

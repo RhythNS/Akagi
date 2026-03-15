@@ -2,5 +2,5 @@
 
 internal abstract class DocumentCommand : Command
 {
-    public abstract Task ExecuteAsync(Context context, Document[] documents, string[] args);
+    public abstract Task<CommandResult> ExecuteAsync(Context context, Document[] documents, string[] args);
 }

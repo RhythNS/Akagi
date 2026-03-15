@@ -15,16 +15,17 @@ internal class CreateCheckpointCommand : TextCommand
         _checkpointDatabase = checkpointDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
         {
             await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
-            return;
+            return CommandResult.Fail("No active character.");
         }
 
         Checkpoint checkpoint = Checkpoint.CreateFromCharacter(context.Character);
         await _checkpointDatabase.SaveDocumentAsync(checkpoint);
         await Communicator.SendMessage(context.User, $"Checkpoint '{checkpoint.Id}' created.");
+        return CommandResult.Ok;
     }
 }

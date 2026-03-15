@@ -13,12 +13,12 @@ internal abstract class UploadDocumentCommand<T> : DocumentCommand where T : Sav
     protected abstract IDatabase<T> Database { get; }
     protected virtual SaveType SaveMethod => SaveType.File;
 
-    public override async Task ExecuteAsync(Context context, Document[] documents, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, Document[] documents, string[] args)
     {
         if (documents.Length == 0)
         {
             await Communicator.SendMessage(context.User, "Please upload valid files or images.");
-            return;
+            return CommandResult.Fail("No documents provided.");
         }
         List<string> successNames = [];
         foreach (Document document in documents)
@@ -43,9 +43,10 @@ internal abstract class UploadDocumentCommand<T> : DocumentCommand where T : Sav
         if (successNames.Count == 0)
         {
             await Communicator.SendMessage(context.User, "No valid files found.");
-            return;
+            return CommandResult.Fail("No valid files found.");
         }
         string successMessage = $"Successfully uploaded: {string.Join(", ", successNames)}";
         await Communicator.SendMessage(context.User, successMessage);
+        return CommandResult.Ok;
     }
 }

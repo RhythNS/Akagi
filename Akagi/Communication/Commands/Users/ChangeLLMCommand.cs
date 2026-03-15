@@ -16,31 +16,31 @@ internal class ChangeLLMCommand : TextCommand
         _llmDefinitions = llmDefinitions;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length < 2)
         {
             await Communicator.SendMessage(context.User, "Please provide the preference index and the LLM index to switch to.");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
         if (!int.TryParse(args[0], out int preferenceIndex))
         {
             await Communicator.SendMessage(context.User, "Invalid preference index. Please provide a valid number.");
-            return;
+            return CommandResult.Fail("Invalid preference index.");
         }
         ILLM.LLMUsage[] usages = Enum.GetValues<ILLM.LLMUsage>();
         if (preferenceIndex < 0 || preferenceIndex >= usages.Length)
         {
             string valuesList = string.Join(", ", usages.Select((u, i) => $"{i}: {u}"));
             await Communicator.SendMessage(context.User, $"Invalid preference index. Please provide a valid number. Valid values are: {valuesList}");
-            return;
+            return CommandResult.Fail("Preference index out of range.");
         }
         string llmId = args[1];
         LLMDefinition? llm = await _llmDefinitions.GetDocumentByIdAsync(llmId);
         if (llm == null)
         {
             await Communicator.SendMessage(context.User, "Could not find llm with that id!");
-            return;
+            return CommandResult.Fail("LLM not found.");
         }
 
         Dictionary<string, string> dict = context.User.LLMPreferences.ToDictionary();
@@ -48,5 +48,6 @@ internal class ChangeLLMCommand : TextCommand
         context.User.LLMPreferences = new ReadOnlyDictionary<string, string>(dict);
 
         await Communicator.SendMessage(context.User, $"Your preferred LLM has been changed to {llm.Type}:{llm.Model}.");
+        return CommandResult.Ok;
     }
 }

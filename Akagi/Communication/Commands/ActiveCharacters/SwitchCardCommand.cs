@@ -15,18 +15,18 @@ internal class SwitchCardCommand : TextCommand
         _cardDatabase = cardDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
         {
             await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
-            return;
+            return CommandResult.Fail("No active character.");
         }
 
         if (args.Length != 1)
         {
             await Communicator.SendMessage(context.User, "Usage: !SwitchCard <CardName>");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
         string cardId = args[0];
 
@@ -34,9 +34,10 @@ internal class SwitchCardCommand : TextCommand
         if (card == null)
         {
             await Communicator.SendMessage(context.User, $"Card with ID '{cardId}' not found.");
-            return;
+            return CommandResult.Fail($"Card '{cardId}' not found.");
         }
         context.Character.CardId = card.Id!;
         await Communicator.SendMessage(context.User, "Switched cards!");
+        return CommandResult.Ok;
     }
 }

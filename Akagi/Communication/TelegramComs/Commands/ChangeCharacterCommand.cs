@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Communication.Commands;
 
 namespace Akagi.Communication.TelegramComs.Commands;
 
@@ -15,12 +16,12 @@ internal class ChangeCharacterCommand : TelegramTextCommand
         _characterDatabase = characterDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length < 1)
         {
             await Communicator.SendMessage(context.User, "Please provide a character id");
-            return;
+            return CommandResult.Fail("No character id provided.");
         }
         string name = string.Join(' ', args);
         List<Character> characters = await _characterDatabase.GetCharactersForUser(context.User);
@@ -28,9 +29,10 @@ internal class ChangeCharacterCommand : TelegramTextCommand
         if (character == null)
         {
             await Communicator.SendMessage(context.User, "Character not found");
-            return;
+            return CommandResult.Fail("Character not found.");
         }
         context.User.TelegramUser!.CurrentCharacterId = character.Id;
         await Communicator.SendMessage(context.User, $"Current character changed to {character.Card.Name}");
+        return CommandResult.Ok;
     }
 }

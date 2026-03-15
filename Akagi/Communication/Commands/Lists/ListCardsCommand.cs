@@ -15,18 +15,19 @@ internal class ListCardsCommand : ListCommand
         _cardDatabase = cardDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] _)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] _)
     {
         List<Card> cards = await _cardDatabase.GetDocumentsAsync();
         if (cards.Count == 0)
         {
             await Communicator.SendMessage(context.User, "No cards found");
-            return;
+            return CommandResult.Ok;
         }
         string[] ids = [.. cards.Select(x => x.Id!)];
         string[] names = [.. cards.Select(x => x.Name)];
         string choices = GetCommandListChoice("createCharacter", ids, names);
         await Communicator.SendMessage(context.User, $"Available cards:\n{choices}");
+        return CommandResult.Ok;
     }
 }
 

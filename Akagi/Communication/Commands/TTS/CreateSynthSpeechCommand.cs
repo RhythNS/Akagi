@@ -16,12 +16,12 @@ internal class CreateSynthSpeechCommand : TextCommand
         _tts = tTS;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length != 3)
         {
             await Communicator.SendMessage(context.User, "Usage: /CreateSynthSpeech <text> <voice> <model>");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
         string text = args[0];
         string voice = args[1];
@@ -30,5 +30,6 @@ internal class CreateSynthSpeechCommand : TextCommand
         TTSResult speech = await _tts.SynthesizeSpeechAsync(text, voice, model);
         await using MemoryStream memoryStream = new MemoryStream(speech.AudioContent);
         await Communicator.SendAudio(context.User, memoryStream, $"audio{speech.AudioEncoding.ToFile()}");
+        return CommandResult.Ok;
     }
 }

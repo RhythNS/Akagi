@@ -9,18 +9,18 @@ internal class ListReflectorsCommand : TextCommand
 
     public override string Description => "Lists all reflectors associated with the active character.";
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
         {
             await Communicator.SendMessage(context.User, "You must select a character to use this command.");
-            return;
+            return CommandResult.Fail("No active character.");
         }
         string[] reflectorIds = context.Character.ReflectorIds;
         if (reflectorIds.Length == 0)
         {
             await Communicator.SendMessage(context.User, "The active character has no reflectors.");
-            return;
+            return CommandResult.Ok;
         }
 
         IReflectorDatabase database = context.DatabaseFactory.GetDatabase<IReflectorDatabase>();
@@ -38,5 +38,6 @@ internal class ListReflectorsCommand : TextCommand
             string.Join("\n", reflectors.Select(r => $"- {r.Name} (ID: {r.Id})"));
 
         await Communicator.SendMessage(context.User, reflectorList);
+        return CommandResult.Ok;
     }
 }

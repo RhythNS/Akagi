@@ -15,18 +15,18 @@ internal class DeleteCheckpointCommand : TextCommand
         _checkpointDatabase = checkpointDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
         {
             await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
-            return;
+            return CommandResult.Fail("No active character.");
         }
 
         if (args.Length != 1)
         {
             await Communicator.SendMessage(context.User, "Usage: /deleteCheckpoint <checkpointId>");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
 
         string checkpointId = args[0];
@@ -34,16 +34,17 @@ internal class DeleteCheckpointCommand : TextCommand
         if (checkpoint == null)
         {
             await Communicator.SendMessage(context.User, $"Checkpoint with ID '{checkpointId}' not found.");
-            return;
+            return CommandResult.Fail($"Checkpoint '{checkpointId}' not found.");
         }
 
         if (checkpoint.CharacterId != context.Character.Id)
         {
             await Communicator.SendMessage(context.User, $"Checkpoint '{checkpointId}' does not belong to the active character.");
-            return;
+            return CommandResult.Fail($"Checkpoint '{checkpointId}' does not belong to active character.");
         }
 
         await _checkpointDatabase.DeleteDocumentByIdAsync(checkpointId);
         await Communicator.SendMessage(context.User, $"Checkpoint '{checkpointId}' deleted.");
+        return CommandResult.Ok;
     }
 }

@@ -10,7 +10,7 @@ internal class RecapCommand : TextCommand
 
     public override string Description => "Gives context about the current active conversation";
 
-    public override Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         StringBuilder sb = new();
         if (context.Character == null)
@@ -38,6 +38,7 @@ internal class RecapCommand : TextCommand
             }
         }
 
-        return Communicator.SendMessage(context.User, sb.ToString());
+        await Communicator.SendMessage(context.User, sb.ToString());
+        return CommandResult.Ok;
     }
 }

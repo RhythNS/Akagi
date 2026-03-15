@@ -15,23 +15,24 @@ internal class ExampleSentenceCommand : TextCommand
         _tatoebaConnector = tatoebaConnector;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         TatoebaUserConfig? userConfig = context.User.GetConfig<TatoebaUserConfig>();
         if (userConfig == null)
         {
             await Communicator.SendMessage(context.User, "Configuration is not set. Call /exampleConfigure first.");
-            return;
+            return CommandResult.Fail("Configuration not set.");
         }
 
         if (args.Length < 1)
         {
             await Communicator.SendMessage(context.User, "Provide what you would like to have an example of.");
-            return;
+            return CommandResult.Fail("No example word provided.");
         }
 
         string example = await _tatoebaConnector.GetExample(args[0], userConfig);
 
         await Communicator.SendMessage(context.User, example);
+        return CommandResult.Ok;
     }
 }

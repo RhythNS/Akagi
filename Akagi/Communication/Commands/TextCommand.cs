@@ -2,5 +2,5 @@
 
 internal abstract class TextCommand : Command
 {
-    public abstract Task ExecuteAsync(Context context, string[] args);
+    public abstract Task<CommandResult> ExecuteAsync(Context context, string[] args);
 }

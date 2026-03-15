@@ -17,12 +17,12 @@ internal class DeleteLLMDefinitionCommand : TextCommand
         _lLMDefinitionDatabase = lLMDefinitionDatabase;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length != 1)
         {
             await Communicator.SendMessage(context.User, "Expected an id as argument!");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
         string id = args[0];
 
@@ -30,11 +30,12 @@ internal class DeleteLLMDefinitionCommand : TextCommand
         if (definition == null)
         {
             await Communicator.SendMessage(context.User, $"No LLM definition found with id {id}!");
-            return;
+            return CommandResult.Fail($"LLM definition '{id}' not found.");
         }
 
         await _lLMDefinitionDatabase.DeleteDocumentByIdAsync(id);
 
         await Communicator.SendMessage(context.User, $"LLM definition {definition.Type}:{definition.Model} with id {id} deleted successfully!");
+        return CommandResult.Ok;
     }
 }

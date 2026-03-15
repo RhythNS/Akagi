@@ -15,12 +15,14 @@ internal class SaySomethingCommand : TextCommand
         _receiver = receiver;
     }
 
-    public override Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
         {
-            return Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
+            await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
+            return CommandResult.Fail("No active character.");
         }
-        return _receiver.OnPromptContinue(Communicator, context.Character, context.User);
+        await _receiver.OnPromptContinue(Communicator, context.Character, context.User);
+        return CommandResult.Ok;
     }
 }

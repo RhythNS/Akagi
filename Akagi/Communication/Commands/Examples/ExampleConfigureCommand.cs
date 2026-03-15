@@ -8,18 +8,18 @@ internal class ExampleConfigureCommand : TextCommand
 
     public override string Description => "Configures the example commands.";
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length < 3)
         {
             await Communicator.SendMessage(context.User, "Usage: /exampleConfigure <maxSentences> <targetLanguage> <translationLanguage>");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
 
         if (!int.TryParse(args[0], out int maxSentences) || maxSentences <= 0)
         {
             await Communicator.SendMessage(context.User, "Invalid maxSentences. It must be a positive integer.");
-            return;
+            return CommandResult.Fail("Invalid maxSentences.");
         }
 
         string targetLanguage = args[1];
@@ -38,5 +38,6 @@ internal class ExampleConfigureCommand : TextCommand
             $"Max Sentences: {maxSentences}\n" +
             $"Target Language: {targetLanguage}\n" +
             $"Translation Language: {translationLanguage}");
+        return CommandResult.Ok;
     }
 }

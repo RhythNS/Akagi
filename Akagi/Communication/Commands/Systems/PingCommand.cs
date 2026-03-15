@@ -8,8 +8,9 @@ internal class PingCommand : TextCommand
 
     public override bool AdminOnly => true;
 
-    public override async Task ExecuteAsync(Context context, string[] _)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] _)
     {
         await Communicator.SendMessage(context.User, "Pong!");
+        return CommandResult.Ok;
     }
 }

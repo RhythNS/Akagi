@@ -18,7 +18,7 @@ internal class BuildTimeCommand : TextCommand
         this.applicationInformation = applicationInformation;
     }
 
-    public override Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         DateTime? buildTime = applicationInformation.BuildTimestampUtc;
 
@@ -33,6 +33,7 @@ internal class BuildTimeCommand : TextCommand
             response = $"The application was built {timeSpan.Stringify()} ago.";
         }
 
-        return Communicator.SendMessage(context.User, response);
+        await Communicator.SendMessage(context.User, response);
+        return CommandResult.Ok;
     }
 }

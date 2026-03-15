@@ -15,24 +15,25 @@ internal class JPDictLookupCommand : TextCommand
         _desuConnector = desuConnector;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         DesuUserConfig? desuUserConfig = context.User.GetConfig<DesuUserConfig>();
         if (desuUserConfig == null)
         {
             await Communicator.SendMessage(context.User, "Configuration is not set. Call /jpDictConfigure first");
-            return;
+            return CommandResult.Fail("Configuration not set.");
         }
 
         if (args.Length == 0)
         {
             await Communicator.SendMessage(context.User, "Please provide a word to look up.");
-            return;
+            return CommandResult.Fail("No word provided.");
         }
 
         string word = args[0];
         string result = _desuConnector.Lookup(word, desuUserConfig);
 
         await Communicator.SendMessage(context.User, result);
+        return CommandResult.Ok;
     }
 }

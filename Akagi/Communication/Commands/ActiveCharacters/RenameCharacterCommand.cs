@@ -7,21 +7,24 @@ internal class RenameCharacterCommand : TextCommand
 
     public override string Description => "Renames the active character. Usage: /renameCharacter [new name]";
 
-    public override Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
         {
-            return Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
+            await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
+            return CommandResult.Fail("No active character.");
         }
 
         if (args.Length < 1)
         {
-            return Communicator.SendMessage(context.User, "Please provide a new name for the character.");
+            await Communicator.SendMessage(context.User, "Please provide a new name for the character.");
+            return CommandResult.Fail("No name provided.");
         }
 
         string newName = string.Join(" ", args);
         context.Character.Name = newName;
 
-        return Communicator.SendMessage(context.User, $"Character renamed to '{newName}'.");
+        await Communicator.SendMessage(context.User, $"Character renamed to '{newName}'.");
+        return CommandResult.Ok;
     }
 }

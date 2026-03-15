@@ -16,12 +16,12 @@ internal class DeleteGraphCommand : TextCommand
         _databaseFactory = databaseFactory;
     }
 
-    public override async Task ExecuteAsync(Context context, string[] args)
+    public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (args.Length < 2)
         {
             await Communicator.SendMessage(context.User, "Usage: /deleteGraph <graph id> <graph name>");
-            return;
+            return CommandResult.Fail("Invalid arguments.");
         }
         string graphId = args[0];
         string graphName = args[1];
@@ -31,7 +31,7 @@ internal class DeleteGraphCommand : TextCommand
         if (graphInstance == null)
         {
             await Communicator.SendMessage(context.User, $"Graph with ID '{graphId}' and name '{graphName}' not found.");
-            return;
+            return CommandResult.Fail($"Graph '{graphId}:{graphName}' not found.");
         }
         foreach (GraphInstance.SavableInfo savableInfo in graphInstance.SavableInfos)
         {
@@ -50,5 +50,6 @@ internal class DeleteGraphCommand : TextCommand
         await graphInstanceDatabase.DeleteDocumentByIdAsync(graphInstance.Id!);
 
         await Communicator.SendMessage(context.User, "Deleted Graph successfully");
+        return CommandResult.Ok;
     }
 }
