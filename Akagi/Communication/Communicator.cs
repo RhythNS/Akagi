@@ -40,7 +40,7 @@ internal abstract class Communicator : ICommunicator
     public abstract Task SendAudio(User user, Character character, Stream stream, string fileName);
     public abstract Task SendAudio(User user, Stream stream, string fileName);
 
-    protected Task RecieveMessage(User user, Character character, string message)
+    protected Task ReceiveMessage(User user, Character character, string message)
     {
         TextMessage textMessage = new()
         {
@@ -48,10 +48,10 @@ internal abstract class Communicator : ICommunicator
             Text = message,
             Time = DateTime.UtcNow,
         };
-        return RecieveMessage(user, character, textMessage);
+        return ReceiveMessage(user, character, textMessage);
     }
 
-    protected async Task RecieveMessage(User user, Character character, Message message)
+    protected async Task ReceiveMessage(User user, Character character, Message message)
     {
         await _receiver.OnMessageRecieved(this, user, character, message);
     }

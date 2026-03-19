@@ -1,4 +1,5 @@
 using Akagi.Characters.Conversations;
+using Akagi.Characters.VoiceClips;
 using Akagi.Flow;
 using Akagi.TTSs;
 using Akagi.TTSs.Inworld;
@@ -12,7 +13,7 @@ internal class TTSInterceptor : Interceptor
 {
     private string _voiceId = string.Empty;
     private string _modelId = string.Empty;
-    private ITTS.AudioEncoding _audioEncoding = ITTS.AudioEncoding.MP3;
+    private AudioEncoding _audioEncoding = AudioEncoding.MP3;
 
     public string VoiceId
     {
@@ -27,7 +28,7 @@ internal class TTSInterceptor : Interceptor
     }
 
     [BsonRepresentation(MongoDB.Bson.BsonType.String)]
-    public ITTS.AudioEncoding AudioEncoding
+    public AudioEncoding AudioEncoding
     {
         get => _audioEncoding;
         set => SetProperty(ref _audioEncoding, value);

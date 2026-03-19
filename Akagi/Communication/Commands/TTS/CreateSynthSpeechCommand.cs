@@ -1,4 +1,5 @@
-﻿using Akagi.TTSs;
+﻿using Akagi.Characters.VoiceClips;
+using Akagi.TTSs;
 using Akagi.TTSs.Inworld;
 
 namespace Akagi.Communication.Commands.TTS;

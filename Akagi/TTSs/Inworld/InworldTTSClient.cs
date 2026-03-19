@@ -1,3 +1,4 @@
+using Akagi.Characters.VoiceClips;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text;
@@ -19,7 +20,7 @@ internal class InworldTTSClient : TTS, IInworldTTSClient
     }
 
     private readonly Options _options;
-    private readonly ITTS.AudioEncoding _audioEncoding = ITTS.AudioEncoding.MP3;
+    private readonly AudioEncoding _audioEncoding = AudioEncoding.MP3;
     private readonly ILogger<InworldTTSClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new()
     {
@@ -32,7 +33,7 @@ internal class InworldTTSClient : TTS, IInworldTTSClient
         _options = options.CurrentValue;
         _logger = logger;
 
-        _audioEncoding = Enum.Parse<ITTS.AudioEncoding>(_options.AudioEncoding, ignoreCase: true);
+        _audioEncoding = Enum.Parse<AudioEncoding>(_options.AudioEncoding, ignoreCase: true);
     }
 
     private InworldPayload GetPayload(string text, string voiceId, string modelId)

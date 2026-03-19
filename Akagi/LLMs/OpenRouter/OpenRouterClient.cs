@@ -1,8 +1,10 @@
 ﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.VoiceClips;
 using Akagi.Receivers;
 using Akagi.Receivers.Commands;
 using Akagi.Receivers.Commands.Messages;
+using Akagi.Utils.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text;
@@ -25,6 +27,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
     }
 
     private readonly Options _options;
+    private readonly IVoiceClipsDatabase _voiceClipsDatabase;
     private readonly ICommandFactory _commandFactory;
     private readonly ILogger<OpenRouterClient> _logger;
     private readonly JsonSerializerOptions _jsonOptions = new()
@@ -33,14 +36,18 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
 
-    public OpenRouterClient(ICommandFactory commandFactory, IOptionsMonitor<Options> options, ILogger<OpenRouterClient> logger)
+    public OpenRouterClient(ICommandFactory commandFactory,
+        IVoiceClipsDatabase voiceClipsDatabase,
+        IOptionsMonitor<Options> options,
+        ILogger<OpenRouterClient> logger)
     {
         _commandFactory = commandFactory;
+        _voiceClipsDatabase = voiceClipsDatabase;
         _options = options.CurrentValue;
         _logger = logger;
     }
 
-    private OpenRouterPayload GetPayload(SystemProcessor systemProcessor, Context context)
+    private async Task<OpenRouterPayload> GetPayload(SystemProcessor systemProcessor, Context context)
     {
         Characters.Conversations.Message[] messages = systemProcessor.MessageCompiler.Compile(context);
 
@@ -65,6 +72,37 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
                         Content = textMessage.Text,
                     });
                     break;
+
+                case VoiceMessage voiceMessage:
+                    {
+                        VoiceClip? voiceClip = await _voiceClipsDatabase.GetDocumentByIdAsync(voiceMessage.VoiceId);
+                        if (voiceClip == null)
+                        {
+                            _logger.LogWarning("Could not find voice clip with id {VoiceId} for message, skipping message", voiceMessage.VoiceId);
+                            continue;
+                        }
+                        using Stream audioFile = await _voiceClipsDatabase.LoadFileAsync(voiceClip);
+                        string audioFormat = voiceClip.AudioEncoding.ToExtension();
+
+                        input.Add(new UserMessage
+                        {
+                            Role = messageRoleEnum,
+
+                            Content = new object[]
+                            {
+                                new Dictionary<string, object>
+                                {
+                                    ["type"] = "input_audio",
+                                    ["input_audio"] = new Dictionary<string, string>
+                                    {
+                                        ["data"] = await audioFile.ToBase64(),
+                                        ["format"] = audioFormat
+                                    }
+                                }
+                            }
+                        });
+                        break;
+                    }
 
                 case CommandMessage commandMessage:
                     List<CommandMessage> commandMessages = [];
@@ -301,14 +339,14 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
 
         if (string.IsNullOrEmpty(_options.ApiKey))
         {
-            throw new Exception("Gemini API key is not set.");
+            throw new Exception("OpenRouter API key is not set.");
         }
         if (string.IsNullOrEmpty(Model))
         {
-            throw new Exception("Gemini model is not set.");
+            throw new Exception("OpenRouter model is not set.");
         }
 
-        OpenRouterPayload payload = GetPayload(systemProcessor, context);
+        OpenRouterPayload payload = await GetPayload(systemProcessor, context);
         HttpRequestMessage request = new(HttpMethod.Post,
             $"{_options.BaseUrl}{_options.ResponsePath}");
 
@@ -316,12 +354,14 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         request.Headers.TryAddWithoutValidation("Content-Type", "application/json");
         request.Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json");
 
+        _logger.LogDebug("Sending request to OpenRouter using model {Model}", Model);
         HttpResponseMessage response = await httpClient.SendAsync(request);
         if (response.IsSuccessStatusCode == false)
         {
             throw new Exception($"Request failed with status code {response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
         }
         string content = await response.Content.ReadAsStringAsync();
+        _logger.LogDebug("Received response from OpenRouter using model {Model}", Model);
 
         OpenRouterResponse? openRouterResponse;
         try

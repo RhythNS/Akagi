@@ -42,7 +42,6 @@ internal class HelpListCommand : ListCommand
         {
             Command command = commands[i];
             sb.AppendLine($"{command.Name} - {command.Description}");
-            sb.AppendLine();
         }
 
         await Communicator.SendMessage(context.User, sb.ToString());

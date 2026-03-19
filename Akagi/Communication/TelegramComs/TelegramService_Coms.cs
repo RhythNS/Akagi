@@ -22,7 +22,7 @@ internal partial class TelegramService : Communicator, IHostedService
         switch (message)
         {
             case TextMessage textMessage:
-                await SendMessage(user, character, textMessage.Text);
+                await SendMessage(user, textMessage.Text);
                 break;
             case VoiceMessage voiceMessage:
                 {
@@ -215,32 +215,24 @@ internal partial class TelegramService : Communicator, IHostedService
 
         await _client!.SendChatAction(message.Chat.Id, ChatAction.Typing, cancellationToken: cancellationToken);
 
-        bool needsSave = false;
-        if (user.Username != null && message?.From != null && message.From.Username != user.TelegramUser!.UserName)
+        if (user.Username != null && message.From != null && message.From.Username != user.TelegramUser!.UserName)
         {
-            user.TelegramUser.UserName = message!.From!.Username!;
-            needsSave = true;
+            user.TelegramUser.UserName = message.From.Username!;
         }
         if (user.LastUsedCommunicator != Name)
         {
             user.LastUsedCommunicator = Name;
-            needsSave = true;
         }
-        if (needsSave == true)
+        if (user.Dirty == true)
         {
             await _userDatabase.SaveDocumentAsync(user);
         }
 
-        if ((message?.Text?.StartsWith("/", StringComparison.InvariantCultureIgnoreCase) ?? false) ||
-            (message?.Caption?.StartsWith("/", StringComparison.InvariantCultureIgnoreCase) ?? false))
+        if ((message.Text?.StartsWith("/", StringComparison.InvariantCultureIgnoreCase) ?? false) ||
+            (message.Caption?.StartsWith("/", StringComparison.InvariantCultureIgnoreCase) ?? false))
         {
             _logger.LogInformation("Received command '{Command}' from user {UserId}", message.Text, user.Id);
             await HandleCommand(message, user);
-            return;
-        }
-
-        if (message?.Text == null)
-        {
             return;
         }
 
@@ -258,14 +250,78 @@ internal partial class TelegramService : Communicator, IHostedService
             return;
         }
 
-        _logger.LogInformation("Received text '{Text}' in chat {ChatId}", message.Text, message.Chat.Id);
+        Characters.Conversations.Message toProcess;
+        switch (message.Type)
+        {
+            case MessageType.Text:
+
+                if (message.Text == null)
+                {
+                    _logger.LogWarning("Received text message with null text in chat {ChatId}", message.Chat.Id);
+                    await _client!.SendMessage(message.Chat.Id, "Received text message with null text, cannot process.", cancellationToken: cancellationToken);
+                    return;
+                }
+                toProcess = new TextMessage
+                {
+                    From = Characters.Conversations.Message.Type.User,
+                    Text = message.Text,
+                    Time = DateTime.UtcNow,
+                };
+                break;
+
+            case MessageType.Voice:
+                {
+                    if (message.Voice == null)
+                    {
+                        _logger.LogWarning("Received voice message with null voice in chat {ChatId}", message.Chat.Id);
+                        await _client!.SendMessage(message.Chat.Id, "Received voice message with null voice, cannot process.", cancellationToken: cancellationToken);
+                        return;
+                    }
+
+                    if (message.Voice.FileSize > 20 * 1024 * 1024)
+                    {
+                        _logger.LogInformation("Received voice message that is too large ({FileSize} bytes) in chat {ChatId}", message.Voice.FileSize, message.Chat.Id);
+                        await _client!.SendMessage(message.Chat.Id, "Voice message is too large. Maximum size is 20mb.", cancellationToken: cancellationToken);
+                        return;
+                    }
+
+                    await using MemoryStream? stream = await LoadFile(message.Voice);
+                    if (stream == null)
+                    {
+                        _logger.LogWarning("Failed to load voice message file in chat {ChatId}", message.Chat.Id);
+                        await _client!.SendMessage(message.Chat.Id, "Failed to load voice message file, cannot process.", cancellationToken: cancellationToken);
+                        return;
+                    }
+                    VoiceClip voiceClip = new()
+                    {
+                        AudioEncoding = AudioEncoding.OGG_OPUS,
+                        Text = null, // TODO: Consider transcribing the voice message to text
+                    };
+                    await _voiceClipsDatabase.SaveFileAsync(voiceClip, stream);
+
+                    toProcess = new VoiceMessage
+                    {
+                        From = Characters.Conversations.Message.Type.User,
+                        VoiceId = voiceClip.Id!,
+                        Time = DateTime.UtcNow,
+                    };
+                    break;
+                }
+
+            default:
+                _logger.LogInformation("Received message of type {MessageType} which is not handled", message.Type);
+                await _client!.SendMessage(message.Chat.Id, $"Message type {message.Type} is not supported yet.", cancellationToken: cancellationToken);
+                return;
+        }
+
+        _logger.LogInformation("Received message '{Message}' in chat {ChatId}", toProcess.ToString(), message.Chat.Id);
         try
         {
-            await RecieveMessage(user, character, message.Text);
+            await ReceiveMessage(user, character, toProcess);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to process message '{Text}' from user {UserId}", message.Text, user.Id);
+            _logger.LogError(ex, "Failed to process message '{Message}' from user {UserId}", toProcess.ToString(), user.Id);
             await _client!.SendMessage(message.Chat.Id, "Failed to process message", cancellationToken: cancellationToken);
         }
         finally

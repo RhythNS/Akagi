@@ -57,8 +57,6 @@ internal class RequestTextToSpeechCommand : Command
         VoiceClip voiceClip = new()
         {
             AudioEncoding = result.AudioEncoding,
-            CharacterId = context.Character.Id!,
-            CharacterName = context.Character.Name,
             Text = ssml,
         };
         using MemoryStream audioStream = new(result.AudioContent);

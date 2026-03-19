@@ -30,7 +30,7 @@ internal class VoiceClipsDatabase : Database<VoiceClip>, IVoiceClipsDatabase
     {
         if (string.IsNullOrEmpty(fileName))
         {
-            fileName = $"{voiceClip.CharacterName}_{Guid.NewGuid()}.audio";
+            fileName = $"{Guid.NewGuid()}.audio";
         }
 
         ObjectId fileId = await _fileDatabase.UploadFileAsync(stream, fileName, "audio");
