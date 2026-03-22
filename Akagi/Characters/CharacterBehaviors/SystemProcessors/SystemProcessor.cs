@@ -16,7 +16,7 @@ internal class SystemProcessor : Savable
     private string _description = string.Empty;
     private string _systemInstruction = string.Empty;
     private Message.Type _readableMessages = Message.Type.Character | Message.Type.User | Message.Type.System;
-    private Message.Type _output = Message.Type.Character | Message.Type.User | Message.Type.System;
+    private Message.Type _output = Message.Type.Character;
     private ILLM.RunMode _runMode = ILLM.RunMode.Mixed;
     private ILLM.LLMUsage _usage = ILLM.LLMUsage.TextGeneral;
     private LLMDefinition? _specificLLM = null;

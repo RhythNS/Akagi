@@ -15,7 +15,7 @@ internal class EditMessageCommand : TextCommand
             await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
             return CommandResult.Fail("No active character.");
         }
-        Conversation conversation = context.Character.GetCurrentConversation();
+        Conversation conversation = context.Character.Conversations.GetCurrentConversation();
         int index = conversation.Messages.Count - 1;
 
         if (args.Length < 2 || int.TryParse(args[0], out int parsedCount) == false)
@@ -31,7 +31,7 @@ internal class EditMessageCommand : TextCommand
         }
 
         index -= parsedCount;
-        if (index < 0 || index >= context.Character.GetCurrentConversation().Messages.Count)
+        if (index < 0 || index >= context.Character.Conversations.GetCurrentConversation().Messages.Count)
         {
             await Communicator.SendMessage(context.User, "Invalid message index.");
             return CommandResult.Fail("Invalid message index.");

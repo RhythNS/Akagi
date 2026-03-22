@@ -23,6 +23,13 @@ internal class RemoveMemoryCommand : Command
             Description = "Whether the memory is long-term (true) or short-term (false).",
             IsRequired = true,
             ArgumentType = Argument.Type.Bool
+        },
+        new Argument
+        {
+            Name = "Target",
+            Description = "Where to remove the memory from: 'character' (default), 'group' (shared group memory), or a specific character ID.",
+            IsRequired = false,
+            ArgumentType = Argument.Type.String
         }
     ];
 
@@ -47,9 +54,15 @@ internal class RemoveMemoryCommand : Command
             throw new ArgumentException($"IsLongTerm argument must be a valid boolean. Received: {Arguments[1].Value}");
         }
 
+        string target = Arguments.Length > 2 && !string.IsNullOrWhiteSpace(Arguments[2].Value)
+            ? Arguments[2].Value
+            : "character";
+
+        Memory targetMemory = ResolveTargetMemory(context, target);
+
         ThoughtCollection<SingleFactThought> thoughtCollection = isLongTerm.Value ?
-            context.Character.Memory.LongTerm :
-            context.Character.Memory.ShortTerm;
+            targetMemory.LongTerm :
+            targetMemory.ShortTerm;
 
         if (index < 0 || index >= thoughtCollection.Thoughts.Count)
         {
@@ -59,9 +72,28 @@ internal class RemoveMemoryCommand : Command
         SingleFactThought deletedThought = thoughtCollection.Thoughts[index.Value];
         thoughtCollection.RemoveThoughtAt(index.Value);
 
-        string output = $"Removed {(isLongTerm.Value ? "long-term" : "short-term")} memory with ID {index}. Thought: \"{deletedThought.Fact}\".";
+        string output = $"Removed {(isLongTerm.Value ? "long-term" : "short-term")} memory with ID {index} (target: {target}). Thought: \"{deletedThought.Fact}\".";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
         return Task.FromResult(Array.Empty<Command>());
+    }
+
+    private static Memory ResolveTargetMemory(Context context, string target)
+    {
+        if (string.Equals(target, "group", StringComparison.OrdinalIgnoreCase))
+        {
+            if (context.Group == null)
+            {
+                throw new InvalidOperationException("Cannot target 'group' memory when not in a group context.");
+            }
+            return context.Group.SharedMemory;
+        }
+
+        if (string.Equals(target, "character", StringComparison.OrdinalIgnoreCase))
+        {
+            return context.Character.Memory;
+        }
+
+        return context.Character.Memory;
     }
 }

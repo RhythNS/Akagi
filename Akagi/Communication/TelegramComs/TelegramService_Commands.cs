@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Groups;
 using Akagi.Communication.Commands;
 using Akagi.Communication.TelegramComs.Commands;
 using Microsoft.Extensions.Hosting;
@@ -62,9 +63,11 @@ internal partial class TelegramService : Communicator, IHostedService
         string[] args = Command.ParseArguments(argString);
 
         Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+        CharacterGroup? group = await _characterGroupDatabase.GetDocumentByIdAsync(user.TelegramUser!.CurrentGroupId!);
         await using Command.Context context = new()
         {
             Character = character,
+            Group = group,
             User = user,
             DatabaseFactory = _databaseFactory
         };
@@ -118,9 +121,11 @@ internal partial class TelegramService : Communicator, IHostedService
         validFiles.ForEach(x => x.Init(this));
 
         Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+        CharacterGroup? group = await _characterGroupDatabase.GetDocumentByIdAsync(user.TelegramUser!.CurrentGroupId!);
         await using Command.Context context = new()
         {
             Character = character,
+            Group = group,
             User = user,
             DatabaseFactory = _databaseFactory
         };

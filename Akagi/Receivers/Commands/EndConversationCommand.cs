@@ -42,7 +42,7 @@ internal class EndConversationCommand : Command
             throw new ArgumentException("MessageIndex argument exceeds the number of messages in the conversation.");
         }
 
-        context.Character.CompleteCurrentConversationAtIndex(index.Value);
+        context.Character.Conversations.CompleteCurrentConversationAtIndex(index.Value);
 
         string output = $"Conversation ended at message index {index.Value}.";
         context.Conversation.AddMessage(CreateCommandMessage(output));

@@ -34,7 +34,7 @@ internal class DeleteLastMessagesCommand : TextCommand
             await Communicator.SendMessage(context.User, "You need to have an active character to use this command.");
             return CommandResult.Fail("No active character.");
         }
-        Conversation conversation = context.Character.GetCurrentConversation();
+        Conversation conversation = context.Character.Conversations.GetCurrentConversation();
         for (int i = conversation.Messages.Count - 1; i >= 0; i--)
         {
             Message.Type from = conversation.Messages[i].From;
@@ -48,7 +48,7 @@ internal class DeleteLastMessagesCommand : TextCommand
         }
         if (conversation.Messages.Count == 0)
         {
-            context.Character.ClearCurrentConversation();
+            context.Character.Conversations.ClearCurrentConversation();
         }
 
         string toReturn;

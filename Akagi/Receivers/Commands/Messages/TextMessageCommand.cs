@@ -1,4 +1,6 @@
-﻿namespace Akagi.Receivers.Commands.Messages;
+﻿using Akagi.Characters.Conversations;
+
+namespace Akagi.Receivers.Commands.Messages;
 
 internal class TextMessageCommand : MessageCommand
 {
@@ -20,7 +22,14 @@ internal class TextMessageCommand : MessageCommand
     public override Task<Command[]> Execute(Context context)
     {
         string text = Arguments[0].Value;
-        _message = context.Conversation.AddMessage(text, DateTime.UtcNow, From);
+        _message = new TextMessage
+        {
+            Text = text,
+            From = From,
+            Time = DateTime.UtcNow,
+            CharacterId = FromCharacterId
+        };
+        context.Conversation.AddMessage(_message);
         return Task.FromResult(Array.Empty<Command>());
     }
 

@@ -255,7 +255,7 @@ internal class SocketService : Communicator, IHostedService
 
     public Task RecieveText(User user, Character character, string text)
     {
-        return ReceiveMessage(user, character, text);
+        return ReceiveCharacterMessage(user, character, text);
     }
 
     private SocketSession[] GetSessions(User user)

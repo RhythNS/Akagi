@@ -48,7 +48,7 @@ internal class RequestTextToSpeechCommand : Command
         }
         string emotionTag = Arguments.FirstOrDefault(arg => string.Equals(arg.Name, "EmotionTag", StringComparison.OrdinalIgnoreCase))?.Value ?? string.Empty;
 
-        string ssml = $"<speak>{emotionTag} {text}</speak>";
+        string ssml = $"{emotionTag} {text}";
 
         IInworldTTSClient tts = Globals.Instance.ServiceProvider.GetRequiredService<IInworldTTSClient>();
         TTSResult result = await tts.SynthesizeSpeechAsync(ssml, context.Character.VoiceId, context.Character.VoiceModelId);
@@ -69,7 +69,7 @@ internal class RequestTextToSpeechCommand : Command
 
         VoiceMessageCommand voiceMessageCommand = commandFactory.Create<VoiceMessageCommand>();
         voiceMessageCommand.SetMessage(ssml, voiceClip.Id!);
-        voiceMessageCommand.From = From;
+        voiceMessageCommand.SetFrom(From, FromCharacterId!);
 
         return [voiceMessageCommand];
     }

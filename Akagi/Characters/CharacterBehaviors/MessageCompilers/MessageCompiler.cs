@@ -33,8 +33,10 @@ internal abstract class MessageCompiler : Savable
 
     public Message[] Compile(Context context)
     {
+        ConversationContainer conversationContainer = context.Group != null ? context.Group.Conversations : context.Character.Conversations;
+
         List<Conversation> filteredConversations = [];
-        foreach (Conversation conversation in context.Character.Conversations
+        foreach (Conversation conversation in conversationContainer.List
             .OrderBy(c => c.Time)
             .Select(c => c.Copy()))
         {

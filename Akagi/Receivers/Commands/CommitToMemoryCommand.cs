@@ -23,6 +23,13 @@ internal class CommitToMemoryCommand : Command
             Description = "The thought to commit to memory.",
             IsRequired = true,
             ArgumentType = Argument.Type.String
+        },
+        new Argument
+        {
+            Name = "Target",
+            Description = "Where to store the memory: 'character' (default), 'group' (shared group memory), or a specific character ID.",
+            IsRequired = false,
+            ArgumentType = Argument.Type.String
         }
     ];
 
@@ -49,15 +56,41 @@ internal class CommitToMemoryCommand : Command
             Timestamp = DateTime.UtcNow
         };
 
+        string target = Arguments.Length > 2 && !string.IsNullOrWhiteSpace(Arguments[2].Value)
+            ? Arguments[2].Value
+            : "character";
+
+        Memory targetMemory = ResolveTargetMemory(context, target);
+
         ThoughtCollection<SingleFactThought> thoughtCollection = isLongTerm.Value ?
-            context.Character.Memory.LongTerm :
-            context.Character.Memory.ShortTerm;
+            targetMemory.LongTerm :
+            targetMemory.ShortTerm;
 
         thoughtCollection.AddThought(singleFactThought);
 
-        string output = $"Committed thought to {(isLongTerm.Value ? "long-term" : "short-term")} memory: \"{thought}\"";
+        string output = $"Committed thought to {(isLongTerm.Value ? "long-term" : "short-term")} memory (target: {target}): \"{thought}\"";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
         return Task.FromResult(Array.Empty<Command>());
+    }
+
+    private static Memory ResolveTargetMemory(Context context, string target)
+    {
+        if (string.Equals(target, "group", StringComparison.OrdinalIgnoreCase))
+        {
+            if (context.Group == null)
+            {
+                throw new InvalidOperationException("Cannot target 'group' memory when not in a group context.");
+            }
+            return context.Group.SharedMemory;
+        }
+
+        if (string.Equals(target, "character", StringComparison.OrdinalIgnoreCase))
+        {
+            return context.Character.Memory;
+        }
+
+        // Assume it's a character ID — not supported for now outside group context
+        return context.Character.Memory;
     }
 }

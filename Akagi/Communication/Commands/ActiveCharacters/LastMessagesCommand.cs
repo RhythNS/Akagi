@@ -16,7 +16,7 @@ internal class LastMessagesCommand : TextCommand
             await Communicator.SendMessage(context.User, "You must select a character to use this command.");
             return CommandResult.Fail("No active character.");
         }
-        Conversation? conversation = context.Character.GetCurrentConversation();
+        Conversation? conversation = context.Character.Conversations.GetCurrentConversation();
         if (conversation == null || conversation.Messages.Count == 0)
         {
             await Communicator.SendMessage(context.User, "No messages found in the current conversation.");

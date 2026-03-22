@@ -15,7 +15,7 @@ namespace Akagi.Characters;
 [GraphNode]
 internal class Character : Savable
 {
-    private List<Conversation> _conversations = [];
+    private ConversationContainer _conversations = new();
     private Memory _memory = new();
     private string _cardId = string.Empty;
     private Card? _card;
@@ -29,25 +29,26 @@ internal class Character : Savable
     private string _voiceId = string.Empty;
     private string _voiceModelId = string.Empty;
     private string _name = string.Empty;
+    private string _description = string.Empty;
 
     public override bool Dirty
     {
-        get => base.Dirty || _memory.Dirty || _conversations.Any(c => c.Dirty);
+        get => base.Dirty || _memory.Dirty || _conversations.Dirty;
         set
         {
             base.Dirty = value;
             if (value == false)
             {
                 _memory.Dirty = false;
-                _conversations.ForEach(c => c.Dirty = false);
+                _conversations.Dirty = false;
             }
         }
     }
 
-    public IReadOnlyList<Conversation> Conversations
+    public ConversationContainer Conversations
     {
         get => _conversations;
-        set => SetProperty(ref _conversations, [.. value]);
+        set => SetProperty(ref _conversations, value);
     }
     public Memory Memory
     {
@@ -123,96 +124,14 @@ internal class Character : Savable
         get => _name;
         set => SetProperty(ref _name, value);
     }
+    public string Description
+    {
+        get => _description;
+        set => SetProperty(ref _description, value);
+    }
 
     public void Init(Card card)
     {
         _card = card ?? throw new ArgumentNullException(nameof(card), "Card cannot be null.");
-    }
-
-    public Conversation GetCurrentConversation()
-    {
-        if (Conversations.Count != 0)
-        {
-            Conversation? conv = Conversations.MaxBy(c => c.Time);
-            if (conv != null && conv.IsCompleted == false)
-            {
-                return conv;
-            }
-        }
-
-        Dirty = true;
-        _conversations.Add(new Conversation
-        {
-            Time = DateTime.UtcNow,
-            Messages = []
-        });
-        return Conversations[0];
-    }
-
-    public Conversation StartNewConversation()
-    {
-        Conversation? conv = Conversations.MaxBy(c => c.Time);
-        if (conv != null)
-        {
-            conv.IsCompleted = true;
-        }
-
-        Conversation newConversation = new()
-        {
-            Time = DateTime.UtcNow,
-            Messages = [],
-            Id = Conversations.Count > 0 ? Conversations.Max(c => c.Id) + 1 : 1,
-        };
-
-        Dirty = true;
-        _conversations.Add(newConversation);
-        return newConversation;
-    }
-
-    public void CompleteCurrentConversationAtIndex(int messageIndex)
-    {
-        Conversation? conv = Conversations.MaxBy(c => c.Time);
-        if (conv == null)
-        {
-            return;
-        }
-        if (messageIndex < 0 || messageIndex >= conv.Messages.Count)
-        {
-            throw new ArgumentOutOfRangeException(nameof(messageIndex), "Message index is out of range.");
-        }
-        List<Message> completedMessages = [.. conv.Messages.Take(messageIndex + 1)];
-        Conversation completedConversation = new()
-        {
-            Id = conv.Id,
-            Time = completedMessages.Max(x => x.Time),
-            Messages = completedMessages,
-            IsCompleted = true
-        };
-
-        List<Message> remainingMessages = [.. conv.Messages.Skip(messageIndex + 1)];
-        Conversation remainingConversation = new()
-        {
-            Id = Conversations.Count > 0 ? Conversations.Max(c => c.Id) + 1 : 1,
-            Time = remainingMessages.Count > 0 ? remainingMessages.Max(x => x.Time) : DateTime.UtcNow,
-            Messages = remainingMessages,
-            IsCompleted = false
-        };
-
-        Dirty = true;
-        _conversations.Remove(conv);
-        _conversations.Add(completedConversation);
-        _conversations.Add(remainingConversation);
-    }
-
-    public void ClearCurrentConversation()
-    {
-        Conversation? conv = Conversations.MaxBy(c => c.Time);
-        if (conv == null)
-        {
-            return;
-        }
-
-        Dirty = true;
-        _conversations.Remove(conv);
     }
 }

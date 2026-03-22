@@ -227,7 +227,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         return payload;
     }
 
-    private Command[] HandleResponse(SystemProcessor systemProcessor, OpenRouterResponse response)
+    private Command[] HandleResponse(SystemProcessor systemProcessor, OpenRouterResponse response, Context context)
     {
         if (response.Choices.Count == 0)
         {
@@ -328,7 +328,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
             throw new Exception("OpenRouter returned unknown choice type");
         }
 
-        commands.ForEach(x => x.From = systemProcessor.Output);
+        commands.ForEach(x => x.SetFrom(systemProcessor.Output, context.Character.Id!));
 
         return [.. commands];
     }
@@ -378,6 +378,6 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
             throw new Exception("Failed to deserialize OpenRouter response.");
         }
 
-        return HandleResponse(systemProcessor, openRouterResponse);
+        return HandleResponse(systemProcessor, openRouterResponse, context);
     }
 }

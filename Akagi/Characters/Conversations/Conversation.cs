@@ -10,66 +10,51 @@ internal class Conversation : DirtyTrackable
     private List<Message> _messages = [];
     private bool _isCompleted = false;
 
-    public int Id
+    public virtual int Id
     {
         get => _id;
         set => SetProperty(ref _id, value);
     }
-    public DateTime Time
+    public virtual DateTime Time
     {
         get => _time;
         set => SetProperty(ref _time, value);
     }
-    public IReadOnlyList<Message> Messages
+    public virtual IReadOnlyList<Message> Messages
     {
         get => _messages;
         set => SetProperty(ref _messages, [.. value]);
     }
-    public bool IsCompleted
+    public virtual bool IsCompleted
     {
         get => _isCompleted;
         set => SetProperty(ref _isCompleted, value);
     }
 
-    public void AddMessage(Message message)
+    public virtual void AddMessage(Message message)
     {
         Dirty = true;
         _messages.Add(message);
     }
 
-    public Message AddMessage(string text, DateTime time, Message.Type from)
-    {
-        TextMessage message = new()
-        {
-            Text = text,
-            From = from,
-            Time = time,
-        };
-
-        Dirty = true;
-        _messages.Add(message);
-
-        return message;
-    }
-
-    public void InsertMessage(int index, Message message)
+    public virtual void InsertMessage(int index, Message message)
     {
         Dirty = true;
         _messages.Insert(index, message);
     }
 
-    public IReadOnlyList<Message> GetLastMessages(int count)
+    public virtual IReadOnlyList<Message> GetLastMessages(int count)
     {
         return [.. Messages.Skip(Math.Max(0, Messages.Count - count))];
     }
 
-    public void ClearMessages()
+    public virtual void ClearMessages()
     {
         Dirty = true;
         _messages.Clear();
     }
 
-    public bool RemoveMessage(Message message)
+    public virtual bool RemoveMessage(Message message)
     {
         if (!_messages.Remove(message))
         {
@@ -80,7 +65,7 @@ internal class Conversation : DirtyTrackable
         return true;
     }
 
-    public bool RemoveMessageAt(int index)
+    public virtual bool RemoveMessageAt(int index)
     {
         if (index < 0 || index >= _messages.Count)
         {
@@ -92,7 +77,7 @@ internal class Conversation : DirtyTrackable
         return true;
     }
 
-    public bool EditMessage(int index, string newText)
+    public virtual bool EditMessage(int index, string newText)
     {
         if (index < 0 || index >= _messages.Count || _messages[index] is not TextMessage textMessage)
         {
@@ -104,13 +89,13 @@ internal class Conversation : DirtyTrackable
         return true;
     }
 
-    public int CountWords(Message.Type filter)
+    public virtual int CountWords(Message.Type filter)
     {
         return _messages.Where(x => x.From.HasFlag(filter))
             .Sum(x => x.CountWords());
     }
 
-    public Bridge.Chat.Models.Conversation ToBridgeModel()
+    public virtual Bridge.Chat.Models.Conversation ToBridgeModel()
     {
         List<Bridge.Chat.Models.TextMessage> bridgeMessages = [];
         foreach (Message message in _messages)
@@ -134,7 +119,7 @@ internal class Conversation : DirtyTrackable
         };
     }
 
-    public Conversation Copy()
+    public virtual Conversation Copy()
     {
         Conversation copy = new()
         {

@@ -36,7 +36,7 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
 
         if (conversationRequestTransmission.ConversationId != null)
         {
-            Conversation? conversation = character.Conversations.FirstOrDefault(c => c.Id == conversationRequestTransmission.ConversationId);
+            Conversation? conversation = character.Conversations.List.FirstOrDefault(c => c.Id == conversationRequestTransmission.ConversationId);
             if (conversation == null)
             {
                 throw new ArgumentException("Conversation not found for the character");
@@ -56,7 +56,7 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
         {
             CharacterId = character.Id!,
             ConversationId = null,
-            Conversations = [.. character.Conversations.Select(c => c.ToBridgeModel())],
+            Conversations = [.. character.Conversations.List.Select(c => c.ToBridgeModel())],
         };
         context.Session.SendTransmission(responseTransmission);
     }

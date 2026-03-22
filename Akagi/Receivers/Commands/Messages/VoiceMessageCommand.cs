@@ -36,7 +36,8 @@ internal class VoiceMessageCommand : MessageCommand
             Content = content,
             VoiceId = messageId,
             Time = DateTime.UtcNow,
-            From = From
+            From = From,
+            CharacterId = FromCharacterId
         };
         context.Conversation.AddMessage(_message);
         return Task.FromResult(Array.Empty<Command>());

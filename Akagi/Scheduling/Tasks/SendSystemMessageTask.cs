@@ -39,6 +39,7 @@ internal class SendSystemMessageTask : OneShotTask
             From = Characters.Conversations.Message.Type.System,
             Text = $"{TextMessage.SystemMessagePrefix}{Message}",
             Time = DateTime.UtcNow,
+            CharacterId = null
         };
 
         IReceiver receiver = Globals.Instance.ServiceProvider.GetRequiredService<IReceiver>();

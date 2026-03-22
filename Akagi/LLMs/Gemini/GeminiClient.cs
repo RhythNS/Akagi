@@ -356,7 +356,7 @@ internal class GeminiClient : LLM, IGeminiClient
                 continue;
             }
 
-            command.From = systemProcessor.Output;
+            command.SetFrom(systemProcessor.Output, context.Character.Id!);
             commands.Add(command);
         }
 

@@ -47,7 +47,7 @@ internal class DefaultReflector : Reflector
 
     protected virtual List<Conversation> GetConversationsToReflect()
     {
-        return [.. Character.Conversations.Where(c =>
+        return [.. Character.Conversations.List.Where(c =>
             c.IsCompleted && Character.Memory.Conversations.Thoughts.FirstOrDefault(t => t.ConversationId == c.Id) == null)];
     }
 

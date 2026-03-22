@@ -13,11 +13,17 @@ namespace Akagi.Characters.CharacterBehaviors;
 internal abstract class CharacterBehavior : Savable
 {
     private string _name = string.Empty;
+    private int _maxSteps = 3;
 
     public string Name
     {
         get => _name;
         set => SetProperty(ref _name, value);
+    }
+    public int MaxSteps
+    {
+        get => _maxSteps;
+        set => SetProperty(ref _maxSteps, value);
     }
 
     protected Context Context
@@ -78,9 +84,11 @@ internal abstract class CharacterBehavior : Savable
 
     protected virtual Task InnerInit() => Task.CompletedTask;
 
-    protected async Task DefaultNextSteps(ILLM llm, SystemProcessor systemProcessor, int maxSteps = 3)
+    protected async Task DefaultNextSteps(ILLM llm, SystemProcessor systemProcessor)
     {
-        bool shouldContinue = true;
+        bool shouldContinue;
+        int maxSteps = MaxSteps;
+
         do
         {
             if (maxSteps-- <= 0)

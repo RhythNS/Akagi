@@ -61,7 +61,7 @@ internal class SummarizeConversationCommand : Command
             throw new ArgumentException("Long summary cannot be null or empty.");
         }
 
-        Conversation? conversation = context.Character.Conversations.FirstOrDefault(c => c.Id == id);
+        Conversation? conversation = context.Character.Conversations.List.FirstOrDefault(c => c.Id == id);
         if (conversation == null)
         {
             throw new ArgumentException($"Conversation with ID {id} not found.");

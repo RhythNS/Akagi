@@ -13,7 +13,7 @@ internal class EndConversationCommand : TextCommand
             throw new InvalidOperationException("You need to have an active character to use this command.");
         }
 
-        context.Character.StartNewConversation();
+        context.Character.Conversations.StartNewConversation();
         return Task.FromResult(CommandResult.Ok);
     }
 }

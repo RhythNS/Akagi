@@ -38,7 +38,7 @@ internal class CharacterRequestHandler : SocketTransmissionHandler
         List<Bridge.Chat.Models.Character> castCharacters = [];
         foreach (Character character in characters)
         {
-            DateTime lastMessageTime = character.Conversations
+            DateTime lastMessageTime = character.Conversations.List
                 .SelectMany(c => c.Messages)
                 .Select(m => (DateTime?)m.Time)
                 .Max() ?? DateTime.MinValue;

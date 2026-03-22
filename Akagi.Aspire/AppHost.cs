@@ -29,6 +29,8 @@ var tatoebaUrl = builder.AddParameter("TatoebaUrl", "https://api.tatoeba.org/uns
 var socketServerIp = builder.AddParameter("SocketServerIp", "127.0.0.1", false);
 var socketServerPort = builder.AddParameter("SocketServerPort", "6000", false);
 
+var fileSystemBasePath = builder.AddParameter("FileSystemBasePath", false);
+
 var serilogConfig = builder.AddParameter("SerilogConfig", """{"Serilog":{"Using":["Serilog.Sinks.Console"],"MinimumLevel":{"Default":"Information","Override":{"Microsoft":"Warning","System":"Warning"}},"WriteTo":[{"Name":"Console"}],"Enrich":["FromLogContext","WithMachineName","WithThreadId"]}}""", false);
 
 var akagi = builder.AddProject<Akagi>("Akagi")
@@ -48,6 +50,7 @@ var akagi = builder.AddProject<Akagi>("Akagi")
                    .WithEnvironment("Tatoeba__url", tatoebaUrl)
                    .WithEnvironment("Socket__Ip", socketServerIp)
                    .WithEnvironment("Socket__Port", socketServerPort)
+                   .WithEnvironment("FileSystem__BasePath", fileSystemBasePath)
                    .WithEnvironment("Serilog__Using__0", "Serilog.Sinks.Console")
                    .WithEnvironment("Serilog__MinimumLevel__Default", "Information")
                    .WithEnvironment("Serilog__MinimumLevel__Override__Microsoft", "Warning")

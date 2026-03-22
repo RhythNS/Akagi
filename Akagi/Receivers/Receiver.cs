@@ -4,6 +4,8 @@ using Akagi.Characters.CharacterBehaviors.Puppeteers;
 using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
+using Akagi.Characters.Groups.Strategies;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Communication;
 using Akagi.Data;
@@ -21,6 +23,7 @@ namespace Akagi.Receivers;
 internal interface IReceiver
 {
     public Task OnMessageRecieved(ICommunicator from, User user, Character character, Message message);
+    public Task OnGroupMessageRecieved(ICommunicator from, User user, CharacterGroup group, Message message);
     public Task OnPromptContinue(ICommunicator? from, Character character, User user);
     public Task Reflect(Character character, User user, string name);
     public Task OnSystemEvent(Character character, User user, Message message);
@@ -30,11 +33,15 @@ internal class Receiver : IReceiver, ICleanable
 {
     private static readonly ConcurrentDictionary<(string userId, string characterId), SemaphoreSlim> _locks = new();
     private static readonly ConcurrentDictionary<(string userId, string characterId), AsyncLocal<int>> _lockCounts = new();
+    private static readonly ConcurrentDictionary<(string userId, string groupId), SemaphoreSlim> _groupLocks = new();
+    private static readonly ConcurrentDictionary<(string userId, string groupId), CancellationTokenSource> _groupCancellations = new();
 
     private readonly IPuppeteerDatabase _puppeteerDatabase;
     private readonly IReflectorDatabase _reflectorDatabase;
     private readonly IInterceptorDatabase _interceptorDatabase;
     private readonly ISystemProcessorDatabase _systemProcessorDatabase;
+    private readonly IGroupStrategyDatabase _groupStrategyDatabase;
+    private readonly ICharacterGroupDatabase _characterGroupDatabase;
     private readonly ILLMFactory _llmFactory;
     private readonly IDatabaseFactory _databaseFactory;
     private readonly ILogger<Receiver> _logger;
@@ -43,6 +50,8 @@ internal class Receiver : IReceiver, ICleanable
                     IReflectorDatabase reflectorDatabase,
                     IInterceptorDatabase interceptorDatabase,
                     ISystemProcessorDatabase systemProcessorDatabase,
+                    IGroupStrategyDatabase groupStrategyDatabase,
+                    ICharacterGroupDatabase characterGroupDatabase,
                     ILLMFactory llmFactory,
                     IDatabaseFactory databaseFactory,
                     ILogger<Receiver> logger)
@@ -51,6 +60,8 @@ internal class Receiver : IReceiver, ICleanable
         _reflectorDatabase = reflectorDatabase;
         _interceptorDatabase = interceptorDatabase;
         _systemProcessorDatabase = systemProcessorDatabase;
+        _groupStrategyDatabase = groupStrategyDatabase;
+        _characterGroupDatabase = characterGroupDatabase;
         _llmFactory = llmFactory;
         _databaseFactory = databaseFactory;
         _logger = logger;
@@ -176,6 +187,99 @@ internal class Receiver : IReceiver, ICleanable
         }
     }
 
+    public async Task OnGroupMessageRecieved(ICommunicator from, User user, CharacterGroup group, Message message)
+    {
+        if (!TryLockGroup(group, user))
+        {
+            await from.SendMessage(user, "Group is busy processing another message. Please try again later.");
+            return;
+        }
+
+        CancellationTokenSource cts = GetOrCreateGroupCancellation(group, user);
+        List<ContextBase> contexts = [];
+
+        try
+        {
+            ICharacterDatabase characterDatabase = _databaseFactory.GetDatabase<ICharacterDatabase>();
+            List<Character> members = [];
+            foreach (string memberId in group.MemberCharacterIds)
+            {
+                Character member = await characterDatabase.GetCharacter(memberId)
+                    ?? throw new Exception($"Member character with ID {memberId} not found for group {group.Id}");
+                members.Add(member);
+            }
+
+            GroupStrategy strategy = await _groupStrategyDatabase.GetDocumentByIdAsync(group.StrategyId)
+                ?? throw new Exception($"GroupStrategy with ID {group.StrategyId} not found for group {group.Id}");
+
+            ICommunicator communicator = from;
+
+            if (group.InterceptorIds.Length > 0)
+            {
+                ILogger interceptorLogger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Interceptor>>();
+                List<Interceptor> interceptors = [];
+
+                foreach (string id in group.InterceptorIds)
+                {
+                    Interceptor interceptor = await _interceptorDatabase.GetDocumentByIdAsync(id)
+                        ?? throw new Exception($"Interceptor with ID {id} not found for group {group.Id}");
+
+                    Context tempContext = GetContext(members[0], user, communicator);
+                    await interceptor.Init(interceptorLogger, tempContext, _systemProcessorDatabase);
+                    interceptors.Add(interceptor);
+                    contexts.Add(tempContext);
+                }
+
+                communicator = new InterceptingCommunicator(communicator, [.. interceptors]);
+            }
+
+            Conversation groupConversation = group.Conversations.GetCurrentConversation();
+            groupConversation.AddMessage(message);
+
+            await using GroupContext groupContext = new()
+            {
+                Group = group,
+                Members = members,
+                User = user,
+                Communicator = communicator,
+                LLMFactory = _llmFactory,
+                DatabaseFactory = _databaseFactory,
+                CancellationToken = cts.Token,
+            };
+
+            try
+            {
+                await strategy.ProcessAsync(groupContext);
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogInformation("Group run cancelled for user {UserId} and group {GroupId}", user.Id, group.Id);
+                await from.SendMessage(user, $"Group '{group.Name}' run was cancelled.");
+            }
+            catch (Exception ex) when (group.ErrorBehavior == GroupErrorBehavior.NotifyGroup)
+            {
+                _logger.LogError(ex, "Error during group processing for user {UserId} and group {GroupId}", user.Id, group.Id);
+                string errorMessage = group.ErrorMessage.Replace("{{error}}", ex.Message);
+                await from.SendMessage(user, errorMessage);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing group message for user {UserId} and group {GroupId}", user.Id, group.Id);
+            await from.SendMessage(user, "An error occurred while processing your message. Please try again later.");
+        }
+        finally
+        {
+            foreach (ContextBase context in contexts)
+            {
+                await context.DisposeAsync();
+            }
+
+            RemoveGroupCancellation(group, user);
+            ReleaseGroupLock(group, user);
+        }
+    }
+
     public async Task OnPromptContinue(ICommunicator? from, Character character, User user)
     {
         if (!TryLockCharacter(character, user))
@@ -245,7 +349,7 @@ internal class Receiver : IReceiver, ICleanable
         return new Context()
         {
             Character = character,
-            Conversation = character.GetCurrentConversation(),
+            Conversation = character.Conversations.GetCurrentConversation(),
             User = user,
             Communicator = communicator,
             LLMFactory = _llmFactory,
@@ -355,5 +459,47 @@ internal class Receiver : IReceiver, ICleanable
                 }
             }
         }
+    }
+
+    private static bool TryLockGroup(CharacterGroup group, User user)
+    {
+        (string, string) key = (user.Id!, group.Id!);
+        SemaphoreSlim semaphore = _groupLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        return semaphore.Wait(0);
+    }
+
+    private static void ReleaseGroupLock(CharacterGroup group, User user)
+    {
+        (string, string) key = (user.Id!, group.Id!);
+        if (_groupLocks.TryGetValue(key, out SemaphoreSlim? semaphore))
+        {
+            semaphore.Release();
+        }
+    }
+
+    private static CancellationTokenSource GetOrCreateGroupCancellation(CharacterGroup group, User user)
+    {
+        (string, string) key = (user.Id!, group.Id!);
+        return _groupCancellations.GetOrAdd(key, _ => new CancellationTokenSource());
+    }
+
+    private static void RemoveGroupCancellation(CharacterGroup group, User user)
+    {
+        (string, string) key = (user.Id!, group.Id!);
+        if (_groupCancellations.TryRemove(key, out CancellationTokenSource? cts))
+        {
+            cts.Dispose();
+        }
+    }
+
+    public static bool TryCancelGroupRun(string userId, string groupId)
+    {
+        (string, string) key = (userId, groupId);
+        if (_groupCancellations.TryGetValue(key, out CancellationTokenSource? cts))
+        {
+            cts.Cancel();
+            return true;
+        }
+        return false;
     }
 }

@@ -68,6 +68,7 @@ internal class MemoryInjectionCompiler : InjectionCompiler
                     From = MessageType,
                     Time = DateTime.Now,
                     Text = sb.ToString(),
+                    CharacterId = context.Character.Id!,
                 };
 
                 return [text];
@@ -77,15 +78,15 @@ internal class MemoryInjectionCompiler : InjectionCompiler
 
                 if (Collections.HasFlag(MemoryCollections.Long))
                 {
-                    AddCollectionToList(messages, memory.LongTerm, Indexed);
+                    AddCollectionToList(messages, memory.LongTerm, Indexed, context.Character.Id!);
                 }
                 if (Collections.HasFlag(MemoryCollections.Short))
                 {
-                    AddCollectionToList(messages, memory.ShortTerm, Indexed);
+                    AddCollectionToList(messages, memory.ShortTerm, Indexed, context.Character.Id!);
                 }
                 if (Collections.HasFlag(MemoryCollections.Goals))
                 {
-                    AddCollectionToList(messages, memory.Goals, Indexed);
+                    AddCollectionToList(messages, memory.Goals, Indexed, context.Character.Id!);
                 }
 
                 return [.. messages];
@@ -95,15 +96,15 @@ internal class MemoryInjectionCompiler : InjectionCompiler
 
                 if (Collections.HasFlag(MemoryCollections.Long))
                 {
-                    AddThoughtsToList(thoughtMessages, memory.LongTerm, Indexed);
+                    AddThoughtsToList(thoughtMessages, memory.LongTerm, Indexed, context.Character.Id!);
                 }
                 if (Collections.HasFlag(MemoryCollections.Short))
                 {
-                    AddThoughtsToList(thoughtMessages, memory.ShortTerm, Indexed);
+                    AddThoughtsToList(thoughtMessages, memory.ShortTerm, Indexed, context.Character.Id!);
                 }
                 if (Collections.HasFlag(MemoryCollections.Goals))
                 {
-                    AddThoughtsToList(thoughtMessages, memory.Goals, Indexed);
+                    AddThoughtsToList(thoughtMessages, memory.Goals, Indexed, context.Character.Id!);
                 }
 
                 return [.. thoughtMessages];
@@ -129,7 +130,7 @@ internal class MemoryInjectionCompiler : InjectionCompiler
         }
     }
 
-    private void AddCollectionToList(List<Message> messages, ThoughtCollection<SingleFactThought> thoughtCollection, bool indexed)
+    private void AddCollectionToList(List<Message> messages, ThoughtCollection<SingleFactThought> thoughtCollection, bool indexed, string characterId)
     {
         for (int i = 0; i < thoughtCollection.Thoughts.Count; i++)
         {
@@ -148,11 +149,12 @@ internal class MemoryInjectionCompiler : InjectionCompiler
                 From = MessageType,
                 Time = DateTime.Now,
                 Text = sb.ToString(),
+                CharacterId = characterId,
             });
         }
     }
 
-    private void AddThoughtsToList(List<Message> messages, ThoughtCollection<SingleFactThought> thoughtCollection, bool indexed)
+    private void AddThoughtsToList(List<Message> messages, ThoughtCollection<SingleFactThought> thoughtCollection, bool indexed, string characterId)
     {
         for (int i = 0; i < thoughtCollection.Thoughts.Count; i++)
         {
@@ -171,6 +173,7 @@ internal class MemoryInjectionCompiler : InjectionCompiler
                 From = MessageType,
                 Time = DateTime.Now,
                 Text = sb.ToString(),
+                CharacterId = characterId,
             });
         }
     }

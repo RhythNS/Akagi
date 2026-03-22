@@ -1,14 +1,17 @@
 ﻿using Akagi.Receivers.Commands;
 using Akagi.Utils;
 using Akagi.Utils.Extensions;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.Receivers;
 
 static class DependendyInjection
 {
-    public static void AddPuppeteers(this IServiceCollection services)
+    public static void AddReceivers(this IServiceCollection services, IConfiguration configuration)
     {
+        services.Configure<FileSystemCommand.Options>(configuration.GetSection("FileSystem"));
+
         services.AddSingleton<IReceiver, Receiver>();
         services.AddScoped<ICommandFactory, CommandFactory>();
 

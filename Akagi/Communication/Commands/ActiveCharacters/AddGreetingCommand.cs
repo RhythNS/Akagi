@@ -34,12 +34,13 @@ internal class AddGreetingCommand : TextCommand
             return CommandResult.Fail("Invalid greeting index.");
         }
 
-        Conversation conversation = context.Character.StartNewConversation();
+        Conversation conversation = context.Character.Conversations.StartNewConversation();
         TextMessage message = new()
         {
             From = Message.Type.Character,
             Text = greeting,
             Time = DateTime.UtcNow,
+            CharacterId = context.Character.Id
         };
         conversation.AddMessage(message);
 

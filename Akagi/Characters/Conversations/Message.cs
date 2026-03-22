@@ -35,6 +35,7 @@ internal abstract class Message
 
     public required DateTime Time { get; set; }
     public required Type From { get; set; }
+    public required string? CharacterId { get; set; }
 
     public abstract Message Copy();
 

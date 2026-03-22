@@ -1,10 +1,12 @@
-﻿using MongoDB.Bson.Serialization.Attributes;
+﻿using Akagi.Bridge.Attributes;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Data;
 
 internal class DirtyTrackable
 {
     [BsonIgnore]
+    [NodeIgnore]
     public virtual bool Dirty { get; set; } = false;
 
     protected bool SetProperty<T>(ref T field, T value)

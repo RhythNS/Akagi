@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Groups;
 using Akagi.Data;
 using Akagi.Users;
 
@@ -15,9 +16,10 @@ internal abstract class Command
     public class Context : ContextBase
     {
         public Character? Character { get; init; }
+        public CharacterGroup? Group { get; init; }
         public required User User { get; init; }
         public Dictionary<string, string> Variables { get; init; } = [];
-        protected override Savable?[] ToTrack => [Character, User];
+        protected override Savable?[] ToTrack => [Character, Group, User];
     }
 
     public abstract string Name { get; }

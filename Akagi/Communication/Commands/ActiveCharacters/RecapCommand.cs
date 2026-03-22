@@ -22,7 +22,7 @@ internal class RecapCommand : TextCommand
             sb.AppendLine($"Character: {context.Character.Name}");
             sb.AppendLine($"Character ID: {context.Character.Id}");
 
-            Conversation conversation = context.Character.GetCurrentConversation();
+            Conversation conversation = context.Character.Conversations.GetCurrentConversation();
             Message[] lastMessages = [.. conversation.Messages.TakeLast(3)];
             if (lastMessages.Length == 0)
             {

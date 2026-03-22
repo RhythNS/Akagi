@@ -1,6 +1,8 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
 using Akagi.Characters.VoiceClips;
+using Akagi.Data;
 using Akagi.LLMs;
 using Akagi.Users;
 using Microsoft.Extensions.Hosting;
@@ -52,6 +54,9 @@ internal partial class TelegramService : Communicator, IHostedService
 
     private async Task SendInfoIfCharacterSwitched(Users.User user, Character character)
     {
+        //TODO: fix
+        return;
+
         if (user.TelegramUser!.CurrentCharacterId == character.Id)
         {
             return;
@@ -215,6 +220,12 @@ internal partial class TelegramService : Communicator, IHostedService
 
         await _client!.SendChatAction(message.Chat.Id, ChatAction.Typing, cancellationToken: cancellationToken);
 
+        await using CustomContext saveUser = new()
+        {
+            DatabaseFactory = _databaseFactory,
+            Track = [user]
+        };
+
         if (user.Username != null && message.From != null && message.From.Username != user.TelegramUser!.UserName)
         {
             user.TelegramUser.UserName = message.From.Username!;
@@ -222,10 +233,6 @@ internal partial class TelegramService : Communicator, IHostedService
         if (user.LastUsedCommunicator != Name)
         {
             user.LastUsedCommunicator = Name;
-        }
-        if (user.Dirty == true)
-        {
-            await _userDatabase.SaveDocumentAsync(user);
         }
 
         if ((message.Text?.StartsWith("/", StringComparison.InvariantCultureIgnoreCase) ?? false) ||
@@ -236,18 +243,47 @@ internal partial class TelegramService : Communicator, IHostedService
             return;
         }
 
-        Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
-        if (character == null)
+        bool hasCharacter = string.IsNullOrEmpty(user.TelegramUser!.CurrentCharacterId) == false;
+        bool hasGroup = string.IsNullOrEmpty(user.TelegramUser.CurrentGroupId) == false;
+
+        if (hasCharacter == false && hasGroup == false)
         {
-            if (string.IsNullOrEmpty(user.TelegramUser!.CurrentCharacterId) == false)
+            _logger.LogInformation("Received text '{Text}' in chat {ChatId} where user had no character or group selected.", message.Text, message.Chat.Id);
+            await _client!.SendMessage(message.Chat.Id, "You do not have a current character or group. Please select one first!", cancellationToken: cancellationToken);
+            return;
+        }
+        if (hasCharacter && hasGroup)
+        {
+            user.TelegramUser!.CurrentGroupId = null;
+            user.TelegramUser!.CurrentCharacterId = null;
+            _logger.LogInformation("User {UserId} had both a character and group selected. Clearing group and character selection.", user.Id);
+            await _client!.SendMessage(message.Chat.Id, "You had both a character and group selected. Clearing selections. Please select a character or group.", cancellationToken: cancellationToken);
+            return;
+        }
+
+        Character? character = null;
+        if (hasCharacter)
+        {
+            character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
+            if (character == null)
             {
                 user.TelegramUser.CurrentCharacterId = string.Empty;
-                await _userDatabase.SaveDocumentAsync(user);
+                _logger.LogInformation("Received text '{Text}' in chat {ChatId} where user had no character selected.", message.Text, message.Chat.Id);
+                await _client!.SendMessage(message.Chat.Id, "You do not have a current character. Please select one first!", cancellationToken: cancellationToken);
+                return;
             }
-
-            _logger.LogInformation("Received text '{Text}' in chat {ChatId} where user had no character selected.", message.Text, message.Chat.Id);
-            await _client!.SendMessage(message.Chat.Id, "You do not have a current character. Please select one first!", cancellationToken: cancellationToken);
-            return;
+        }
+        CharacterGroup? group = null;
+        if (hasGroup)
+        {
+            group = await _characterGroupDatabase.GetDocumentByIdAsync(user.TelegramUser!.CurrentGroupId!);
+            if (group == null)
+            {
+                user.TelegramUser.CurrentGroupId = string.Empty;
+                _logger.LogInformation("Received text '{Text}' in chat {ChatId} where user had no group selected.", message.Text, message.Chat.Id);
+                await _client!.SendMessage(message.Chat.Id, "You do not have a current group. Please select one first!", cancellationToken: cancellationToken);
+                return;
+            }
         }
 
         Characters.Conversations.Message toProcess;
@@ -266,6 +302,7 @@ internal partial class TelegramService : Communicator, IHostedService
                     From = Characters.Conversations.Message.Type.User,
                     Text = message.Text,
                     Time = DateTime.UtcNow,
+                    CharacterId = null,
                 };
                 break;
 
@@ -304,6 +341,7 @@ internal partial class TelegramService : Communicator, IHostedService
                         From = Characters.Conversations.Message.Type.User,
                         VoiceId = voiceClip.Id!,
                         Time = DateTime.UtcNow,
+                        CharacterId = null,
                     };
                     break;
                 }
@@ -317,7 +355,14 @@ internal partial class TelegramService : Communicator, IHostedService
         _logger.LogInformation("Received message '{Message}' in chat {ChatId}", toProcess.ToString(), message.Chat.Id);
         try
         {
-            await ReceiveMessage(user, character, toProcess);
+            if (hasCharacter)
+            {
+                await ReceiveCharacterMessage(user, character!, toProcess);
+            }
+            else if (hasGroup)
+            {
+                await ReceiveGroupMessage(user, group!, toProcess);
+            }
         }
         catch (Exception ex)
         {

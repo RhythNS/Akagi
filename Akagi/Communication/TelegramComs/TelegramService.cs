@@ -1,4 +1,5 @@
 ﻿using Akagi.Characters;
+using Akagi.Characters.Groups;
 using Akagi.Characters.VoiceClips;
 using Akagi.Communication.Commands;
 using Akagi.Data;
@@ -27,6 +28,7 @@ internal partial class TelegramService : Communicator, IHostedService
     private readonly ILogger<TelegramService> _logger;
     private readonly IUserDatabase _userDatabase;
     private readonly ICharacterDatabase _characterDatabase;
+    private readonly ICharacterGroupDatabase _characterGroupDatabase;
     private readonly IVoiceClipsDatabase _voiceClipsDatabase;
     private readonly IDatabaseFactory _databaseFactory;
     private readonly ILLMDefinitionDatabase _lLMDefinitionDatabase;
@@ -40,6 +42,7 @@ internal partial class TelegramService : Communicator, IHostedService
                            IOptionsMonitor<Options> options,
                            IUserDatabase userDatabase,
                            ICharacterDatabase characterDatabase,
+                           ICharacterGroupDatabase characterGroupDatabase,
                            IDatabaseFactory databaseFactory,
                            IVoiceClipsDatabase voiceClipsDatabase,
                            ILLMDefinitionDatabase llmDefinitionsDatabase,
@@ -49,6 +52,7 @@ internal partial class TelegramService : Communicator, IHostedService
         _token = options.CurrentValue.Token;
         _logger = logger;
         _characterDatabase = characterDatabase;
+        _characterGroupDatabase = characterGroupDatabase;
         _voiceClipsDatabase = voiceClipsDatabase;
         _databaseFactory = databaseFactory;
         _userDatabase = userDatabase;

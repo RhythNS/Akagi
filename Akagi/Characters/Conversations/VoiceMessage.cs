@@ -13,7 +13,8 @@ internal class VoiceMessage : Message
             Time = Time,
             From = From,
             Content = Content,
-            VoiceId = VoiceId
+            VoiceId = VoiceId,
+            CharacterId = CharacterId
         };
     }
 }

@@ -24,7 +24,7 @@ internal class Program
         builder.Services.AddUtils();
         builder.Services.AddConnectors(builder.Configuration);
         builder.Services.AddData(builder.Configuration);
-        builder.Services.AddPuppeteers();
+        builder.Services.AddReceivers(builder.Configuration);
         builder.Services.AddCharacter();
         builder.Services.AddUsers();
         builder.Services.AddLLMs();

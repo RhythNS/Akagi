@@ -142,7 +142,8 @@ internal class SummarizedCompiler : MessageCompiler
                     {
                         From = SummaryFrom,
                         Text = summary,
-                        Time = filteredConversations[i].Time
+                        Time = filteredConversations[i].Time,
+                        CharacterId = context.Character.Id
                     }
                 ]
             };

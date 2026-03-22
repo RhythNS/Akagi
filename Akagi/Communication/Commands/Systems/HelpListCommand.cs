@@ -18,13 +18,20 @@ internal class HelpListCommand : ListCommand
             .. Communicator.AvailableCommands
             .Where(x =>
             {
+                bool hasAccess = !x.AdminOnly || context.User.Admin;
+
+                if (hasAccess == false)
+                {
+                    return false;
+                }
+
                 if (searchTerm != null)
                 {
                     return x.Name.Contains(searchTerm,
                         StringComparison.InvariantCultureIgnoreCase);
                 }
 
-               return !x.AdminOnly || context.User.Admin;
+               return true;
             }
             ).OrderBy(x => x.Name)
         ];

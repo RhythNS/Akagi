@@ -1,5 +1,6 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
 using Akagi.Communication.Commands;
 using Akagi.Receivers;
 using Akagi.Users;
@@ -40,19 +41,37 @@ internal abstract class Communicator : ICommunicator
     public abstract Task SendAudio(User user, Character character, Stream stream, string fileName);
     public abstract Task SendAudio(User user, Stream stream, string fileName);
 
-    protected Task ReceiveMessage(User user, Character character, string message)
+    protected Task ReceiveCharacterMessage(User user, Character character, string message)
     {
         TextMessage textMessage = new()
         {
             From = Message.Type.User,
             Text = message,
             Time = DateTime.UtcNow,
+            CharacterId = null,
         };
-        return ReceiveMessage(user, character, textMessage);
+        return ReceiveCharacterMessage(user, character, textMessage);
     }
 
-    protected async Task ReceiveMessage(User user, Character character, Message message)
+    protected Task ReceiveCharacterMessage(User user, Character character, Message message)
     {
-        await _receiver.OnMessageRecieved(this, user, character, message);
+        return _receiver.OnMessageRecieved(this, user, character, message);
+    }
+
+    protected Task ReceiveGroupMessage(User user, CharacterGroup group, string message)
+    {
+        TextMessage textMessage = new()
+        {
+            From = Message.Type.User,
+            Text = message,
+            Time = DateTime.UtcNow,
+            CharacterId = null,
+        };
+        return ReceiveGroupMessage(user, group, textMessage);
+    }
+
+    protected Task ReceiveGroupMessage(User user, CharacterGroup group, Message message)
+    {
+        return _receiver.OnGroupMessageRecieved(this, user, group, message);
     }
 }

@@ -6,6 +6,9 @@ using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Checkpoints;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
+using Akagi.Characters.Groups.Checkpoints;
+using Akagi.Characters.Groups.Strategies;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Characters.VoiceClips;
@@ -30,6 +33,9 @@ static class DependencyInjection
         services.AddSingleton<IMessageCompilerDatabase, MessageCompilerDatabase>();
         services.AddSingleton<ITriggerPointDatabase, TriggerPointDatabase>();
         services.AddSingleton<ITriggerActionDatabase, TriggerActionDatabase>();
+        services.AddSingleton<ICharacterGroupDatabase, CharacterGroupDatabase>();
+        services.AddSingleton<IGroupStrategyDatabase, GroupStrategyDatabase>();
+        services.AddSingleton<IGroupCheckpointDatabase, GroupCheckpointDatabase>();
 
         RegisterDBClasses();
     }
@@ -56,5 +62,8 @@ static class DependencyInjection
 
         Type[] triggerActionTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<TriggerAction>();
         Array.ForEach(triggerActionTypes, BsonExtensions.Register);
+
+        Type[] groupStrategyTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<GroupStrategy>();
+        Array.ForEach(groupStrategyTypes, BsonExtensions.Register);
     }
 }

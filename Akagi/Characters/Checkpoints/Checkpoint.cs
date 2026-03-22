@@ -1,4 +1,5 @@
-﻿using Akagi.Characters.Memories;
+﻿using Akagi.Characters.Conversations;
+using Akagi.Characters.Memories;
 using Akagi.Data;
 
 namespace Akagi.Characters.Checkpoints;
@@ -8,19 +9,19 @@ internal class Checkpoint : Savable
     private DateTime _createdOn;
     private string _characterId = string.Empty;
     private string _characterName = string.Empty;
-    private List<Conversation> _conversations = [];
+    private ConversationContainer _conversations = new();
     private Memory _memory = new();
 
     public override bool Dirty
     {
-        get => base.Dirty || _memory.Dirty || _conversations.Any(c => c.Dirty);
+        get => base.Dirty || _memory.Dirty || _conversations.Dirty;
         set
         {
             base.Dirty = value;
             if (value == false)
             {
                 _memory.Dirty = false;
-                _conversations.ForEach(c => c.Dirty = false);
+                _conversations.Dirty = false;
             }
         }
     }
@@ -40,7 +41,7 @@ internal class Checkpoint : Savable
         get => _characterName;
         set => SetProperty(ref _characterName, value);
     }
-    public List<Conversation> Conversations
+    public ConversationContainer Conversations
     {
         get => _conversations;
         set => SetProperty(ref _conversations, value);
@@ -58,14 +59,14 @@ internal class Checkpoint : Savable
             CreatedOn = DateTime.UtcNow,
             CharacterId = character.Id!,
             CharacterName = character.Name,
-            Conversations = character.Conversations.Select(c => c.Copy()).ToList(),
+            Conversations = character.Conversations.Copy(),
             Memory = character.Memory.Copy(),
         };
     }
 
     public void ApplyToCharacter(Character character)
     {
-        character.Conversations = Conversations.Select(c => c.Copy()).ToList();
+        character.Conversations = Conversations.Copy();
         character.Memory = Memory.Copy();
     }
 }
