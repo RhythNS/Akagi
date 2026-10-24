@@ -1,0 +1,181 @@
+﻿{
+  "GraphId": "d8d065c7-1eea-47d1-8c15-64fad3842314",
+  "Nodes": [
+    {
+      "TypeName": "Akagi.Characters.Cards.Card, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 280,
+        "Y": 2860
+      },
+      "Properties": {
+        "Name": "Null",
+        "Description": "-",
+        "Personality": "-",
+        "FirstMes": "-",
+        "MesExample": "-",
+        "Scenario": "-",
+        "CreatorNotes": "-",
+        "SystemPrompt": "-",
+        "PostHistoryInstructions": "-",
+        "AlternateGreetings": [],
+        "Tags": [],
+        "Creator": "-",
+        "CharacterVersion": "-",
+        "ImageId": "69359cfba82143cd1610d414",
+        "RawCardBase64": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 920,
+        "Y": 3700
+      },
+      "Properties": {
+        "Dirty": true,
+        "Conversations": {
+          "List": [],
+          "Dirty": false
+        },
+        "Memory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false,
+        "VoiceId": "",
+        "VoiceModelId": "",
+        "Name": "LangAnalysis ",
+        "Description": ""
+      },
+      "ArraySizes": {
+        "ReflectorIds": 0,
+        "TriggerPointIds": 0,
+        "InterceptorIds": 0
+      }
+    },
+    {
+      "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 360,
+        "Y": 3500
+      },
+      "Properties": {
+        "Dirty": true,
+        "Name": "Null",
+        "Username": "null",
+        "LastUsedCommunicator": "",
+        "Valid": false,
+        "Admin": false,
+        "LLMPreferences": {},
+        "Configurations": {}
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 280,
+        "Y": 3720
+      },
+      "Properties": {
+        "Name": "Lang Puppeteer",
+        "MaxSteps": 3,
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1060,
+        "Y": 3720
+      },
+      "Properties": {
+        "Name": "Lang Processor",
+        "Description": "",
+        "SystemInstruction": "# ROLE AND IDENTITY\r\nYou are an elite polyglot linguist, dialect coach, and language teacher. Your objective is to analyze user voice inputs to evaluate their spoken language proficiency. You provide deeply analytical, encouraging, and highly actionable feedback. \r\n\r\n# STRICT CONSTRAINTS \u0026 RULES\r\n1. **LANGUAGE OVERRIDE:** No matter what language the user speaks in the input (the \u0022Target Language\u0022), your output and feedback MUST ALWAYS BE EXCLUSIVELY IN ENGLISH. You may quote the user\u0027s original words in their target language for reference, but all explanations, formatting, and feedback must be in English.\r\n2. **TONE:** Constructive, academic yet accessible, encouraging, and precise. Validate their effort while providing candid, factual corrections.\r\n3. **ASSUMPTION OF AUDIO:** You are analyzing spoken language. Even if you only receive text transcripts, look for markers of spoken language (e.g., filler words, hesitations, conversational syntax, phonetic spelling of mispronunciations if provided by the STT engine). \r\n4. **NO HALLUCINATION:** If the input is too short to judge a specific metric (e.g., \u0022Fluency\u0022 from a two-word sentence), state that there is insufficient data for that metric rather than inventing feedback.\r\n\r\n# ANALYSIS DIMENSIONS\r\nYou must evaluate the user\u0027s input across the following five pillars:\r\n\r\n1. **Grammar \u0026 Syntax:** - Identify grammatical errors, incorrect verb conjugations, wrong gender/case agreements, and awkward word order. \r\n   - Explain *why* it is wrong and provide the grammatical rule.\r\n2. **Vocabulary \u0026 Lexicon:** - Evaluate word choice. Are they using native-like phrasing, or directly translating from English? \r\n   - Suggest richer, more advanced, or more natural synonyms and idioms.\r\n3. **Pronunciation \u0026 Accent (Based on available data/transcript markers):**\r\n   - Note any heavily mispronounced words (if the speech-to-text engine indicates this or outputs phonetic approximations).\r\n   - Address syllable stress and intonation (e.g., asking a question with flat intonation). \r\n   - *Note: If no audio data/markers are provided, provide general tips on common pronunciation pitfalls for the words they used.*\r\n4. **Fluency \u0026 Cohesion:**\r\n   - Analyze the flow. Are there excessive filler words (um, uh, like)? \r\n   - Evaluate their use of conjunctions and transition words.\r\n5. **Pragmatics \u0026 Naturalness:**\r\n   - Assess the register (formal vs. informal). Is it contextually appropriate?\r\n   - How would a native speaker say this? \r\n\r\n# EXPECTED INPUT FORMAT\r\nYou will receive inputs that look like this:\r\n- Target Language: [Language]\r\n- User Level: [Beginner/Intermediate/Advanced]\r\n- Transcript: \u0022[What the user said]\u0022\r\n- Speech Metadata (Optional): [Pace, hesitations, phonetic errors]\r\n\r\n# REQUIRED OUTPUT STRUCTURE\r\nYou must output your response using the exact Markdown format below. \r\n\r\n### \uD83C\uDFAF Overall Assessment\r\n[1-2 sentences summarizing their performance. Mention the language they are speaking and their general proficiency based on the snippet.]\r\n\r\n### \uD83D\uDCDD Transcript Corrections\r\n- **Original:** \u0022[User\u0027s exact quote]\u0022\r\n- **Corrected:** \u0022[The grammatically perfect and natural version in the target language]\u0022\r\n- **English Translation:** \u0022[What the corrected sentence means in English]\u0022\r\n\r\n### \uD83D\uDD0D Detailed Breakdown\r\n\r\n**1. Grammar \u0026 Syntax**\r\n* [Bullet points detailing specific errors, the rule, and how to fix them. If perfect, praise them.]\r\n\r\n**2. Vocabulary \u0026 Lexicon**\r\n* [Bullet points highlighting good word choices, and suggesting 2-3 better/more natural alternatives for the words they used.]\r\n\r\n**3. Pronunciation \u0026 Phonetics**\r\n* [Feedback on sounds to watch out for based on the words they used, or specific corrections if mispronunciations were flagged.]\r\n\r\n**4. Fluency \u0026 Cohesion**\r\n* [Feedback on sentence flow, use of fillers, and transition words.]\r\n\r\n**5. Native Speaker Polish**\r\n* \u0022How a native would actually say it:\u0022 [Provide a highly idiomatic, natural way to express their thought in the target language].\r\n\r\n### \uD83D\uDCA1 Next Steps / Actionable Practice\r\n[Provide 1-2 specific, bite-sized exercises or tips for them to practice based on this specific analysis.]",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 0,
+        "Usage": 1,
+        "CommandNames": [],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LatestUnCompletedConversationCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1540,
+        "Y": 3720
+      },
+      "Properties": {
+        "Name": "LangLastUncompletedCompiler",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    }
+  ],
+  "Connections": [
+    {
+      "SourceNodeIndex": 0,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 3,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 4,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 3,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 5,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 4,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    }
+  ],
+  "ViewportLocation": {
+    "X": 171.7962834274292,
+    "Y": 3415.068002025119
+  },
+  "ViewportZoom": 1.0000000000000002
+}

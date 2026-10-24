@@ -1,5 +1,6 @@
 ﻿using Akagi.Connectors.Desu;
 using Akagi.Connectors.Tatoeba;
+using Akagi.Connectors.TimeTracker;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -12,5 +13,8 @@ static class DependencyInjection
         services.Configure<TatoebaConnector.Options>(configuration.GetSection("Tatoeba"));
         services.AddScoped<ITatoebaConnector, TatoebaConnector>();
         services.AddScoped<IDesuConnector, DesuConnector>();
+
+        services.Configure<TimeTrackerConnector.Options>(configuration.GetSection("TimeTracker"));
+        services.AddScoped<ITimeTrackerConnector, TimeTrackerConnector>();
     }
 }

@@ -1,13 +1,12 @@
 using Akagi.Bridge.Attributes;
 using Akagi.Characters.Cards;
 using Akagi.Characters.Conversations;
-using Akagi.Receivers;
 using MongoDB.Bson.Serialization.Attributes;
 
-namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
+namespace Akagi.Characters.CharacterBehaviors.Filters;
 
 [GraphNode]
-internal class FilterGroupMemberMessageCompiler : MessageCompiler
+internal class GroupMemberFilterCompiler : FilterMessageCompiler
 {
     private string[] _allowedCharacterIds = [];
     private bool _allowUserMessages = true;
@@ -25,23 +24,7 @@ internal class FilterGroupMemberMessageCompiler : MessageCompiler
         set => SetProperty(ref _allowUserMessages, value);
     }
 
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
-    {
-        List<Conversation> result = [];
-
-        foreach (Conversation conversation in filteredConversations)
-        {
-            conversation.Messages = [.. conversation.Messages.Where(IsAllowed)];
-            if (conversation.Messages.Count > 0)
-            {
-                result.Add(conversation);
-            }
-        }
-
-        filteredConversations = result;
-    }
-
-    private bool IsAllowed(Message message)
+    protected override bool IsAllowed(Message message)
     {
         if (message.CharacterId == null)
         {

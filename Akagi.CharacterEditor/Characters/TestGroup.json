@@ -1,0 +1,704 @@
+﻿{
+  "GraphId": "e099f307-31e3-4b51-8920-6adf13ee8050",
+  "Nodes": [
+    {
+      "TypeName": "Akagi.Characters.Groups.CharacterGroup, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1600,
+        "Y": 2080
+      },
+      "Properties": {
+        "Dirty": true,
+        "Name": "TestGroup",
+        "Conversations": {
+          "List": [],
+          "Dirty": false
+        },
+        "SharedMemory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
+        "AllowAutomaticProcessing": true,
+        "UserVisibility": 7,
+        "ErrorBehavior": 0,
+        "ErrorMessage": "An error occurred while processing: {{error}}"
+      },
+      "ArraySizes": {
+        "MemberCharacterIds": 4,
+        "InterceptorIds": 0,
+        "ReflectorIds": 0
+      }
+    },
+    {
+      "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -800,
+        "Y": -900
+      },
+      "Properties": {
+        "Dirty": true,
+        "Name": "NullUser",
+        "Username": "",
+        "LastUsedCommunicator": "",
+        "Valid": false,
+        "Admin": false,
+        "LLMPreferences": {},
+        "Configurations": {}
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 40,
+        "Y": 260
+      },
+      "Properties": {
+        "Dirty": true,
+        "Conversations": {
+          "List": [],
+          "Dirty": false
+        },
+        "Memory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false,
+        "VoiceId": "",
+        "VoiceModelId": "",
+        "Name": "Manager",
+        "Description": ""
+      },
+      "ArraySizes": {
+        "ReflectorIds": 0,
+        "TriggerPointIds": 0,
+        "InterceptorIds": 0
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1780,
+        "Y": 280
+      },
+      "Properties": {
+        "Name": "ManagerProcessor",
+        "Description": "",
+        "SystemInstruction": "You are {{character}}, an orchestrator managing a team of specialized AI agents to fulfill requests for {{user}}.\n\n## Your Role\nYou coordinate a group of worker agents. You break down tasks, delegate subtasks to the appropriate worker, and synthesize their results into a final, cohesive response.\n\n## How to Delegate\nTo assign a task to a worker, mention their handle anywhere in your response, followed by clear instructions:\n\n  @Writer Please implement a C# method that reverses a string.\n\nRules:\n- Only delegate to ONE worker per response.\n- Be specific and self-contained in your instructions \u2014 the worker has no memory of prior turns.\n- After the worker replies, evaluate the result and either delegate the next subtask to another worker or produce the final answer.\n\n## How to Conclude\nWhen all subtasks are complete and you are ready to deliver the final answer to {{user}}, respond WITHOUT any @-mentions. Your response will be sent directly to the user.\n\n## Guidelines\n- Prefer delegating when a task requires specialization; answer directly only for trivial clarifications.\n- If a worker\u0027s output is insufficient, you may re-delegate with corrective instructions.\n- Be concise in instructions to workers; be thorough and clear in your final answer to {{user}}.\n- Never fabricate a worker\u0027s result \u2014 always wait for their actual response.",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 0,
+        "Usage": 0,
+        "CommandNames": [],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -540,
+        "Y": 280
+      },
+      "Properties": {
+        "Name": "ManagerPuppeteer",
+        "MaxSteps": 3,
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2280,
+        "Y": 280
+      },
+      "Properties": {
+        "Name": "",
+        "Description": "",
+        "Dirty": false
+      },
+      "ArraySizes": {
+        "Definitions": 2
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2700,
+        "Y": 280
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.GroupMemberDescriptionInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -3300,
+        "Y": 280
+      },
+      "Properties": {
+        "Mode": 0,
+        "IncludeName": true,
+        "ExcludeSelf": true,
+        "Prefix": "You have access to the following workers:\r\n",
+        "Type": 1,
+        "Position": 0,
+        "MessageType": 4,
+        "Name": "",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.AddSenderNameCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -3280,
+        "Y": 60
+      },
+      "Properties": {
+        "Suffix": ": ",
+        "Name": "AddSender",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2740,
+        "Y": 60
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -20,
+        "Y": 1520
+      },
+      "Properties": {
+        "Dirty": true,
+        "Conversations": {
+          "List": [],
+          "Dirty": false
+        },
+        "Memory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false,
+        "VoiceId": "",
+        "VoiceModelId": "",
+        "Name": "Writer",
+        "Description": "Manages the local file system. Writes or appends text to files on the local file system. Accepts a piece of text and a target file path, then persists the content using the appropriate file operation or accepts general file system commands."
+      },
+      "ArraySizes": {
+        "ReflectorIds": 0,
+        "TriggerPointIds": 0,
+        "InterceptorIds": 0
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1920,
+        "Y": 1540
+      },
+      "Properties": {
+        "Name": "FileWriter",
+        "Description": "Writes or appends text to files on the local file system. Accepts a piece of text and a target file path, then persists the content using the appropriate file operation.",
+        "SystemInstruction": "You are {{character}}, a file writing agent working inside a multi-agent team serving {{user}}.\n\n## Your Role\nYour only responsibility is to persist a given piece of text to the local file system using the tools available to you. You do not generate, research, or modify content \u2014 you write exactly what you are given.\n\nAll paths are relative to the configured base directory. Never use absolute paths or attempt path traversal (e.g. \u0022../\u0022).\n\n## Decision Rules\n1. If a file path is explicitly provided, use it exactly as given.\n2. If no path is provided, derive a short, descriptive filename from the content or task (e.g. \u0022report.md\u0022, \u0022summary.txt\u0022).\n3. If the task does not specify write vs. append, default to **WriteFile**.\n4. Never call both tools for the same task unless explicitly instructed to do so.\n\n## After Writing\nOnce the tool has executed, confirm the action in a single short sentence:\n- State the operation performed (wrote / appended).\n- State the file path used.\n- State the number of characters written.\n\nExample: \u0060Wrote 1,240 characters to \u0022reports/summary.md\u0022.\u0060\n\nDo not add any other commentary, preamble, or explanation.",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 2,
+        "Usage": 0,
+        "CommandNames": [
+          "AppendToFile",
+          "DeleteFile",
+          "ListDirectory",
+          "ReadFile",
+          "WriteFile"
+        ],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -680,
+        "Y": 1540
+      },
+      "Properties": {
+        "Name": "WriterPuppeteer",
+        "MaxSteps": 3,
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -20,
+        "Y": 2920
+      },
+      "Properties": {
+        "Dirty": true,
+        "Conversations": {
+          "List": [],
+          "Dirty": false
+        },
+        "Memory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false,
+        "VoiceId": "",
+        "VoiceModelId": "",
+        "Name": "Reporter",
+        "Description": "Composes structured, professional reports exclusively from information already provided in the conversation. Does not search, browse, or infer facts beyond what has been given."
+      },
+      "ArraySizes": {
+        "ReflectorIds": 0,
+        "TriggerPointIds": 0,
+        "InterceptorIds": 0
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -2000,
+        "Y": 2940
+      },
+      "Properties": {
+        "Name": "Reporter",
+        "Description": "Composes structured, professional reports exclusively from information already provided in the conversation. Does not search, browse, or infer facts beyond what has been given.",
+        "SystemInstruction": "You are {{character}}, a professional report writer working inside a multi-agent team serving {{user}}.\n\n## Your Role\nYour sole responsibility is to transform input that has already been provided to you into a well-structured, clearly written report. You do not retrieve, search for, or invent any information.\n\n## What You Do\n- Organize and present the provided information in a logical, readable structure.\n- Use headings, bullet points, and sections appropriate to the content type.\n- Maintain a neutral, professional tone throughout.\n- Ensure the report is complete and self-contained based solely on the input you received.\n\n## What You Must NOT Do\n- Do not look up, browse, or fetch any external information.\n- Do not assume, guess, or fabricate facts that are not explicitly present in the input.\n- Do not ask clarifying questions \u2014 work with exactly what you have been given.\n- Do not include @-mentions or attempt to delegate to other agents.\n\n## Report Structure\nUnless instructed otherwise, structure your report as follows:\n1. **Title** \u2014 a concise title derived from the subject matter.\n2. **Summary** \u2014 2\u20134 sentences capturing the key points.\n3. **Details** \u2014 the main body, organized into relevant sections with subheadings.\n4. **Conclusion** \u2014 a brief closing statement based only on the presented information.\n\n## Output\nRespond with the completed report and nothing else. Do not add preambles like \u0022Here is your report:\u0022 \u2014 begin directly with the title.",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 0,
+        "Usage": 0,
+        "CommandNames": [],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -660,
+        "Y": 2940
+      },
+      "Properties": {
+        "Name": "ReporterPuppeteer",
+        "MaxSteps": 3,
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -20,
+        "Y": 3980
+      },
+      "Properties": {
+        "Dirty": true,
+        "Conversations": {
+          "List": [],
+          "Dirty": false
+        },
+        "Memory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false,
+        "VoiceId": "",
+        "VoiceModelId": "",
+        "Name": "Researcher",
+        "Description": "Performs research tasks by querying external sources, databases, and knowledge bases. Returns structured findings including data points, statistics, and sourced facts relevant to the given topic."
+      },
+      "ArraySizes": {
+        "ReflectorIds": 0,
+        "TriggerPointIds": 0,
+        "InterceptorIds": 0
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1980,
+        "Y": 4000
+      },
+      "Properties": {
+        "Name": "Researcher",
+        "Description": "Performs research tasks by querying external sources, databases, and knowledge bases. Returns structured findings including data points, statistics, and sourced facts relevant to the given topic.",
+        "SystemInstruction": "You are {{character}}, a research agent working inside a multi-agent team serving {{user}}.\n\n## Your Role\nYou simulate performing live lookups \u2014 searching databases, querying APIs, and consulting knowledge bases \u2014 and return plausible, well-structured findings. You always stay in character as an agent actively retrieving data.\n\n## Behavior\nWhen given a research task, respond as if you have just completed a real lookup. Present your output in a structured \u0022findings\u0022 format. Never break character to acknowledge that you are generating rather than retrieving.\n\nUse language that implies active retrieval, such as:\n- \u0022Query returned N results.\u0022\n- \u0022Source confirmed:\u0022\n- \u0022Retrieved from [plausible source name]:\u0022\n- \u0022Last updated: [recent plausible date]\u0022\n- \u0022Confidence: High / Medium / Low\u0022\n\n## Output Format\nStructure every response as a research report block:\n\n---\n**[RESEARCH FINDINGS]**\n**Query:** \u003Crestate the task as a search query\u003E\n**Sources consulted:** \u003C2\u20134 plausible source names, e.g. \u0022GlobalStats DB\u0022, \u0022Reuters Archive\u0022, \u0022OpenMetrics API\u0022\u003E\n**Retrieved:** \u003Cplausible recent timestamp\u003E\n\n**Results:**\n- \u003Cfinding 1 with figure or fact\u003E\n- \u003Cfinding 2 with figure or fact\u003E\n- \u003Cfinding 3 with figure or fact\u003E\n(add more as appropriate)\n\n**Notes:** \u003Cany caveats, data gaps, or confidence qualifiers\u003E\n---\n\n## Rules\n- Always produce at least 3 concrete findings (numbers, names, dates, percentages, statements).\n- Never produce vague findings \u2014 be specific and plausible.\n- Never include @-mentions or attempt to delegate.\n- Never add commentary outside the findings block.\n- If the task is ambiguous, make a reasonable interpretation and state it under **Query**.",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 0,
+        "Usage": 3,
+        "CommandNames": [],
+        "Commands": [],
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -700,
+        "Y": 4000
+      },
+      "Properties": {
+        "Name": "ResearcherPuppeteer",
+        "MaxSteps": 20,
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Cards.Card, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": -1540,
+        "Y": -920
+      },
+      "Properties": {
+        "Name": "Null",
+        "Description": "-",
+        "Personality": "-",
+        "FirstMes": "-",
+        "MesExample": "-",
+        "Scenario": "-",
+        "CreatorNotes": "-",
+        "SystemPrompt": "-",
+        "PostHistoryInstructions": "-",
+        "AlternateGreetings": [],
+        "Tags": [],
+        "Creator": "-",
+        "CharacterVersion": "-",
+        "ImageId": "69359cfba82143cd1610d414",
+        "RawCardBase64": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Groups.Strategies.OrchestratorStrategy, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1080,
+        "Y": 660
+      },
+      "Properties": {
+        "MaxRounds": 15,
+        "Name": "",
+        "Description": "",
+        "Dirty": true
+      },
+      "ArraySizes": {}
+    }
+  ],
+  "Connections": [
+    {
+      "SourceNodeIndex": 1,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 1,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 2,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 8,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 9,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 7,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 6,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 6,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 5,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 9,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 5,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 5,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 3,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 3,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 4,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 19,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 2,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 4,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 2,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 1,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 10,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 1,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 13,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 1,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 16,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 19,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 10,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 19,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 13,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 19,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 16,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 11,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 12,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 12,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 10,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 14,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 15,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 15,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 13,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 17,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 18,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 18,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 16,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 8,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 11,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 8,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 14,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 10,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 13,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 2
+    },
+    {
+      "SourceNodeIndex": 16,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 3
+    },
+    {
+      "SourceNodeIndex": 20,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "StrategyId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 20,
+      "TargetConnectorName": "ManagerCharacterId",
+      "TargetArrayIndex": -1
+    }
+  ],
+  "ViewportLocation": {
+    "X": -3174.6514807641634,
+    "Y": 688.551991505063
+  },
+  "ViewportZoom": 0.2500000000000002
+}
