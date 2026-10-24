@@ -1,4 +1,4 @@
-﻿using Akagi.Bridge.Attributes;
+using Akagi.Bridge.Attributes;
 using Akagi.Data;
 using System.Collections.ObjectModel;
 using System.Text.Json;
@@ -21,8 +21,8 @@ internal class User : Savable
     public override bool Dirty
     {
         get => base.Dirty
-            || (_telegramUser == null || _telegramUser.Dirty)
-            || (_googleUser == null || _googleUser.Dirty);
+            || (_telegramUser != null && _telegramUser.Dirty)
+            || (_googleUser != null && _googleUser.Dirty);
         set
         {
             base.Dirty = value;
@@ -31,6 +31,10 @@ internal class User : Savable
                 if (_telegramUser != null)
                 {
                     _telegramUser.Dirty = false;
+                }
+                if (_googleUser != null)
+                {
+                    _googleUser.Dirty = false;
                 }
             }
         }

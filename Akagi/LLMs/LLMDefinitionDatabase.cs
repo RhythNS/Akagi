@@ -1,4 +1,4 @@
-﻿using Akagi.Data;
+using Akagi.Data;
 using Akagi.Flow;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -8,11 +8,12 @@ namespace Akagi.LLMs;
 internal interface ILLMDefinitionDatabase : IDatabase<LLMDefinition>
 {
     public Task<string?> GetDefaultIdAsync();
+    public Task<LLMDefinition?> GetDefaultDefinitionAsync();
 }
 
 internal class LLMDefinitionDatabase : Database<LLMDefinition>, ILLMDefinitionDatabase, ISystemInitializer
 {
-    private ILogger<LLMDefinitionDatabase> _logger;
+    private readonly ILogger<LLMDefinitionDatabase> _logger;
 
     public LLMDefinitionDatabase(IOptionsMonitor<DatabaseOptions> options, ILogger<LLMDefinitionDatabase> logger) : base(options)
     {
@@ -23,9 +24,7 @@ internal class LLMDefinitionDatabase : Database<LLMDefinition>, ILLMDefinitionDa
     {
         LLMDefinition[] definitions =
         [
-            new LLMDefinition() { Type = ILLM.LLMType.Gemini, Model = "gemini-2.5-flash-lite" },
-            new LLMDefinition() { Type = ILLM.LLMType.Gemini, Model = "gemini-2.5-flash" },
-            new LLMDefinition() { Type = ILLM.LLMType.Gemini, Model = "gemini-2.5-pro" },
+            new LLMDefinition() { Type = ILLM.LLMType.OpenRouter, Model = "google/gemini-2.0-flash-001" }
         ];
 
         List<LLMDefinition> existingDefinitions = await GetDocumentsAsync();
@@ -46,8 +45,13 @@ internal class LLMDefinitionDatabase : Database<LLMDefinition>, ILLMDefinitionDa
 
     public async Task<string?> GetDefaultIdAsync()
     {
-        // TODO: Find a better solution
+        LLMDefinition? defaultDef = await GetDefaultDefinitionAsync();
+        return defaultDef?.Id;
+    }
+
+    public async Task<LLMDefinition?> GetDefaultDefinitionAsync()
+    {
         List<LLMDefinition> definitions = await GetDocumentsAsync();
-        return definitions.Count > 0 ? definitions[0].Id : null;
+        return definitions.Count > 0 ? definitions[0] : null;
     }
 }

@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.VoiceClips;
 using Akagi.Receivers;
@@ -49,7 +49,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
 
     private async Task<OpenRouterPayload> GetPayload(SystemProcessor systemProcessor, Context context)
     {
-        Characters.Conversations.Message[] messages = systemProcessor.MessageCompiler.Compile(context);
+        Characters.Conversations.Message[] messages = await systemProcessor.MessageCompiler.CompileAsync(context);
 
         List<OpenRouterPayload.Message> input = [];
 

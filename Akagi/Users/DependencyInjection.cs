@@ -1,8 +1,8 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.Users;
 
-static class DependendyInjection
+static class DependencyInjection
 {
     public static void AddUsers(this IServiceCollection services)
     {

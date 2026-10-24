@@ -1,4 +1,3 @@
-﻿
 namespace Akagi.Receivers.Commands;
 
 internal class EndConversationCommand : Command
@@ -42,7 +41,7 @@ internal class EndConversationCommand : Command
             throw new ArgumentException("MessageIndex argument exceeds the number of messages in the conversation.");
         }
 
-        context.Character.Conversations.CompleteCurrentConversationAtIndex(index.Value);
+        context.Conversation = context.Character.Conversations.CompleteCurrentConversationAtIndex(index.Value);
 
         string output = $"Conversation ended at message index {index.Value}.";
         context.Conversation.AddMessage(CreateCommandMessage(output));

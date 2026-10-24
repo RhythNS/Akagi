@@ -1,4 +1,4 @@
-﻿using Akagi.Characters;
+using Akagi.Characters;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Groups;
 using Akagi.Characters.VoiceClips;
@@ -54,10 +54,12 @@ internal partial class TelegramService : Communicator, IHostedService
 
     private async Task SendInfoIfCharacterSwitched(Users.User user, Character character)
     {
-        //TODO: fix
-        return;
+        if (user.TelegramUser == null)
+        {
+            return;
+        }
 
-        if (user.TelegramUser!.CurrentCharacterId == character.Id)
+        if (user.TelegramUser.CurrentCharacterId == character.Id)
         {
             return;
         }

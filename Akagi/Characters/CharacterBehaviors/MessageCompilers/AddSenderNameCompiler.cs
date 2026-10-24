@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.Conversations;
+using Akagi.Characters.Conversations;
 using Akagi.Receivers;
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
@@ -13,7 +13,7 @@ internal class AddSenderNameCompiler : MessageCompiler
         set => SetProperty(ref _suffix, value);
     }
 
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
+    public override async Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations)
     {
         ICharacterDatabase characterDatabase = context.DatabaseFactory.GetDatabase<ICharacterDatabase>();
         Dictionary<string, Character> idToCharacter =
@@ -35,8 +35,7 @@ internal class AddSenderNameCompiler : MessageCompiler
 
                 if (idToCharacter.TryGetValue(textMessage.CharacterId, out Character? character) == false)
                 {
-                    // TODO: Fix this
-                    character = characterDatabase.GetCharacter(textMessage.CharacterId!).Result
+                    character = await characterDatabase.GetCharacter(textMessage.CharacterId!)
                         ?? throw new Exception($"Character with ID {textMessage.CharacterId} not found in database.");
                     idToCharacter[textMessage.CharacterId!] = character;
                 }
@@ -46,5 +45,7 @@ internal class AddSenderNameCompiler : MessageCompiler
 
             textMessage.Text = $"{senderName}{Suffix}{textMessage.Text}";
         }
+
+        return filteredConversations;
     }
 }

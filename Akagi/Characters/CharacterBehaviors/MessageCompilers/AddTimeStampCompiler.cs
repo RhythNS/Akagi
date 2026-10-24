@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.Conversations;
+using Akagi.Characters.Conversations;
 using Akagi.Flow;
 using Akagi.Receivers;
 using Microsoft.Extensions.Logging;
@@ -15,7 +15,7 @@ internal class AddTimeStampCompiler : MessageCompiler
         set => SetProperty(ref format, value);
     }
 
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
+    public override Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations)
     {
         try
         {
@@ -24,7 +24,7 @@ internal class AddTimeStampCompiler : MessageCompiler
         catch (Exception ex)
         {
             Globals.Instance.GetLogger<AddTimeStampCompiler>().LogWarning(ex, "Invalid date time format string: {Format}", Format);
-            return;
+            return Task.FromResult(filteredConversations);
         }
 
         foreach (Conversation conversation in filteredConversations)
@@ -42,5 +42,7 @@ internal class AddTimeStampCompiler : MessageCompiler
                 }
             }
         }
+
+        return Task.FromResult(filteredConversations);
     }
 }

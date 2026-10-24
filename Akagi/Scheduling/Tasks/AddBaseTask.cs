@@ -1,4 +1,4 @@
-﻿using Akagi.Flow;
+using Akagi.Flow;
 
 namespace Akagi.Scheduling.Tasks;
 
@@ -11,7 +11,7 @@ internal class AddBaseTask : ISystemInitializer
         _database = database;
     }
 
-    public Task InitializeAsync()
+    public async Task InitializeAsync()
     {
         CleanUpTask cleanUpTask = new()
         {
@@ -20,10 +20,11 @@ internal class AddBaseTask : ISystemInitializer
             TimeOfDay = new TimeSpan(2, 0, 0)
         };
 
-        BaseTask? existingTask = _database.GetDocumentsAsync().Result.FirstOrDefault(t => t is CleanUpTask);
+        List<BaseTask> tasks = await _database.GetDocumentsAsync();
+        BaseTask? existingTask = tasks.FirstOrDefault(t => t is CleanUpTask);
         if (existingTask == null)
         {
-            return _database.SaveDocumentAsync(cleanUpTask);
+            await _database.SaveDocumentAsync(cleanUpTask);
         }
         else
         {
@@ -32,7 +33,7 @@ internal class AddBaseTask : ISystemInitializer
             existingCleanUpTask.Name = cleanUpTask.Name;
             existingCleanUpTask.Description = cleanUpTask.Description;
             existingCleanUpTask.TimeOfDay = cleanUpTask.TimeOfDay;
-            return _database.SaveDocumentAsync(existingTask);
+            await _database.SaveDocumentAsync(existingTask);
         }
     }
 }

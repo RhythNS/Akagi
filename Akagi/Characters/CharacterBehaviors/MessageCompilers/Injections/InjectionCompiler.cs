@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.Conversations;
+using Akagi.Characters.Conversations;
 using Akagi.Receivers;
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections;
@@ -37,12 +37,12 @@ internal abstract class InjectionCompiler : MessageCompiler
         set => SetProperty(ref _messageType, value);
     }
 
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
+    public override async Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations)
     {
-        Message[] messages = GetInjectionMessages(context);
+        Message[] messages = await GetInjectionMessagesAsync(context);
         if (messages.Length == 0)
         {
-            return;
+            return filteredConversations;
         }
 
         switch (Type)
@@ -88,7 +88,7 @@ internal abstract class InjectionCompiler : MessageCompiler
                         }
                         break;
                     case InjectionPosition.End:
-                        for (int i = messages.Length - 1; i >= 0; i--)
+                        for (int i = 0; i < messages.Length; i++)
                         {
                             filteredConversations[^1].AddMessage(messages[i]);
                         }
@@ -98,7 +98,9 @@ internal abstract class InjectionCompiler : MessageCompiler
                 }
                 break;
         }
+
+        return filteredConversations;
     }
 
-    protected abstract Message[] GetInjectionMessages(Context context);
+    protected abstract Task<Message[]> GetInjectionMessagesAsync(Context context);
 }

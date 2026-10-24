@@ -41,7 +41,7 @@ internal class GroupMemberDescriptionInjectionCompiler : InjectionCompiler
         set => SetProperty(ref _prefix, value);
     }
 
-    protected override Message[] GetInjectionMessages(Context context)
+    protected override async Task<Message[]> GetInjectionMessagesAsync(Context context)
     {
         if (context.Group == null || context.Group.MemberCharacterIds.Length == 0)
         {
@@ -50,10 +50,10 @@ internal class GroupMemberDescriptionInjectionCompiler : InjectionCompiler
 
         ICharacterDatabase database = context.DatabaseFactory.GetDatabase<ICharacterDatabase>();
 
-        // TODO: Fix this
-        IEnumerable<Character> members = context.Group.MemberCharacterIds
-            .Select(id => database.GetCharacter(id).Result)
-            .Where(c => c != null)!;
+        var characterTasks = context.Group.MemberCharacterIds
+            .Select(id => database.GetCharacter(id));
+        var loadedMembers = await Task.WhenAll(characterTasks);
+        IEnumerable<Character> members = loadedMembers.Where(c => c != null)!;
 
         if (ExcludeSelf)
         {

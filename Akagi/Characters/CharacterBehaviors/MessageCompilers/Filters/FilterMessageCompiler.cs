@@ -8,7 +8,7 @@ namespace Akagi.Characters.CharacterBehaviors.Filters;
 [GraphNode]
 internal abstract class FilterMessageCompiler : MessageCompiler
 {
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
+    public override Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations)
     {
         List<Conversation> result = [];
 
@@ -21,7 +21,7 @@ internal abstract class FilterMessageCompiler : MessageCompiler
             }
         }
 
-        filteredConversations = result;
+        return Task.FromResult(result);
     }
 
     protected abstract bool IsAllowed(Message message);

@@ -1,4 +1,4 @@
-﻿using Akagi.Receivers.Commands;
+using Akagi.Receivers.Commands;
 using Akagi.Utils;
 using Akagi.Utils.Extensions;
 using Microsoft.Extensions.Configuration;
@@ -6,7 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.Receivers;
 
-static class DependendyInjection
+static class DependencyInjection
 {
     public static void AddReceivers(this IServiceCollection services, IConfiguration configuration)
     {

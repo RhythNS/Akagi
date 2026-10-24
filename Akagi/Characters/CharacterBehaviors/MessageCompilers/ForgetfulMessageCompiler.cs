@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.Conversations;
+using Akagi.Characters.Conversations;
 using Akagi.Receivers;
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
@@ -13,7 +13,7 @@ internal class ForgetfulMessageCompiler : MessageCompiler
         set => SetProperty(ref _maxMessages, value);
     }
 
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
+    public override Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations)
     {
         List<Message> messages = [];
         IEnumerable<Conversation> conversations = filteredConversations.OrderByDescending(x => x.Time);
@@ -38,13 +38,13 @@ internal class ForgetfulMessageCompiler : MessageCompiler
         }
         messages.Reverse();
 
-        filteredConversations.Clear();
         Conversation newConversation = new()
         {
             Id = 0,
             Time = DateTime.UtcNow,
             Messages = [.. messages]
         };
-        filteredConversations.Add(newConversation);
+
+        return Task.FromResult(new List<Conversation> { newConversation });
     }
 }

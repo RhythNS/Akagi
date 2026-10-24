@@ -1,12 +1,12 @@
-﻿using Akagi.Receivers;
+using Akagi.Characters.Conversations;
+using Akagi.Receivers;
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
 
 internal class ContextOnlyConversationCompiler : MessageCompiler
 {
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
+    public override Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations)
     {
-        filteredConversations.Clear();
-        filteredConversations.Add(context.Conversation);
+        return Task.FromResult(new List<Conversation> { context.Conversation });
     }
 }

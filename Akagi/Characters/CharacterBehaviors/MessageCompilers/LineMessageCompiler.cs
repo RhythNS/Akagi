@@ -1,4 +1,4 @@
-﻿using Akagi.Bridge.Attributes;
+using Akagi.Bridge.Attributes;
 using Akagi.Characters.Conversations;
 using Akagi.Receivers;
 using MongoDB.Bson.Serialization.Attributes;
@@ -41,16 +41,18 @@ internal class LineMessageCompiler : MessageCompiler
         }
     }
 
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
+    public override async Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations)
     {
+        List<Conversation> current = filteredConversations;
         foreach (Definition definition in Definitions)
         {
             if (definition.MessageCompiler == null)
             {
-                throw new InvalidOperationException("MessageCompilerId cannot be null.");
+                throw new InvalidOperationException("MessageCompiler cannot be null.");
             }
 
-            definition.MessageCompiler.FilterCompile(context, ref filteredConversations);
+            current = await definition.MessageCompiler.FilterCompileAsync(context, current);
         }
+        return current;
     }
 }

@@ -1,4 +1,4 @@
-﻿using Akagi.Flow;
+using Akagi.Flow;
 using Akagi.Scheduling;
 using Akagi.Scheduling.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,7 +31,7 @@ internal class RemindCommand : Command
 
     public override bool ContinueAfterExecution => true;
 
-    public override Task<Command[]> Execute(Context context)
+    public override async Task<Command[]> Execute(Context context)
     {
         if (Arguments.Length < 2
             || string.IsNullOrWhiteSpace(Arguments[0].Value)
@@ -51,11 +51,11 @@ internal class RemindCommand : Command
         };
 
         ITaskDatabase taskDatabase = Globals.Instance.ServiceProvider.GetRequiredService<ITaskDatabase>();
-        taskDatabase.SaveAsync(sendSystemMessageTask);
+        await taskDatabase.SaveAsync(sendSystemMessageTask);
 
         string output = $"Reminder set for {timeInMinutes} minute(s) from now: {thought}";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
-        return Task.FromResult(Array.Empty<Command>());
+        return Array.Empty<Command>();
     }
 }

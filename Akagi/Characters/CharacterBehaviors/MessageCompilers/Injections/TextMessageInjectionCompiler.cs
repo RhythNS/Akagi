@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.Conversations;
+using Akagi.Characters.Conversations;
 using Akagi.Receivers;
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections;
@@ -13,10 +13,10 @@ internal class TextMessageInjectionCompiler : InjectionCompiler
         set => SetProperty(ref _injectionMessage, value);
     }
 
-    protected override Message[] GetInjectionMessages(Context context)
+    protected override Task<Message[]> GetInjectionMessagesAsync(Context context)
     {
         TextMessage copied = (TextMessage)InjectionMessage.Copy();
         copied.From = MessageType;
-        return [copied];
+        return Task.FromResult<Message[]>([copied]);
     }
 }

@@ -1,4 +1,4 @@
-﻿using Akagi.Bridge.Attributes;
+using Akagi.Bridge.Attributes;
 using Akagi.Characters.Conversations;
 using Akagi.Data;
 using Akagi.Receivers;
@@ -31,7 +31,7 @@ internal abstract class MessageCompiler : Savable
         return Task.CompletedTask;
     }
 
-    public Message[] Compile(Context context)
+    public async Task<Message[]> CompileAsync(Context context)
     {
         ConversationContainer conversationContainer = context.Group != null ? context.Group.Conversations : context.Character.Conversations;
 
@@ -49,10 +49,10 @@ internal abstract class MessageCompiler : Savable
             }
         }
 
-        FilterCompile(context, ref filteredConversations);
+        filteredConversations = await FilterCompileAsync(context, filteredConversations);
 
         return [.. filteredConversations.SelectMany(c => c.Messages)];
     }
 
-    public abstract void FilterCompile(Context context, ref List<Conversation> filteredConversations);
+    public abstract Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations);
 }

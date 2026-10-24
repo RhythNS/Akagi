@@ -1,8 +1,8 @@
-﻿namespace Akagi.Characters.Memories;
+namespace Akagi.Characters.Memories;
 
 internal class SingleFactThought : CopyableThought<SingleFactThought>
 {
-    public string _fact = string.Empty;
+    private string _fact = string.Empty;
 
     public string Fact
     {
@@ -15,12 +15,12 @@ internal class SingleFactThought : CopyableThought<SingleFactThought>
         return new SingleFactThought()
         {
             Timestamp = Timestamp,
-            _fact = _fact,
+            Fact = Fact,
         };
     }
 
     public override string ToString()
     {
-        return $"SingleFactThought(Timestamp={Timestamp}, Fact={Fact})";
+        return Fact;
     }
 }

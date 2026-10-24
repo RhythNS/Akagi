@@ -1,11 +1,11 @@
-﻿using Akagi.Scheduling.Tasks;
+using Akagi.Scheduling.Tasks;
 using Akagi.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using MongoDB.Bson.Serialization;
 
 namespace Akagi.Scheduling;
 
-static class DependendyInjection
+static class DependencyInjection
 {
     public static void AddScheduling(this IServiceCollection services)
     {

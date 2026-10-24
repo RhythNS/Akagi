@@ -1,9 +1,9 @@
-﻿using Akagi.Utils;
+using Akagi.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.Flow;
 
-static class DependendyInjection
+static class DependencyInjection
 {
     public static void AddUtils(this IServiceCollection services)
     {

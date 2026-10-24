@@ -3,7 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.TTSs;
 
-static class DependendyInjection
+static class DependencyInjection
 {
     public static void AddTTSs(this IServiceCollection services)
     {

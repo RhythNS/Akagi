@@ -1,4 +1,3 @@
-﻿using Akagi.LLMs.Gemini;
 using Akagi.LLMs.OpenRouter;
 using Akagi.Users;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,7 +22,7 @@ internal class LLMFactory : ILLMFactory
 
     public async Task<ILLM> Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType)
     {
-        LLMDefinition effectiveDefinition;
+        LLMDefinition? effectiveDefinition = null;
 
         if (overrideModel != null)
         {
@@ -31,17 +30,18 @@ internal class LLMFactory : ILLMFactory
         }
         else if (user.LLMPreferences.TryGetValue(usageType.ToString(), out string? modelId))
         {
-            effectiveDefinition = await _definitionDatabase.GetDocumentByIdAsync(modelId)
-                ?? throw new Exception($"User {user.Id} does not have a llm set for {usageType}!");
+            effectiveDefinition = await _definitionDatabase.GetDocumentByIdAsync(modelId);
         }
-        else
+
+        effectiveDefinition ??= await _definitionDatabase.GetDefaultDefinitionAsync();
+
+        if (effectiveDefinition == null)
         {
-            throw new InvalidOperationException("No LLMDefinition could be deduced!");
+            throw new InvalidOperationException($"No LLMDefinition could be deduced for user {user.Id} ({usageType}) and no default LLMDefinition exists in the database.");
         }
 
         ILLM? lLM = effectiveDefinition.Type switch
         {
-            ILLM.LLMType.Gemini => (ILLM?)_serviceProvider.GetRequiredService(typeof(IGeminiClient)),
             ILLM.LLMType.OpenRouter => (ILLM?)_serviceProvider.GetRequiredService(typeof(IOpenRouterClient)),
             _ => throw new Exception($"Unsupported LLM type: {effectiveDefinition.Type}"),
         } ?? throw new InvalidOperationException($"LLM of type {effectiveDefinition.Type} could not be created.");

@@ -1,4 +1,4 @@
-﻿using Akagi.Data;
+using Akagi.Data;
 
 namespace Akagi.Characters.Conversations;
 
@@ -35,13 +35,16 @@ internal class ConversationContainer : DirtyTrackable
             }
         }
 
-        Dirty = true;
-        _list.Add(new Conversation
+        Conversation newConv = new()
         {
+            Id = List.Count > 0 ? List.Max(c => c.Id) + 1 : 1,
             Time = DateTime.UtcNow,
             Messages = []
-        });
-        return List[^1];
+        };
+
+        Dirty = true;
+        _list.Add(newConv);
+        return newConv;
     }
 
     public Conversation StartNewConversation()
@@ -64,12 +67,12 @@ internal class ConversationContainer : DirtyTrackable
         return newConversation;
     }
 
-    public void CompleteCurrentConversationAtIndex(int messageIndex)
+    public Conversation CompleteCurrentConversationAtIndex(int messageIndex)
     {
         Conversation? conv = List.MaxBy(c => c.Time);
         if (conv == null)
         {
-            return;
+            return GetCurrentConversation();
         }
         if (messageIndex < 0 || messageIndex >= conv.Messages.Count)
         {
@@ -79,7 +82,7 @@ internal class ConversationContainer : DirtyTrackable
         Conversation completedConversation = new()
         {
             Id = conv.Id,
-            Time = completedMessages.Max(x => x.Time),
+            Time = completedMessages.Count > 0 ? completedMessages.Max(x => x.Time) : conv.Time,
             Messages = completedMessages,
             IsCompleted = true
         };
@@ -97,6 +100,7 @@ internal class ConversationContainer : DirtyTrackable
         _list.Remove(conv);
         _list.Add(completedConversation);
         _list.Add(remainingConversation);
+        return remainingConversation;
     }
 
     public void ClearCurrentConversation()
@@ -113,9 +117,10 @@ internal class ConversationContainer : DirtyTrackable
 
     public ConversationContainer Copy()
     {
-        return new ConversationContainer
+        ConversationContainer copy = new()
         {
-            List = List.Select(c => c.Copy()).ToList()
+            List = [.. _list.Select(c => c.Copy())]
         };
+        return copy;
     }
 }

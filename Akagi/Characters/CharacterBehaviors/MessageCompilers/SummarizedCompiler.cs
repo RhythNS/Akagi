@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.Conversations;
+using Akagi.Characters.Conversations;
 using Akagi.Characters.Memories;
 using Akagi.Flow;
 using Akagi.Receivers;
@@ -50,12 +50,12 @@ internal class SummarizedCompiler : MessageCompiler
         return base.Init(readableMessages, messageCompilerDatabase);
     }
 
-    public override void FilterCompile(Context context, ref List<Conversation> filteredConversations)
+    public override Task<List<Conversation>> FilterCompileAsync(Context context, List<Conversation> filteredConversations)
     {
         List<Conversation> conversations = BuildSummarizedConversations(context, filteredConversations);
 
         conversations.Reverse();
-        filteredConversations = conversations;
+        return Task.FromResult(conversations);
     }
 
     private List<Conversation> BuildSummarizedConversations(Context context, List<Conversation> filteredConversations)

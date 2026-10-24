@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Receivers;
 using Akagi.Receivers.Commands;
 
@@ -12,7 +12,6 @@ internal interface ILLM
 
     public enum LLMType
     {
-        Gemini,
         OpenRouter
     }
 
