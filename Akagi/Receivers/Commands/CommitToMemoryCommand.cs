@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.Memories;
+using Akagi.Characters.Memories;
 
 namespace Akagi.Receivers.Commands;
 
@@ -35,7 +35,7 @@ internal class CommitToMemoryCommand : Command
 
     public override bool ContinueAfterExecution => true;
 
-    public override Task<Command[]> Execute(Context context)
+    public override async Task<Command[]> Execute(Context context)
     {
         if (Arguments.Length < 2 ||
             string.IsNullOrWhiteSpace(Arguments[0].Value) ||
@@ -68,10 +68,42 @@ internal class CommitToMemoryCommand : Command
 
         thoughtCollection.AddThought(singleFactThought);
 
+        // If storing in long-term memory, also persist as an embedded MemoryRecord in IMemoryDatabase
+        if (isLongTerm.Value && !string.IsNullOrWhiteSpace(context.Character?.Id))
+        {
+            float[] embedding = [];
+            if (context.EmbeddingService != null)
+            {
+                try
+                {
+                    embedding = await context.EmbeddingService.GenerateEmbeddingAsync(thought);
+                }
+                catch
+                {
+                    // Fail gracefully if embedding provider is unreachable
+                }
+            }
+
+            IMemoryDatabase memoryDb = context.DatabaseFactory.GetDatabase<IMemoryDatabase>();
+            MemoryRecord memoryRecord = new()
+            {
+                CharacterId = context.Character.Id,
+                UserId = string.Equals(target, "lore", StringComparison.OrdinalIgnoreCase) ? null : context.User?.Id,
+                Fact = thought,
+                Embedding = embedding,
+                Importance = 5.0f,
+                Timestamp = DateTime.UtcNow,
+                LastAccessed = DateTime.UtcNow,
+                IsArchived = false
+            };
+
+            await memoryDb.SaveDocumentAsync(memoryRecord);
+        }
+
         string output = $"Committed thought to {(isLongTerm.Value ? "long-term" : "short-term")} memory (target: {target}): \"{thought}\"";
         context.Conversation.AddMessage(CreateCommandMessage(output));
 
-        return Task.FromResult(Array.Empty<Command>());
+        return [];
     }
 
     private static Memory ResolveTargetMemory(Context context, string target)

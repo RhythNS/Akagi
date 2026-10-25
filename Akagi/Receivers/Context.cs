@@ -1,7 +1,8 @@
-﻿using Akagi.Characters;
+using Akagi.Characters;
 using Akagi.Characters.Groups;
 using Akagi.Communication;
 using Akagi.Data;
+using Akagi.Embeddings;
 using Akagi.LLMs;
 using Akagi.Users;
 
@@ -15,6 +16,7 @@ internal class Context : ContextBase
     public required ICommunicator Communicator { get; set; }
     public required ILLMFactory LLMFactory { get; set; }
     public CharacterGroup? Group { get; set; }
+    public IEmbeddingService? EmbeddingService { get; set; }
 
     protected override Savable[] ToTrack => Group != null ? [Character, User, Group] : [Character, User];
 }

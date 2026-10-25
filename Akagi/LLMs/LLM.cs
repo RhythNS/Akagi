@@ -20,7 +20,9 @@ internal interface ILLM
         TextRoleplay,
         TextGeneral,
         CommandsRoleplay,
-        CommandsGeneral
+        CommandsGeneral,
+        ReflectionRoleplay,
+        ReflectionGeneral
     }
 
     public enum RunMode

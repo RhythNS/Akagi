@@ -1,7 +1,8 @@
-﻿using Akagi.Characters;
+using Akagi.Characters;
 using Akagi.Communication;
 using Akagi.Connectors;
 using Akagi.Data;
+using Akagi.Embeddings;
 using Akagi.Flow;
 using Akagi.LLMs;
 using Akagi.Logging.Extensions;
@@ -28,6 +29,7 @@ internal class Program
         builder.Services.AddCharacter();
         builder.Services.AddUsers();
         builder.Services.AddLLMs();
+        builder.Services.AddEmbeddings(builder.Configuration);
         builder.Services.AddTTSs();
         builder.Services.AddCommunications(builder.Configuration);
         builder.Services.AddScheduling();

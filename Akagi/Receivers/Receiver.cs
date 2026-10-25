@@ -1,4 +1,4 @@
-﻿using Akagi.Characters;
+using Akagi.Characters;
 using Akagi.Characters.CharacterBehaviors.Interceptors;
 using Akagi.Characters.CharacterBehaviors.Puppeteers;
 using Akagi.Characters.CharacterBehaviors.Reflectors;
@@ -9,6 +9,7 @@ using Akagi.Characters.Groups.Strategies;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Communication;
 using Akagi.Data;
+using Akagi.Embeddings;
 using Akagi.Flow;
 using Akagi.LLMs;
 using Akagi.Scheduling.Tasks;
@@ -17,9 +18,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using static Akagi.Characters.TriggerPoints.TriggerPoint;
-
 namespace Akagi.Receivers;
-
 internal interface IReceiver
 {
     public Task OnMessageRecieved(ICommunicator from, User user, Character character, Message message);
@@ -28,14 +27,12 @@ internal interface IReceiver
     public Task Reflect(Character character, User user, string name);
     public Task OnSystemEvent(Character character, User user, Message message);
 }
-
 internal class Receiver : IReceiver, ICleanable
 {
     private static readonly ConcurrentDictionary<(string userId, string characterId), SemaphoreSlim> _locks = new();
     private static readonly ConcurrentDictionary<(string userId, string characterId), AsyncLocal<int>> _lockCounts = new();
     private static readonly ConcurrentDictionary<(string userId, string groupId), SemaphoreSlim> _groupLocks = new();
     private static readonly ConcurrentDictionary<(string userId, string groupId), CancellationTokenSource> _groupCancellations = new();
-
     private readonly IPuppeteerDatabase _puppeteerDatabase;
     private readonly IReflectorDatabase _reflectorDatabase;
     private readonly IInterceptorDatabase _interceptorDatabase;
@@ -44,8 +41,8 @@ internal class Receiver : IReceiver, ICleanable
     private readonly ICharacterGroupDatabase _characterGroupDatabase;
     private readonly ILLMFactory _llmFactory;
     private readonly IDatabaseFactory _databaseFactory;
+    private readonly IEmbeddingService _embeddingService;
     private readonly ILogger<Receiver> _logger;
-
     public Receiver(IPuppeteerDatabase puppeteerDatabase,
                     IReflectorDatabase reflectorDatabase,
                     IInterceptorDatabase interceptorDatabase,
@@ -54,6 +51,7 @@ internal class Receiver : IReceiver, ICleanable
                     ICharacterGroupDatabase characterGroupDatabase,
                     ILLMFactory llmFactory,
                     IDatabaseFactory databaseFactory,
+                    IEmbeddingService embeddingService,
                     ILogger<Receiver> logger)
     {
         _puppeteerDatabase = puppeteerDatabase;
@@ -64,50 +62,41 @@ internal class Receiver : IReceiver, ICleanable
         _characterGroupDatabase = characterGroupDatabase;
         _llmFactory = llmFactory;
         _databaseFactory = databaseFactory;
+        _embeddingService = embeddingService;
         _logger = logger;
     }
-
     public Task CleanUpAsync()
     {
         CleanupUnusedLocks();
         return Task.CompletedTask;
     }
-
     public async Task Reflect(Character character, User user, string name)
     {
         LockCharacter(character, user);
         try
         {
             _logger.LogInformation("Starting reflection for user {UserId} and character {CharacterId} with reflector name {ReflectorName}", user.Id, character.Id, name);
-
             ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (communicator == null)
             {
                 _logger.LogWarning("No communicator found for user {UserId}", user.Id);
                 return;
             }
-
             await using Context context = GetContext(character, user, communicator);
-
             bool reflected = false;
             foreach (string id in character.ReflectorIds)
             {
                 Reflector reflector = await _reflectorDatabase.GetDocumentByIdAsync(id)
                         ?? throw new Exception($"Reflector with ID {id} not found for character {character.Id}");
-
                 if (string.Equals(reflector.Name, name, StringComparison.OrdinalIgnoreCase) == false)
                 {
                     continue;
                 }
-
                 ILogger logger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Reflector>>();
-
                 await reflector.Init(logger, context, _systemProcessorDatabase);
                 await reflector.ProcessAsync();
-
                 reflected = true;
             }
-
             if (reflected)
             {
                 await TriggerForCharacter(TriggerType.ReflectionCompleted, character, user);
@@ -123,7 +112,6 @@ internal class Receiver : IReceiver, ICleanable
             ReleaseLock(character, user);
         }
     }
-
     public async Task OnSystemEvent(Character character, User user, Message message)
     {
         if (message.From != Message.Type.System)
@@ -131,23 +119,18 @@ internal class Receiver : IReceiver, ICleanable
             _logger.LogWarning("Received non-system message in OnSystemEvent for user {UserId} and character {CharacterId}", user.Id, character.Id);
             return;
         }
-
         LockCharacter(character, user);
-
         try
         {
             _logger.LogInformation("Starting system event {SystemEvent} for user {UserId} and character {CharacterId}", message, user.Id, character.Id);
-
             ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (communicator == null)
             {
                 _logger.LogWarning("No communicator found for user {UserId}", user.Id);
                 return;
             }
-
             await using Context context = GetContext(character, user, communicator);
             context.Conversation.AddMessage(message);
-
             await ProcessCharacterMessageAsync(context);
         }
         catch (Exception ex)
@@ -160,7 +143,6 @@ internal class Receiver : IReceiver, ICleanable
             ReleaseLock(character, user);
         }
     }
-
     public async Task OnMessageRecieved(ICommunicator from, User user, Character character, Message message)
     {
         if (!TryLockCharacter(character, user))
@@ -168,11 +150,9 @@ internal class Receiver : IReceiver, ICleanable
             await from.SendMessage(user, character, "Character is busy processing another message. Please try again later.");
             return;
         }
-
         try
         {
             await using Context context = GetContext(character, user, from);
-
             context.Conversation.AddMessage(message);
             await ProcessCharacterMessageAsync(context);
         }
@@ -186,7 +166,6 @@ internal class Receiver : IReceiver, ICleanable
             ReleaseLock(character, user);
         }
     }
-
     public async Task OnGroupMessageRecieved(ICommunicator from, User user, CharacterGroup group, Message message)
     {
         if (!TryLockGroup(group, user))
@@ -194,10 +173,8 @@ internal class Receiver : IReceiver, ICleanable
             await from.SendMessage(user, "Group is busy processing another message. Please try again later.");
             return;
         }
-
         CancellationTokenSource cts = GetOrCreateGroupCancellation(group, user);
         List<ContextBase> contexts = [];
-
         try
         {
             ICharacterDatabase characterDatabase = _databaseFactory.GetDatabase<ICharacterDatabase>();
@@ -208,34 +185,26 @@ internal class Receiver : IReceiver, ICleanable
                     ?? throw new Exception($"Member character with ID {memberId} not found for group {group.Id}");
                 members.Add(member);
             }
-
             GroupStrategy strategy = await _groupStrategyDatabase.GetDocumentByIdAsync(group.StrategyId)
                 ?? throw new Exception($"GroupStrategy with ID {group.StrategyId} not found for group {group.Id}");
-
             ICommunicator communicator = from;
-
             if (group.InterceptorIds.Length > 0)
             {
                 ILogger interceptorLogger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Interceptor>>();
                 List<Interceptor> interceptors = [];
-
                 foreach (string id in group.InterceptorIds)
                 {
                     Interceptor interceptor = await _interceptorDatabase.GetDocumentByIdAsync(id)
                         ?? throw new Exception($"Interceptor with ID {id} not found for group {group.Id}");
-
                     Context tempContext = GetContext(members[0], user, communicator);
                     await interceptor.Init(interceptorLogger, tempContext, _systemProcessorDatabase);
                     interceptors.Add(interceptor);
                     contexts.Add(tempContext);
                 }
-
                 communicator = new InterceptingCommunicator(communicator, [.. interceptors]);
             }
-
             Conversation groupConversation = group.Conversations.GetCurrentConversation();
             groupConversation.AddMessage(message);
-
             await using GroupContext groupContext = new()
             {
                 Group = group,
@@ -243,10 +212,10 @@ internal class Receiver : IReceiver, ICleanable
                 User = user,
                 Communicator = communicator,
                 LLMFactory = _llmFactory,
-                DatabaseFactory = _databaseFactory,
+            DatabaseFactory = _databaseFactory,
+                EmbeddingService = _embeddingService,
                 CancellationToken = cts.Token,
             };
-
             try
             {
                 await strategy.ProcessAsync(groupContext);
@@ -274,19 +243,16 @@ internal class Receiver : IReceiver, ICleanable
             {
                 await context.DisposeAsync();
             }
-
             RemoveGroupCancellation(group, user);
             ReleaseGroupLock(group, user);
         }
     }
-
     public async Task OnPromptContinue(ICommunicator? from, Character character, User user)
     {
         if (!TryLockCharacter(character, user))
         {
             return;
         }
-
         try
         {
             from ??= Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
@@ -295,9 +261,7 @@ internal class Receiver : IReceiver, ICleanable
                 _logger.LogWarning("No communicator found for user {UserId}", user.Id);
                 return;
             }
-
             await using Context context = GetContext(character, user, from);
-
             await ProcessCharacterMessageAsync(context);
         }
         catch (Exception ex)
@@ -313,37 +277,28 @@ internal class Receiver : IReceiver, ICleanable
             ReleaseLock(character, user);
         }
     }
-
     private async Task ProcessCharacterMessageAsync(Context context)
     {
         if (context.Character.InterceptorIds.Length > 0)
         {
             ILogger interceptorLogger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Interceptor>>();
             List<Interceptor> interceptors = [];
-
             foreach (string id in context.Character.InterceptorIds)
             {
                 Interceptor interceptor = await _interceptorDatabase.GetDocumentByIdAsync(id)
                     ?? throw new Exception($"Interceptor with ID {id} not found for character {context.Character.Id}");
-
                 await interceptor.Init(interceptorLogger, context, _systemProcessorDatabase);
                 interceptors.Add(interceptor);
             }
-
             context.Communicator = new InterceptingCommunicator(context.Communicator, [.. interceptors]);
         }
-
         Puppeteer puppeteer = await _puppeteerDatabase.GetDocumentByIdAsync(context.Character.PuppeteerId)
             ?? throw new Exception($"Puppeteer with ID {context.Character.PuppeteerId} not found for character {context.Character.Id}");
-
         ILogger logger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Puppeteer>>();
-
         await puppeteer.Init(logger, context, _systemProcessorDatabase);
         await puppeteer.ProcessAsync();
-
         await TriggerForCharacter(TriggerType.MessageProcessed, context.Character, context.User);
     }
-
     private Context GetContext(Character character, User user, ICommunicator communicator)
     {
         return new Context()
@@ -353,17 +308,16 @@ internal class Receiver : IReceiver, ICleanable
             User = user,
             Communicator = communicator,
             LLMFactory = _llmFactory,
-            DatabaseFactory = _databaseFactory
+            DatabaseFactory = _databaseFactory,
+                EmbeddingService = _embeddingService,
         };
     }
-
     private async Task TriggerForCharacter(TriggerType type, Character character, User user)
     {
         if (character.AllowAutomaticProcessing == false)
         {
             return;
         }
-
         foreach (string triggerId in character.TriggerPointIds)
         {
             TriggerPoint triggerPoint = await _databaseFactory.GetDatabase<ITriggerPointDatabase>().GetDocumentByIdAsync(triggerId)
@@ -372,16 +326,13 @@ internal class Receiver : IReceiver, ICleanable
             {
                 Character = character,
                 User = user,
-                DatabaseFactory = _databaseFactory,
+            DatabaseFactory = _databaseFactory,
             };
-
             await triggerPoint.Init(context);
             await triggerPoint.On(type);
-
             await _databaseFactory.SaveIfDirty(triggerPoint);
         }
     }
-
     private static void CleanupUnusedLocks()
     {
         foreach (KeyValuePair<(string userId, string characterId), SemaphoreSlim> kvp in _locks)
@@ -402,55 +353,45 @@ internal class Receiver : IReceiver, ICleanable
             }
         }
     }
-
     private static bool TryLockCharacter(Character character, User user)
     {
         (string, string) key = (user.Id!, character.Id!);
         AsyncLocal<int> lockCount = _lockCounts.GetOrAdd(key, _ => new AsyncLocal<int>());
-
         if (lockCount.Value > 0)
         {
             lockCount.Value++;
             return true;
         }
-
         SemaphoreSlim semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         if (!semaphore.Wait(0))
         {
             return false;
         }
-
         lockCount.Value = 1;
         return true;
     }
-
     private static void LockCharacter(Character character, User user)
     {
         (string, string) key = (user.Id!, character.Id!);
         AsyncLocal<int> lockCount = _lockCounts.GetOrAdd(key, _ => new AsyncLocal<int>());
-
         if (lockCount.Value > 0)
         {
             lockCount.Value++;
             return;
         }
-
         SemaphoreSlim semaphore = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         if (semaphore.Wait(TimeSpan.FromMinutes(1)) == false)
         {
             throw new TimeoutException($"Timeout waiting for lock on character {character.Id} for user {user.Id}");
         }
-
         lockCount.Value = 1;
     }
-
     private static void ReleaseLock(Character character, User user)
     {
         (string, string) key = (user.Id!, character.Id!);
         if (_lockCounts.TryGetValue(key, out AsyncLocal<int>? lockCount))
         {
             lockCount.Value--;
-
             if (lockCount.Value == 0)
             {
                 if (_locks.TryGetValue(key, out SemaphoreSlim? semaphore))
@@ -460,14 +401,12 @@ internal class Receiver : IReceiver, ICleanable
             }
         }
     }
-
     private static bool TryLockGroup(CharacterGroup group, User user)
     {
         (string, string) key = (user.Id!, group.Id!);
         SemaphoreSlim semaphore = _groupLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         return semaphore.Wait(0);
     }
-
     private static void ReleaseGroupLock(CharacterGroup group, User user)
     {
         (string, string) key = (user.Id!, group.Id!);
@@ -476,13 +415,11 @@ internal class Receiver : IReceiver, ICleanable
             semaphore.Release();
         }
     }
-
     private static CancellationTokenSource GetOrCreateGroupCancellation(CharacterGroup group, User user)
     {
         (string, string) key = (user.Id!, group.Id!);
         return _groupCancellations.GetOrAdd(key, _ => new CancellationTokenSource());
     }
-
     private static void RemoveGroupCancellation(CharacterGroup group, User user)
     {
         (string, string) key = (user.Id!, group.Id!);
@@ -491,7 +428,6 @@ internal class Receiver : IReceiver, ICleanable
             cts.Dispose();
         }
     }
-
     public static bool TryCancelGroupRun(string userId, string groupId)
     {
         (string, string) key = (userId, groupId);

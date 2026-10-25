@@ -2,8 +2,15 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
+bool webEnabled = false;
 
-var mongo = builder.AddMongoDB("Mongo")
+var passwordDefault = new GenerateParameterDefault { MinLength = 24, Special = false };
+var mongoPassword = builder.AddParameter("MongoPassword", passwordDefault, secret: true, persist: true);
+var mySqlPassword = builder.AddParameter("MySqlPassword", passwordDefault, secret: true, persist: true);
+
+var mongo = builder.AddMongoDB("Mongo", password: mongoPassword)
+                   .WithDataVolume("akagi-mongo-data")
+                   .WithMongoExpress()
                    .WithLifetime(ContainerLifetime.Persistent);
 
 var akagiDb = mongo.AddDatabase("AkagiDB");
@@ -60,31 +67,39 @@ var akagi = builder.AddProject<Akagi>("Akagi")
                    .WithEnvironment("Serilog__Enrich__1", "WithMachineName")
                    .WithEnvironment("Serilog__Enrich__2", "WithThreadId");
 
+builder.AddProject<Akagi_CharacterEditor>("CharacterEditor")
+       .WithExplicitStart();
+
 var akagiWebDb = mongo.AddDatabase("AkagiWebDB");
 
-var analysisSql = builder.AddMySql("AnalysisSQL")
+var analysisSql = builder.AddMySql("AnalysisSQL", mySqlPassword)
+                         .WithDataVolume("akagi-mysql-data")
+                         .WithPhpMyAdmin()
                          .WithLifetime(ContainerLifetime.Persistent);
 var akagiWebSqlDb = analysisSql.AddDatabase("AkagiWebSQLDB");
 
 var googleClientId = builder.AddParameter("GoogleClientId", true);
 var googleClientSecret = builder.AddParameter("GoogleClientSecret", true);
 
-var akagiWeb = builder.AddProject<Akagi_Web>("AkagiWeb")
-                      .WithReference(akagiWebDb, "MongoDB")
-                      .WaitFor(akagiWebDb)
-                      .WithReference(akagiWebSqlDb, "MySQL")
-                      .WaitFor(akagiWebSqlDb)
-                      .WithEnvironment("Google__ClientId", googleClientId)
-                      .WithEnvironment("Google__ClientSecret", googleClientSecret)
-                      .WithEnvironment("Socket__Ip", socketServerIp)
-                      .WithEnvironment("Socket__Port", socketServerPort)
-                      .WithEnvironment("Serilog__Using__0", "Serilog.Sinks.Console")
-                      .WithEnvironment("Serilog__MinimumLevel__Default", "Information")
-                      .WithEnvironment("Serilog__MinimumLevel__Override__Microsoft", "Warning")
-                      .WithEnvironment("Serilog__MinimumLevel__Override__System", "Warning")
-                      .WithEnvironment("Serilog__WriteTo__0__Name", "Console")
-                      .WithEnvironment("Serilog__Enrich__0", "FromLogContext")
-                      .WithEnvironment("Serilog__Enrich__1", "WithMachineName")
-                      .WithEnvironment("Serilog__Enrich__2", "WithThreadId");
+if (webEnabled)
+{
+    var akagiWeb = builder.AddProject<Akagi_Web>("AkagiWeb")
+                          .WithReference(akagiWebDb, "MongoDB")
+                          .WaitFor(akagiWebDb)
+                          .WithReference(akagiWebSqlDb, "MySQL")
+                          .WaitFor(akagiWebSqlDb)
+                          .WithEnvironment("Google__ClientId", googleClientId)
+                          .WithEnvironment("Google__ClientSecret", googleClientSecret)
+                          .WithEnvironment("Socket__Ip", socketServerIp)
+                          .WithEnvironment("Socket__Port", socketServerPort)
+                          .WithEnvironment("Serilog__Using__0", "Serilog.Sinks.Console")
+                          .WithEnvironment("Serilog__MinimumLevel__Default", "Information")
+                          .WithEnvironment("Serilog__MinimumLevel__Override__Microsoft", "Warning")
+                          .WithEnvironment("Serilog__MinimumLevel__Override__System", "Warning")
+                          .WithEnvironment("Serilog__WriteTo__0__Name", "Console")
+                          .WithEnvironment("Serilog__Enrich__0", "FromLogContext")
+                          .WithEnvironment("Serilog__Enrich__1", "WithMachineName")
+                          .WithEnvironment("Serilog__Enrich__2", "WithThreadId");
+}
 
 builder.Build().Run();

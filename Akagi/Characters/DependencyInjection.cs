@@ -1,4 +1,4 @@
-﻿using Akagi.Characters.Cards;
+using Akagi.Characters.Cards;
 using Akagi.Characters.CharacterBehaviors.Interceptors;
 using Akagi.Characters.CharacterBehaviors.MessageCompilers;
 using Akagi.Characters.CharacterBehaviors.Puppeteers;
@@ -9,6 +9,7 @@ using Akagi.Characters.Conversations;
 using Akagi.Characters.Groups;
 using Akagi.Characters.Groups.Checkpoints;
 using Akagi.Characters.Groups.Strategies;
+using Akagi.Characters.Memories;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Characters.VoiceClips;
@@ -23,6 +24,7 @@ static class DependencyInjection
     public static void AddCharacter(this IServiceCollection services)
     {
         services.AddSingleton<ICharacterDatabase, CharacterDatabase>();
+        services.AddSingleton<IMemoryDatabase, MemoryDatabase>();
         services.AddSingleton<ICheckpointDatabase, CheckpointDatabase>();
         services.AddSingleton<ICardDatabase, CardDatabase>();
         services.AddSingleton<IVoiceClipsDatabase, VoiceClipsDatabase>();
@@ -42,6 +44,8 @@ static class DependencyInjection
 
     private static void RegisterDBClasses()
     {
+        BsonExtensions.Register(typeof(MemoryRecord));
+
         Type[] messages = TypeUtils.GetNonAbstractTypesExtendingFrom<Message>();
         Array.ForEach(messages, BsonExtensions.Register);
 
