@@ -1,23 +1,23 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 namespace Akagi.LLMs.OpenRouter;
 
 public class OpenRouterResponse
 {
     [JsonPropertyName("id")]
-    public required string Id { get; set; }
+    public string? Id { get; set; }
 
     [JsonPropertyName("choices")]
-    public required List<Choice> Choices { get; set; }
+    public List<Choice> Choices { get; set; } = [];
 
     [JsonPropertyName("created")]
-    public required int Created { get; set; }
+    public int? Created { get; set; }
 
     [JsonPropertyName("model")]
-    public required string Model { get; set; }
+    public string? Model { get; set; }
 
     [JsonPropertyName("object")]
-    public required string Object { get; set; }
+    public string? Object { get; set; }
 
     [JsonPropertyName("system_fingerprint")]
     public string? SystemFingerprint { get; set; }
@@ -81,7 +81,7 @@ public class Message
     public string? Content { get; set; }
 
     [JsonPropertyName("role")]
-    public required string Role { get; set; }
+    public string? Role { get; set; }
 
     [JsonPropertyName("tool_calls")]
     public List<ToolCall>? ToolCalls { get; set; }
@@ -101,20 +101,23 @@ public class Delta
 
 public class ToolCall
 {
+    [JsonPropertyName("index")]
+    public int? Index { get; set; }
+
     [JsonPropertyName("id")]
-    public required string Id { get; set; }
+    public string? Id { get; set; }
 
     [JsonPropertyName("type")]
-    public required string Type { get; set; }
+    public string? Type { get; set; }
 
     [JsonPropertyName("function")]
-    public required FunctionCall Function { get; set; }
+    public FunctionCall? Function { get; set; }
 }
 
 public class FunctionCall
 {
     [JsonPropertyName("name")]
-    public required string Name { get; set; }
+    public string? Name { get; set; }
 
     [JsonPropertyName("arguments")]
     public string? Arguments { get; set; }
@@ -138,7 +141,7 @@ public class ErrorResponse
     public int Code { get; set; }
 
     [JsonPropertyName("message")]
-    public required string Message { get; set; }
+    public string? Message { get; set; }
 
     [JsonPropertyName("metadata")]
     public Dictionary<string, object>? Metadata { get; set; }

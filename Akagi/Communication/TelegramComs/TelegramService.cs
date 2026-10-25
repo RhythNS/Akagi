@@ -1,4 +1,4 @@
-﻿using Akagi.Characters;
+using Akagi.Characters;
 using Akagi.Characters.Groups;
 using Akagi.Characters.VoiceClips;
 using Akagi.Communication.Commands;
@@ -13,7 +13,7 @@ using Telegram.Bot;
 
 namespace Akagi.Communication.TelegramComs;
 
-internal partial class TelegramService : Communicator, IHostedService
+internal partial class TelegramService : Communicator, IStreamingCommunicator, IHostedService
 {
     internal class Options
     {

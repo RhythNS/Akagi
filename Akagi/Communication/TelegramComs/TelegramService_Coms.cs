@@ -15,8 +15,27 @@ using Telegram.Bot.Types.Enums;
 
 namespace Akagi.Communication.TelegramComs;
 
-internal partial class TelegramService : Communicator, IHostedService
+internal partial class TelegramService : Communicator, IStreamingCommunicator, IHostedService
 {
+    public async Task<IMessageStream> OpenMessageStreamAsync(Users.User user, Character character, CancellationToken ct = default)
+    {
+        await SendInfoIfCharacterSwitched(user, character);
+
+        if (user.TelegramUser == null)
+        {
+            _logger.LogWarning("User {UserId} does not have a Telegram user. Using buffered fallback.", user.Id);
+            return new BufferedFallbackStream(this, user, character);
+        }
+
+        if (_client == null)
+        {
+            _logger.LogWarning("Telegram client is not initialized. Using buffered fallback.");
+            return new BufferedFallbackStream(this, user, character);
+        }
+
+        return new TelegramThrottledStream(_client, user.TelegramUser.Id, _logger);
+    }
+
     public override async Task SendMessage(Users.User user, Character character, Characters.Conversations.Message message)
     {
         await SendInfoIfCharacterSwitched(user, character);

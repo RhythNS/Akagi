@@ -1,4 +1,4 @@
-﻿using Akagi.Bridge.Chat.Transmissions;
+using Akagi.Bridge.Chat.Transmissions;
 using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Characters;
 using Akagi.Characters.Conversations;
@@ -15,7 +15,7 @@ using System.Net;
 
 namespace Akagi.Communication.SocketComs;
 
-internal class SocketService : Communicator, IHostedService
+internal class SocketService : Communicator, IStreamingCommunicator, IHostedService
 {
     internal class Options
     {
@@ -251,6 +251,13 @@ internal class SocketService : Communicator, IHostedService
             session.SendTransmission(transmission);
         }
         _logger.LogInformation("Sent transmission to {Count} sessions for user {UserId}.", sessions.Length, user.Id);
+    }
+
+    public Task<IMessageStream> OpenMessageStreamAsync(User user, Character character, CancellationToken ct = default)
+    {
+        string streamId = Guid.NewGuid().ToString("N");
+        IMessageStream stream = new SocketMessageStream(this, user, character, streamId);
+        return Task.FromResult(stream);
     }
 
     public Task RecieveText(User user, Character character, string text)

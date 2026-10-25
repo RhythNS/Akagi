@@ -2,7 +2,7 @@ using Projects;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
-bool webEnabled = false;
+bool webEnabled = true;
 
 var passwordDefault = new GenerateParameterDefault { MinLength = 24, Special = false };
 var mongoPassword = builder.AddParameter("MongoPassword", passwordDefault, secret: true, persist: true);

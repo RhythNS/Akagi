@@ -7,6 +7,7 @@ using Akagi.Receivers.Commands.Messages;
 using Akagi.Utils.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -35,6 +36,14 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
+
+    private sealed class ToolCallAccumulator
+    {
+        public int Index { get; set; }
+        public string Id { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+        public StringBuilder ArgumentsBuilder { get; } = new();
+    }
 
     public OpenRouterClient(ICommandFactory commandFactory,
         IVoiceClipsDatabase voiceClipsDatabase,
@@ -227,6 +236,75 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         return payload;
     }
 
+    private Command BuildCommandFromFunction(SystemProcessor systemProcessor, string functionName, string? argumentsJson)
+    {
+        Command command = systemProcessor.Commands
+            .FirstOrDefault(x => x.Name.Equals(functionName, StringComparison.OrdinalIgnoreCase))
+            ?? throw new Exception($"Could not find {functionName} command!");
+
+        if (string.IsNullOrEmpty(argumentsJson))
+        {
+            command.Arguments = command.GetDefaultArguments();
+            return command;
+        }
+
+        Dictionary<string, object>? parameters;
+        try
+        {
+            parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(argumentsJson);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogError(ex, "Failed to parse arguments JSON for command {CommandName}: {ArgumentsJson}", functionName, argumentsJson);
+            throw new Exception($"Could not pass parameters: {argumentsJson}", ex);
+        }
+
+        if (parameters == null)
+        {
+            throw new Exception($"Could not pass parameters: {argumentsJson}");
+        }
+
+        Argument[] args = command.GetDefaultArguments();
+        foreach (KeyValuePair<string, object> partParameter in parameters)
+        {
+            Argument? argument = args.FirstOrDefault(x => x.Name == partParameter.Key);
+            if (argument == null)
+            {
+                _logger.LogWarning("Command {CommandName} does not have an argument named {ArgumentName}", command.Name, partParameter.Key);
+                continue;
+            }
+
+            if (partParameter.Value is not JsonElement jsonElement)
+            {
+                _logger.LogWarning("Expected a JSON element for argument {ArgumentName}, but got {Value}", argument.Name, partParameter.Value);
+                continue;
+            }
+
+            switch (jsonElement.ValueKind)
+            {
+                case JsonValueKind.String:
+                    argument.Value = jsonElement.GetString()!;
+                    break;
+                case JsonValueKind.Number:
+                    if (argument.ArgumentType == Argument.Type.Int)
+                        argument.IntValue = jsonElement.GetInt32();
+                    else
+                        argument.FloatValue = jsonElement.GetSingle();
+                    break;
+                case JsonValueKind.True:
+                case JsonValueKind.False:
+                    argument.BoolValue = jsonElement.GetBoolean();
+                    break;
+                default:
+                    _logger.LogWarning("Unknown argument type for {ArgumentName}: {Value}", argument.Name, jsonElement.GetRawText());
+                    argument.Value = jsonElement.GetRawText();
+                    continue;
+            }
+        }
+        command.Arguments = args;
+        return command;
+    }
+
     private Command[] HandleResponse(SystemProcessor systemProcessor, OpenRouterResponse response, Context context)
     {
         if (response.Choices.Count == 0)
@@ -248,7 +326,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
                 throw new Exception("OpenRouter returned NonStreamingChoice with no message.");
             }
 
-            Message message = choice.Message;
+            var message = choice.Message;
 
             if (message.Content != null && string.IsNullOrWhiteSpace(message.Content) == false)
             {
@@ -260,64 +338,20 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
             {
                 foreach (ToolCall call in message.ToolCalls)
                 {
-                    FunctionCall function = call.Function;
-                    Command command = systemProcessor.Commands
-                        .FirstOrDefault(x => x.Name.Equals(function.Name, StringComparison.OrdinalIgnoreCase))
-                        ?? throw new Exception($"Could not find {function.Name} command!");
-
-                    if (string.IsNullOrEmpty(function.Arguments))
+                    FunctionCall? function = call.Function;
+                    if (function == null || string.IsNullOrEmpty(function.Name))
                     {
-                        command.Arguments = command.GetDefaultArguments();
-                        commands.Add(command);
                         continue;
                     }
 
-                    Dictionary<string, object>? parameters = JsonSerializer.Deserialize<Dictionary<string, object>>(function.Arguments);
-                    if (parameters == null)
-                    {
-                        throw new Exception($"Could not pass parameters: {function.Arguments}");
-                    }
-
-                    Argument[] args = command.GetDefaultArguments();
-                    foreach (KeyValuePair<string, object> partParameter in parameters)
-                    {
-                        Argument argument = args.First(x => x.Name == partParameter.Key);
-
-                        if (partParameter.Value is not JsonElement jsonElement)
-                        {
-                            _logger.LogWarning("Expected a JSON element for argument {ArgumentName}, but got {Value}", argument.Name, partParameter.Value);
-                            continue;
-                        }
-
-                        switch (jsonElement.ValueKind)
-                        {
-                            case JsonValueKind.String:
-                                argument.Value = jsonElement.GetString()!;
-                                break;
-                            case JsonValueKind.Number:
-                                if (argument.ArgumentType == Argument.Type.Int)
-                                    argument.IntValue = jsonElement.GetInt32();
-                                else
-                                    argument.FloatValue = jsonElement.GetSingle();
-                                break;
-                            case JsonValueKind.True:
-                            case JsonValueKind.False:
-                                argument.BoolValue = jsonElement.GetBoolean();
-                                break;
-                            default:
-                                _logger.LogWarning("Unknown argument type for {ArgumentName}: {Value}", argument.Name, jsonElement.GetRawText());
-                                argument.Value = jsonElement.GetRawText();
-                                continue;
-                        }
-                    }
-                    command.Arguments = args;
+                    Command command = BuildCommandFromFunction(systemProcessor, function.Name, function.Arguments);
                     commands.Add(command);
                 }
             }
         }
         else if (choice.IsStreamingChoice)
         {
-            throw new NotImplementedException("StreamingChoice not implemented");
+            throw new NotImplementedException("StreamingChoice should be processed via GetNextStepsStreamAsync.");
         }
         else if (choice.IsNonChatChoice)
         {
@@ -379,5 +413,176 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         }
 
         return HandleResponse(systemProcessor, openRouterResponse, context);
+    }
+
+    public override async IAsyncEnumerable<LLMStreamEvent> GetNextStepsStreamAsync(
+        SystemProcessor systemProcessor,
+        Context context,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        using HttpClient httpClient = new();
+
+        if (string.IsNullOrEmpty(_options.ApiKey))
+        {
+            throw new Exception("OpenRouter API key is not set.");
+        }
+        if (string.IsNullOrEmpty(Model))
+        {
+            throw new Exception("OpenRouter model is not set.");
+        }
+
+        OpenRouterPayload payload = await GetPayload(systemProcessor, context);
+        payload.Stream = true;
+
+        HttpRequestMessage request = new(HttpMethod.Post,
+            $"{_options.BaseUrl}{_options.ResponsePath}");
+
+        request.Headers.Add("Authorization", $"Bearer {_options.ApiKey}");
+        request.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+        request.Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json");
+
+        _logger.LogDebug("Sending streaming request to OpenRouter using model {Model}", Model);
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to connect to OpenRouter streaming endpoint with model {Model}", Model);
+            throw;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            string errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+            throw new Exception($"OpenRouter streaming request failed with status code {response.StatusCode}: {errorBody}");
+        }
+
+        using Stream responseStream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using StreamReader reader = new(responseStream, Encoding.UTF8);
+
+        StringBuilder fullTextBuilder = new();
+        Dictionary<int, ToolCallAccumulator> toolCallAccumulators = [];
+
+        while (!reader.EndOfStream)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            string? line = await reader.ReadLineAsync(cancellationToken);
+            if (line == null)
+            {
+                break;
+            }
+
+            line = line.Trim();
+            if (string.IsNullOrEmpty(line) || line.StartsWith(':')) // SSE comment / ping
+            {
+                continue;
+            }
+
+            if (!line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            string data = line["data:".Length..].Trim();
+            if (data.Equals("[DONE]", StringComparison.OrdinalIgnoreCase))
+            {
+                break;
+            }
+
+            OpenRouterResponse? chunk;
+            try
+            {
+                chunk = JsonSerializer.Deserialize<OpenRouterResponse>(data, _jsonOptions);
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Failed to deserialize SSE chunk: {Data}", data);
+                continue;
+            }
+
+            if (chunk?.Choices == null || chunk.Choices.Count == 0)
+            {
+                continue;
+            }
+
+            Choice choice = chunk.Choices[0];
+            if (choice.Error != null)
+            {
+                throw new Exception($"OpenRouter SSE returned error response: {choice.Error.Code}:{choice.Error.Message}");
+            }
+
+            if (choice.Delta != null)
+            {
+                if (!string.IsNullOrEmpty(choice.Delta.Content))
+                {
+                    string textChunk = choice.Delta.Content;
+                    fullTextBuilder.Append(textChunk);
+                    yield return new TextDeltaEvent(textChunk);
+                }
+
+                if (choice.Delta.ToolCalls != null && choice.Delta.ToolCalls.Count > 0)
+                {
+                    foreach (ToolCall tc in choice.Delta.ToolCalls)
+                    {
+                        int tcIndex = tc.Index ?? 0;
+                        if (!toolCallAccumulators.TryGetValue(tcIndex, out ToolCallAccumulator? acc))
+                        {
+                            acc = new ToolCallAccumulator { Index = tcIndex };
+                            toolCallAccumulators[tcIndex] = acc;
+                        }
+
+                        if (!string.IsNullOrEmpty(tc.Id))
+                        {
+                            acc.Id = tc.Id;
+                        }
+
+                        if (tc.Function != null)
+                        {
+                            if (!string.IsNullOrEmpty(tc.Function.Name))
+                            {
+                                acc.Name = tc.Function.Name;
+                            }
+
+                            if (!string.IsNullOrEmpty(tc.Function.Arguments))
+                            {
+                                acc.ArgumentsBuilder.Append(tc.Function.Arguments);
+                                yield return new ToolCallDeltaEvent(tcIndex, acc.Id, acc.Name, tc.Function.Arguments);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        List<Command> finalCommands = [];
+        string fullText = fullTextBuilder.ToString();
+
+        if (!string.IsNullOrWhiteSpace(fullText))
+        {
+            TextMessageCommand textCommand = _commandFactory.Create<TextMessageCommand>();
+            textCommand.SetMessage(fullText);
+            finalCommands.Add(textCommand);
+        }
+
+        foreach (ToolCallAccumulator acc in toolCallAccumulators.Values.OrderBy(x => x.Index))
+        {
+            if (string.IsNullOrWhiteSpace(acc.Name))
+            {
+                continue;
+            }
+
+            Command toolCommand = BuildCommandFromFunction(systemProcessor, acc.Name, acc.ArgumentsBuilder.ToString());
+            finalCommands.Add(toolCommand);
+        }
+
+        finalCommands.ForEach(x => x.SetFrom(systemProcessor.Output, context.Character.Id!));
+
+        _logger.LogDebug("Completed streaming response from OpenRouter using model {Model}. Commands count: {Count}", Model, finalCommands.Count);
+
+        yield return new StreamCompleteEvent([.. finalCommands], fullText);
     }
 }

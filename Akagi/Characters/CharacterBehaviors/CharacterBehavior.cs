@@ -1,4 +1,6 @@
-﻿using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+using Akagi.Characters.CharacterBehaviors.Interceptors;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+using Akagi.Characters.Conversations;
 using Akagi.Communication;
 using Akagi.Data;
 using Akagi.LLMs;
@@ -98,20 +100,76 @@ internal abstract class CharacterBehavior : Savable
                 break;
             }
 
-            Command[] commands = await llm.GetNextSteps(systemProcessor, Context);
+            bool canStream = Communicator is IStreamingCommunicator
+                && systemProcessor.RunMode != ILLM.RunMode.CommandsOnly
+                && systemProcessor.Usage != ILLM.LLMUsage.ReflectionRoleplay
+                && systemProcessor.Usage != ILLM.LLMUsage.ReflectionGeneral
+                && systemProcessor.Output != Message.Type.System;
 
-            if (commands.Length == 0)
+            if (canStream)
             {
-                Logger.LogWarning("No commands returned from LLM for character {CharacterId}, user {UserId}, {SystemProcessorName}",
-                    Character.Id, User.Id, systemProcessor.Name);
-                return;
+                shouldContinue = await ExecuteStreamingStepAsync(llm, systemProcessor);
             }
+            else
+            {
+                Command[] commands = await llm.GetNextSteps(systemProcessor, Context);
 
-            shouldContinue = await ExecuteCommandsAsync(commands);
+                if (commands.Length == 0)
+                {
+                    Logger.LogWarning("No commands returned from LLM for character {CharacterId}, user {UserId}, {SystemProcessorName}",
+                        Character.Id, User.Id, systemProcessor.Name);
+                    return;
+                }
+
+                shouldContinue = await ExecuteCommandsAsync(commands, isStreamed: false);
+            }
         } while (shouldContinue);
     }
 
-    private async Task<bool> ExecuteCommandsAsync(Command[] commands)
+    private async Task<bool> ExecuteStreamingStepAsync(ILLM llm, SystemProcessor systemProcessor)
+    {
+        IStreamingCommunicator streamingCommunicator = (IStreamingCommunicator)Communicator;
+        await using IMessageStream stream = await streamingCommunicator.OpenMessageStreamAsync(User, Character);
+
+        try
+        {
+            Command[] finalCommands = [];
+            string fullText = string.Empty;
+
+            await foreach (LLMStreamEvent streamEvent in llm.GetNextStepsStreamAsync(systemProcessor, Context))
+            {
+                switch (streamEvent)
+                {
+                    case TextDeltaEvent textDelta:
+                        await stream.WriteChunkAsync(textDelta.Text);
+                        break;
+
+                    case StreamCompleteEvent complete:
+                        finalCommands = complete.FinalCommands;
+                        fullText = complete.CompleteText;
+                        break;
+                }
+            }
+
+            await stream.CompleteAsync(fullText);
+
+            if (finalCommands.Length == 0)
+            {
+                Logger.LogWarning("No commands returned from LLM stream for character {CharacterId}, user {UserId}, {SystemProcessorName}",
+                    Character.Id, User.Id, systemProcessor.Name);
+                return false;
+            }
+
+            return await ExecuteCommandsAsync(finalCommands, isStreamed: true);
+        }
+        catch (Exception ex)
+        {
+            await stream.AbortAsync(ex);
+            throw;
+        }
+    }
+
+    private async Task<bool> ExecuteCommandsAsync(Command[] commands, bool isStreamed = false)
     {
         bool shouldContinue = true;
 
@@ -121,14 +179,24 @@ internal abstract class CharacterBehavior : Savable
 
             if (command is MessageCommand response)
             {
-                await Communicator.SendMessage(User, Character, response.GetMessage());
+                if (isStreamed)
+                {
+                    if (Communicator is InterceptingCommunicator interceptingComm)
+                    {
+                        await interceptingComm.DispatchStreamCompletedMessageAsync(User, Character, response.GetMessage());
+                    }
+                }
+                else
+                {
+                    await Communicator.SendMessage(User, Character, response.GetMessage());
+                }
             }
 
             shouldContinue &= command.ContinueAfterExecution;
 
             if (next.Length > 0)
             {
-                shouldContinue &= await ExecuteCommandsAsync(next);
+                shouldContinue &= await ExecuteCommandsAsync(next, isStreamed: false);
             }
         }
 
