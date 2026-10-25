@@ -1,4 +1,4 @@
-﻿using Akagi.Bridge.Chat.Transmissions;
+using Akagi.Bridge.Chat.Transmissions;
 
 namespace Akagi.Web.Services.Sockets.Requests;
 
@@ -6,7 +6,7 @@ public interface IRequest;
 
 public abstract class Request<R, T> : IRequest where T : Transmission
 {
-    private TaskCompletionSource<R> _taskCompletionSource = new();
+    private TaskCompletionSource<R> _taskCompletionSource = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _isCompleted;
     private SocketClient? _client;
 
@@ -15,27 +15,34 @@ public abstract class Request<R, T> : IRequest where T : Transmission
         _client = client;
         _client.AddRequest(this);
 
-        _taskCompletionSource = new TaskCompletionSource<R>();
+        _taskCompletionSource = new TaskCompletionSource<R>(TaskCreationOptions.RunContinuationsAsynchronously);
         _isCompleted = false;
 
-        T transmission = GetTransmission();
-        client.SendTransmission(transmission);
-
-        TimeSpan effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
-        using CancellationTokenSource cts = new();
-        Task timeoutTask = Task.Delay(effectiveTimeout, cts.Token);
-
-        Task completedTask = await Task.WhenAny(_taskCompletionSource.Task, timeoutTask);
-
-        if (completedTask == timeoutTask)
+        try
         {
-            _isCompleted = true;
-            _taskCompletionSource.TrySetCanceled();
-            throw new TimeoutException("Request timed out");
-        }
+            T transmission = GetTransmission();
+            client.SendTransmission(transmission);
 
-        cts.Cancel();
-        return await _taskCompletionSource.Task;
+            TimeSpan effectiveTimeout = timeout ?? TimeSpan.FromSeconds(5);
+            using CancellationTokenSource cts = new();
+            Task timeoutTask = Task.Delay(effectiveTimeout, cts.Token);
+
+            Task completedTask = await Task.WhenAny(_taskCompletionSource.Task, timeoutTask);
+
+            if (completedTask == timeoutTask)
+            {
+                _isCompleted = true;
+                _taskCompletionSource.TrySetCanceled();
+                throw new TimeoutException("Request timed out");
+            }
+
+            cts.Cancel();
+            return await _taskCompletionSource.Task;
+        }
+        finally
+        {
+            _client?.RemoveRequest(this);
+        }
     }
 
     public void Fulfill(R response)

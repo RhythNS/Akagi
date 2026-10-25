@@ -1,4 +1,4 @@
-﻿using Akagi.Web.Models;
+using Akagi.Web.Models;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Primitives;
@@ -28,7 +28,6 @@ public class SocketFileProvider : IFileProvider
 
     public IDirectoryContents GetDirectoryContents(string subpath)
     {
-        // TODO: Implement directory contents retrieval if needed
         return new NotFoundDirectoryContents();
     }
 
@@ -53,14 +52,9 @@ public class SocketFileProvider : IFileProvider
             return new NotFoundFileInfo(subpath);
         }
 
-        string? circuitId = httpContext.Request.Headers["X-Circuit-Id"].FirstOrDefault() ??
-                          httpContext.Request.Query["circuitId"].FirstOrDefault();
-
-        if (string.IsNullOrEmpty(circuitId))
-        {
-            _logger.LogWarning("No circuit ID provided for user {UserId} when accessing {Path}", userIdClaim.Value, subpath);
-            return new NotFoundFileInfo(subpath);
-        }
+        string circuitId = httpContext.Request.Headers["X-Circuit-Id"].FirstOrDefault() ??
+                           httpContext.Request.Query["circuitId"].FirstOrDefault() ??
+                           string.Empty;
 
         User user = new()
         {

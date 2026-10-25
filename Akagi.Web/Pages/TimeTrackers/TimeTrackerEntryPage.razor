@@ -1,7 +1,7 @@
-﻿@using Akagi.Web.Data
+@using Akagi.Web.Data
+@using Akagi.Web.Icons
 @using Akagi.Web.Models
 @using Akagi.Web.Models.TimeTrackers
-@using Blazority
 @using TabBlazor.Services
 
 @inject IDefinitionDatabase DefinitionDatabase
@@ -12,13 +12,22 @@
 @page "/TimeTracking/{DefinitionId}/entry/{EntryId}"
 @page "/TimeTracking/{DefinitionId}/entry/new"
 
-<link rel="stylesheet" href="_content/Blazority/lib/clr/ui/clr-ui.min.css" />
-<link rel="stylesheet" href="_content/Blazority/lib/clr/icons/clr-icons.min.css" />
-<link rel="stylesheet" href="_content/Blazority/blazority.min.css" />
+<PageTitle>@(IsEditMode ? "Edit Entry" : "New Entry") - @(_definition?.Name ?? "Time Tracking")</PageTitle>
 
-<PagePretitle>
-	Create Entry
-</PagePretitle>
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">@(_definition?.Name ?? "Time Tracking")</div>
+			<h2 class="page-title">@(IsEditMode ? "Edit Time Entry" : "Log Time Entry")</h2>
+		</div>
+		<div class="col-auto ms-auto">
+			<a href="@detailPath" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
+				<Icon IconType="@Icons.ArrowLeft" Size="16" />
+				<span>Back to Entries</span>
+			</a>
+		</div>
+	</div>
+</div>
 
 <TabBlazor.Card>
 	@if (_entry == null || _definition == null)
@@ -41,16 +50,19 @@
 						<label class="form-label">
 							@item.Name
 						</label>
-						<div class="d-flex align-items-center gap-2">
+						<div class="d-flex flex-wrap align-items-center gap-2">
 							@{
 								switch (item.Type)
 								{
 									case FieldType.Boolean:
 										bool boolThing = Convert.ToBoolean(_entry.Values[item.Name]);
-										<InputCheckbox class="form-check-input"
-													   Value="Convert.ToBoolean(_entry.Values[item.Name])"
-													   ValueChanged="@(x => _entry.Values[item.Name] = x)"
-													   ValueExpression="() => boolThing" />
+										<label class="form-check form-switch m-0">
+											<InputCheckbox class="form-check-input"
+														   Value="Convert.ToBoolean(_entry.Values[item.Name])"
+														   ValueChanged="@(x => _entry.Values[item.Name] = x)"
+														   ValueExpression="() => boolThing" />
+											<span class="form-check-label">@(boolThing ? "Yes" : "No")</span>
+										</label>
 										break;
 									case FieldType.Int:
 										int intThing = Convert.ToInt32(_entry.Values[item.Name]);
@@ -88,44 +100,50 @@
 										break;
 									case FieldType.DateTime:
 										DateTime dateTimeThing = Convert.ToDateTime(_entry.Values[item.Name]);
-										<DateTimepicker TValue="DateTime"
-														Value=@((DateTime)_entry.Values[item.Name])
-														ValueChanged="x => _entry.Values[item.Name] = x"
-														ValueExpression="() => dateTimeThing" />
+										<input type="datetime-local"
+											   class="form-control"
+											   style="max-width: 260px;"
+											   value="@(dateTimeThing.ToString("yyyy-MM-ddTHH:mm"))"
+											   @onchange="@(e => { if (DateTime.TryParse(e.Value?.ToString(), out var dt)) _entry.Values[item.Name] = dt; })" />
 										break;
 									case FieldType.Date:
 										DateOnly dateOnlyThing = (DateOnly)_entry.Values[item.Name];
-										<Blazority.Datepicker TValue="DateOnly"
-															  Value=@((DateOnly)_entry.Values[item.Name])
-															  ValueChanged="x => _entry.Values[item.Name] = x"
-															  ValueExpression="() => dateOnlyThing" />
+										<InputDate class="form-control"
+												   style="max-width: 220px;"
+												   TValue="DateOnly"
+												   Value="dateOnlyThing"
+												   ValueChanged="@(x => _entry.Values[item.Name] = x)"
+												   ValueExpression="() => dateOnlyThing" />
 										break;
 									case FieldType.Time:
 										TimeOnly timeOnlyThing = (TimeOnly)_entry.Values[item.Name];
-										<Timepicker TValue="TimeOnly"
-												Value=@((TimeOnly)_entry.Values[item.Name])
-												ValueChanged="x => _entry.Values[item.Name] = x"
-													ValueExpression="() => timeOnlyThing" />
-										<button type="button" class="btn btn-secondary btn-sm"
-												@onclick="() => _entry.Values[item.Name] = TimeOnly.FromDateTime(DateTime.Now)">
-											Now
-										</button>
-										<button type="button" class="btn btn-secondary btn-sm"
-												@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(-5)">
-											-5m
-										</button>
-										<button type="button" class="btn btn-secondary btn-sm"
-												@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(-1)">
-											-1m
-										</button>
-										<button type="button" class="btn btn-secondary btn-sm"
-												@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(1)">
-											+1m
-										</button>
-										<button type="button" class="btn btn-secondary btn-sm"
-												@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(5)">
-											+5m
-										</button>
+										<input type="time"
+											   class="form-control"
+											   style="max-width: 160px;"
+											   value="@(timeOnlyThing.ToString("HH:mm"))"
+											   @onchange="@(e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var tm)) _entry.Values[item.Name] = tm; })" />
+										<div class="btn-group" role="group" aria-label="Time quick adjustments">
+											<button type="button" class="btn btn-outline-primary btn-sm"
+													@onclick="() => _entry.Values[item.Name] = TimeOnly.FromDateTime(DateTime.Now)">
+												Now
+											</button>
+											<button type="button" class="btn btn-outline-secondary btn-sm"
+													@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(-5)">
+												-5m
+											</button>
+											<button type="button" class="btn btn-outline-secondary btn-sm"
+													@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(-1)">
+												-1m
+											</button>
+											<button type="button" class="btn btn-outline-secondary btn-sm"
+													@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(1)">
+												+1m
+											</button>
+											<button type="button" class="btn btn-outline-secondary btn-sm"
+													@onclick="() => _entry.Values[item.Name] = ((TimeOnly)_entry.Values[item.Name]).AddMinutes(5)">
+												+5m
+											</button>
+										</div>
 										break;
 								}
 							}
@@ -133,20 +151,23 @@
 					</div>
 				}
 
-				<div>
-					<label class="form-label">
-						Submit multiple
+				<div class="my-3 pt-2 border-top">
+					<label class="form-check form-switch">
+						<InputCheckbox class="form-check-input"
+									   @bind-Value=_submitMultiple />
+						<span class="form-check-label">Keep form open to submit multiple entries</span>
 					</label>
-					<InputCheckbox class="form-check-input"
-								   @bind-Value=_submitMultiple />
 				</div>
-				<TabBlazor.Button Type="ButtonType.Submit"
-								  Text="Save"
-								  class="mt-1" />
-				<TabBlazor.Button Type="ButtonType.Link"
-								  Text="Abort"
-								  LinkTo=@(detailPath)
-								  class="mt-1" />
+
+				<div class="d-flex align-items-center gap-2">
+					<button type="submit" class="btn btn-primary d-inline-flex align-items-center gap-2">
+						<Icon IconType="@Icons.Check" Size="16" />
+						<span>Save Entry</span>
+					</button>
+					<a href="@detailPath" class="btn btn-ghost-secondary">
+						Cancel
+					</a>
+				</div>
 			</TablerForm>
 		</CardBody>
 	}
@@ -168,6 +189,7 @@
 	private Definition? _definition = null;
 	private bool _submitMultiple = false;
 
+	private bool IsEditMode => !string.IsNullOrEmpty(EntryId) && EntryId != "new";
 	private string detailPath => $"/TimeTracking/{DefinitionId}/detail";
 
 	protected override async Task OnInitializedAsync()
@@ -184,9 +206,9 @@
 			return;
 		}
 
-		if (!string.IsNullOrEmpty(EntryId) && EntryId != "new")
+		if (IsEditMode)
 		{
-			_entry = await EntryDatabase.GetDocumentByIdAsync(EntryId);
+			_entry = await EntryDatabase.GetDocumentByIdAsync(EntryId!);
 		}
 		else
 		{
@@ -218,7 +240,7 @@
 						_entry.Values.Add(field.Name, DateOnly.FromDateTime(DateTime.Today));
 						break;
 					case FieldType.Time:
-						_entry.Values.Add(field.Name, TimeOnly.MinValue);
+						_entry.Values.Add(field.Name, TimeOnly.FromDateTime(DateTime.Now));
 						break;
 					default:
 						throw new ArgumentOutOfRangeException();
@@ -246,7 +268,7 @@
 			await ToastService.AddToastAsync(new ToastModel
 			{
 				Title = "Error",
-				Message = "Could not save definition..."
+				Message = "Could not save entry..."
 			});
 			return;
 		}
@@ -267,11 +289,5 @@
 			return;
 		}
 		Navigation.NavigateTo($"/TimeTracking/{DefinitionId}/detail");
-	}
-
-	private Task<IEnumerable<string>> Search(string typed)
-	{
-		IEnumerable<string> toReturn = new string[0];
-		return Task.FromResult(toReturn);
 	}
 }

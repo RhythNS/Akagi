@@ -1,4 +1,4 @@
-﻿using Akagi.Web.Models;
+using Akagi.Web.Models;
 using Akagi.Web.Services.Sockets.Requests;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
@@ -57,9 +57,14 @@ public class SocketService : ISocketService
                                         _socketTransmissionHandlers,
                                         this);
 
-        socketClient.ConnectAsync();
         try
         {
+            bool connected = await socketClient.ConnectAndWaitAsync(TimeSpan.FromSeconds(5));
+            if (!connected)
+            {
+                throw new TimeoutException("Timed out waiting for socket client TCP connection.");
+            }
+
             await new LoginRequest(token).Get(socketClient);
         }
         catch (Exception)
@@ -69,26 +74,35 @@ public class SocketService : ISocketService
             throw;
         }
 
-        _clients.TryAdd((user.Id!, circuitId), socketClient);
+        _clients[(user.Id!, circuitId)] = socketClient;
 
         return socketClient;
     }
 
     public SocketClient? Find(User user, string circuitId)
     {
-        if (_clients.TryGetValue((user.Id!, circuitId), out SocketClient? client))
+        if (!string.IsNullOrEmpty(circuitId) &&
+            _clients.TryGetValue((user.Id!, circuitId), out SocketClient? client) &&
+            client.IsConnected)
         {
             return client;
         }
+
+        SocketClient? fallback = _clients.Values.FirstOrDefault(c => c.User.Id == user.Id && c.IsConnected);
+        if (fallback != null)
+        {
+            return fallback;
+        }
+
         _logger.LogWarning("Socket client not found for user {UserId} and circuit {CircuitId}.", user.Id, circuitId);
         return null;
     }
 
     public void OnDeleted(SocketClient socketClient)
     {
-        if (!_clients.TryRemove((socketClient.User.Id!, socketClient.CircuitId), out _))
-        {
-            _logger.LogWarning("Failed to remove socket client.");
-        }
+        ((ICollection<KeyValuePair<(string UserId, string CircuitId), SocketClient>>)_clients)
+            .Remove(new KeyValuePair<(string UserId, string CircuitId), SocketClient>(
+                (socketClient.User.Id!, socketClient.CircuitId),
+                socketClient));
     }
 }

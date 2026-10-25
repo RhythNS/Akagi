@@ -1,8 +1,8 @@
-﻿using Akagi.Web.Data;
+using Akagi.Web.Data;
 
 namespace Akagi.Web.Exporters;
 
-static class DependendyInjection
+static class DependencyInjection
 {
     public static void AddExporters(this IServiceCollection services, IConfiguration configuration)
     {

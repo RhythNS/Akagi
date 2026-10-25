@@ -1,37 +1,187 @@
-﻿@using Akagi.Web.Icons
+@using Akagi.Web.Icons
+@using Akagi.Web.Models
+@using Akagi.Web.Pages.Chat.Components
 
-<Navbar Direction=NavbarDirection.Vertical Background=NavbarBackground.Dark>
-	<a href="" class="navbar-brand navbar-brand-autodark">
-		<img src="img/logo.png" class="navbar-brand-image me-2">
-		<h2 class="text-muted">Akagi</h2>
-	</a>
+@implements IDisposable
+@inject NavigationManager NavigationManager
 
-	<NavbarMenu>
-		<NavbarMenuItem Href=""
-						Text="Home">
-			<MenuItemIcon>
-				<Icon class="icon" Elements="@Icons.Home" />
-			</MenuItemIcon>
-		</NavbarMenuItem>
+<div class="container-fluid">
+	<button class="navbar-toggler"
+			type="button"
+			aria-controls="sidebar-menu"
+			aria-expanded="@(_mobileMenuOpen ? "true" : "false")"
+			aria-label="Toggle navigation"
+			@onclick="ToggleMobileMenu">
+		<span class="navbar-toggler-icon"></span>
+	</button>
 
-		<NavbarMenuItem Text="Chat"
-						Expanded="true">
-			<SubMenu>
-				<NavbarMenuItem Href="Chat"
-								Text="Home" />
-				<NavbarMenuItem Href="Chat/CharacterList"
-					            Text="List" />
-			</SubMenu>
-		</NavbarMenuItem>
+	<h1 class="navbar-brand">
+		<a href="" class="d-flex align-items-center text-decoration-none text-reset gap-2">
+			<img src="img/logo.png" alt="Akagi" class="navbar-brand-image" />
+			<span class="fw-bold">Akagi</span>
+		</a>
+	</h1>
 
-		<NavbarMenuItem Text="Time Tracking"
-						Expanded="true">
-			<SubMenu>
-				<NavbarMenuItem Href="TimeTracking/list"
-								Text="List" />
-				<NavbarMenuItem Href="TimeTracking/create"
-								Text="Create" />
-			</SubMenu>
-		</NavbarMenuItem>
-	</NavbarMenu>
-</Navbar>
+	<!-- Mobile quick actions -->
+	<div class="navbar-nav flex-row d-lg-none align-items-center gap-2">
+		<ChatConnectionStatus />
+	</div>
+
+	<div class="collapse navbar-collapse @(_mobileMenuOpen ? "show" : "")" id="sidebar-menu">
+		<ul class="navbar-nav pt-lg-3">
+			<!-- Dashboard -->
+			<li class="nav-item @(IsDashboardActive ? "active" : "")">
+				<NavLink class="nav-link d-flex align-items-center" href="" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">
+					<span class="nav-link-icon d-md-none d-lg-inline-block">
+						<Icon class="icon" IconType="@Icons.Home" />
+					</span>
+					<span class="nav-link-title">Dashboard</span>
+				</NavLink>
+			</li>
+
+			<!-- Chat Studio -->
+			<li class="nav-item dropdown @(IsChatActive ? "active" : "")">
+				<a class="nav-link dropdown-toggle @(_chatExpanded ? "show" : "")"
+				   href="javascript:void(0)"
+				   role="button"
+				   aria-expanded="@(_chatExpanded ? "true" : "false")"
+				   @onclick="ToggleChatMenu">
+					<span class="nav-link-icon d-md-none d-lg-inline-block">
+						<Icon class="icon" IconType="@Icons.Messages" />
+					</span>
+					<span class="nav-link-title">Chat Studio</span>
+				</a>
+				<div class="dropdown-menu @(_chatExpanded ? "show" : "")">
+					<div class="dropdown-menu-columns">
+						<div class="dropdown-menu-column">
+							<NavLink class="dropdown-item" href="Chat" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">
+								Chat Hub
+							</NavLink>
+							<NavLink class="dropdown-item" href="Chat/CharacterList" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+								Character Directory
+							</NavLink>
+							<NavLink class="dropdown-item" href="Chat/0/" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+								Direct Assistant
+							</NavLink>
+						</div>
+					</div>
+				</div>
+			</li>
+
+			<!-- Time Tracking -->
+			<li class="nav-item dropdown @(IsTimeTrackingActive ? "active" : "")">
+				<a class="nav-link dropdown-toggle @(_timeTrackingExpanded ? "show" : "")"
+				   href="javascript:void(0)"
+				   role="button"
+				   aria-expanded="@(_timeTrackingExpanded ? "true" : "false")"
+				   @onclick="ToggleTimeTrackingMenu">
+					<span class="nav-link-icon d-md-none d-lg-inline-block">
+						<Icon class="icon" IconType="@Icons.Clock" />
+					</span>
+					<span class="nav-link-title">Time Tracking</span>
+				</a>
+				<div class="dropdown-menu @(_timeTrackingExpanded ? "show" : "")">
+					<div class="dropdown-menu-columns">
+						<div class="dropdown-menu-column">
+							<NavLink class="dropdown-item" href="TimeTracking/list" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+								Entry History
+							</NavLink>
+							<NavLink class="dropdown-item" href="TimeTracking/create" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+								New Definition
+							</NavLink>
+						</div>
+					</div>
+				</div>
+			</li>
+		</ul>
+
+		@if (CurrentUser is not null)
+		{
+			<div class="mt-auto pt-3 pb-2 border-top border-secondary border-opacity-25">
+				<div class="d-flex align-items-center justify-content-between px-2 py-1">
+					<div class="d-flex align-items-center gap-2 text-truncate">
+						<Avatar Rounded="AvatarRounded.Circle" Size="AvatarSize.Small">
+							@UserInitial
+						</Avatar>
+						<div class="text-truncate">
+							<div class="fw-medium small text-white text-truncate">@CurrentUser.Name</div>
+							<div class="text-muted small text-truncate" style="font-size: 0.72rem;">@CurrentUser.Email</div>
+						</div>
+					</div>
+					<a href="Auth/logout"
+					   class="btn btn-icon btn-sm btn-ghost-danger"
+					   title="Logout">
+						<Icon IconType="@Icons.Logout" Size="16" />
+					</a>
+				</div>
+			</div>
+		}
+	</div>
+</div>
+
+@code {
+	[Parameter]
+	public User? CurrentUser { get; set; }
+
+	private bool _mobileMenuOpen = false;
+	private bool _chatExpanded = true;
+	private bool _timeTrackingExpanded = true;
+	private string _currentPath = string.Empty;
+
+	private string UserInitial =>
+		!string.IsNullOrWhiteSpace(CurrentUser?.Name)
+			? CurrentUser.Name[..1].ToUpperInvariant()
+			: "U";
+
+	private bool IsDashboardActive =>
+		string.IsNullOrEmpty(_currentPath) || _currentPath == "/";
+
+	private bool IsChatActive =>
+		_currentPath.StartsWith("Chat", StringComparison.OrdinalIgnoreCase);
+
+	private bool IsTimeTrackingActive =>
+		_currentPath.StartsWith("TimeTracking", StringComparison.OrdinalIgnoreCase);
+
+	protected override void OnInitialized()
+	{
+		UpdateCurrentPath(NavigationManager.Uri);
+		NavigationManager.LocationChanged += OnLocationChanged;
+	}
+
+	private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+	{
+		UpdateCurrentPath(e.Location);
+		_mobileMenuOpen = false;
+		InvokeAsync(StateHasChanged);
+	}
+
+	private void UpdateCurrentPath(string uri)
+	{
+		_currentPath = NavigationManager.ToBaseRelativePath(uri).Trim('/');
+	}
+
+	private void ToggleMobileMenu()
+	{
+		_mobileMenuOpen = !_mobileMenuOpen;
+	}
+
+	private void CloseMobileMenu()
+	{
+		_mobileMenuOpen = false;
+	}
+
+	private void ToggleChatMenu()
+	{
+		_chatExpanded = !_chatExpanded;
+	}
+
+	private void ToggleTimeTrackingMenu()
+	{
+		_timeTrackingExpanded = !_timeTrackingExpanded;
+	}
+
+	public void Dispose()
+	{
+		NavigationManager.LocationChanged -= OnLocationChanged;
+	}
+}

@@ -1,52 +1,62 @@
-﻿@using Akagi.Web.Models.Chat
+@using Akagi.Web.Icons
+@using Akagi.Web.Models.Chat
 @using Akagi.Web.Services.Circuits
 
 @inject ICircuitIdAccessor CircuitIdAccessor
 
-<div class="card"
-	 style="cursor: pointer;">
-	<div class="card-body">
-		<div class="row row-sm align-items-center">
-			<div class="col-auto">
-				<Avatar Rounded="AvatarRounded.Circle"
-						Size="AvatarSize.ExtraLarge"
-						@onclick="HandleCharacterClick"
-						Data=@($"/socket/cards/{Character.CardId}/image.png?circuitId={CircuitIdAccessor.CircuitId}") />
-			</div>
-			<div class="col">
-				<h4 class="card-title m-0">
-					<a @onclick="HandleCharacterClick">
-						@(Character.Name)
-					</a>
-				</h4>
-				<div class="text-secondary">
-					Maybe put tags here or something
-				</div>
-				<div class="small mt-1">
-					<span class="text-success">●</span>
-					@*<Badge BackgroundColor="TablerColor.Success" />*@
-					Online
-				</div>
-			</div>
-			<div class="col-auto">
-				Options
-			</div>
-			<div class="col-auto">
-				<Dropdown>
-					<ChildContent>
-						<Icon Size="16" IconType="@Icons.Icons.Dots_vertical" />
-					</ChildContent>
+<div class="card card-link h-100 shadow-sm">
+	<div class="card-body d-flex flex-column">
+		<div class="d-flex align-items-center gap-3 mb-3">
+			<Avatar Rounded="AvatarRounded.Circle"
+					Size="AvatarSize.Large"
+					@onclick="HandleCharacterClick"
+					Data="@($"/socket/cards/{Character.CardId}/image.png?circuitId={CircuitIdAccessor.CircuitId}")" />
 
-					<DropdownTemplate>
-						<DropdownMenu>
-							<DropdownItem>Send Message</DropdownItem>
-							<DropdownItem>Update profile</DropdownItem>
-							<DropdownItem>Disable</DropdownItem>
-						</DropdownMenu>
-					</DropdownTemplate>
+			<div class="min-w-0 flex-fill">
+				<div class="d-flex align-items-center justify-content-between gap-2">
+					<h3 class="card-title m-0 text-truncate">
+						<a href="javascript:void(0)" class="text-reset text-decoration-none" @onclick="HandleCharacterClick">
+							@Character.Name
+						</a>
+					</h3>
+					@if (HasRecentActivity)
+					{
+						<span class="badge bg-success-lt d-inline-flex align-items-center gap-1 flex-shrink-0">
+							<span class="status-dot status-dot-animated bg-success"></span>
+							Active
+						</span>
+					}
+					else
+					{
+						<span class="badge bg-secondary-lt d-inline-flex align-items-center gap-1 flex-shrink-0">
+							<span class="status-dot bg-secondary"></span>
+							Idle
+						</span>
+					}
+				</div>
 
-				</Dropdown>
+				<div class="text-secondary small mt-1 text-truncate">
+					@LastActivityLabel
+				</div>
 			</div>
+		</div>
+
+		<div class="d-flex flex-wrap gap-1 mb-3">
+			<span class="badge bg-primary-lt">Companion</span>
+			<span class="badge bg-azure-lt">Streaming</span>
+			@if (HasMessageHistory)
+			{
+				<span class="badge bg-purple-lt">History</span>
+			}
+		</div>
+
+		<div class="mt-auto pt-2">
+			<button type="button"
+					class="btn btn-primary w-100 d-inline-flex align-items-center justify-content-center gap-2"
+					@onclick="HandleCharacterClick">
+				<Icon IconType="@Icons.Messages" Size="16" />
+				<span>Open Chat</span>
+			</button>
 		</div>
 	</div>
 </div>
@@ -57,6 +67,19 @@
 
 	[Parameter]
 	public required EventCallback<Character> OnCharacterSelected { get; set; }
+
+	private bool HasMessageHistory =>
+		Character.LastMessageTime.HasValue &&
+		Character.LastMessageTime.Value > DateTime.MinValue.AddYears(1);
+
+	private bool HasRecentActivity =>
+		HasMessageHistory &&
+		(DateTime.UtcNow - Character.LastMessageTime!.Value.ToUniversalTime()).TotalDays <= 7;
+
+	private string LastActivityLabel =>
+		HasMessageHistory
+			? $"Last message: {Character.LastMessageTime!.Value.ToLocalTime():g}"
+			: "No messages yet • Ready to chat";
 
 	private async Task HandleCharacterClick()
 	{

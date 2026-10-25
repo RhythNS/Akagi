@@ -1,10 +1,10 @@
-﻿using MongoDB.Bson;
+using MongoDB.Bson;
 using MongoDB.Bson.IO;
 using MongoDB.Bson.Serialization;
 
 namespace Akagi.Web.Data;
 
-static class DependendyInjection
+static class DependencyInjection
 {
     public static void AddData(this IServiceCollection services, IConfiguration configuration)
     {

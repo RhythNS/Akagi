@@ -1,4 +1,4 @@
-﻿using Akagi.Utils;
+using Akagi.Utils;
 using Akagi.Web.Services.Circuits;
 using Akagi.Web.Services.Sockets;
 using Akagi.Web.Services.Users;
@@ -7,7 +7,7 @@ using Microsoft.Extensions.FileProviders;
 
 namespace Akagi.Web.Services;
 
-static class DependendyInjection
+static class DependencyInjection
 {
     public static void AddServices(this IServiceCollection services, IConfiguration configuration)
     {

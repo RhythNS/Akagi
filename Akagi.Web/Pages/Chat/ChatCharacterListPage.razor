@@ -1,45 +1,133 @@
-﻿@using Akagi.Web.Models.Chat
+@using Akagi.Web.Icons
+@using Akagi.Web.Models.Chat
 @using Akagi.Web.Pages.Chat.Components
 @using Akagi.Web.Services.Circuits
 @using Akagi.Web.Services.Sockets
 @using Akagi.Web.Services.Sockets.Requests
 
+@implements IDisposable
 @inject ISocketClientContainer SocketClientContainer
 @inject NavigationManager NavigationManager
 
 @page "/Chat/CharacterList"
 
-<ChatConnectionStatus />
+<PageTitle>Character Directory - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Chat Studio</div>
+			<h2 class="page-title">Character Directory</h2>
+		</div>
+		<div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
+			<div class="input-icon">
+				<input type="text"
+					   class="form-control"
+					   placeholder="Search characters..."
+					   @bind="_searchQuery"
+					   @bind:event="oninput" />
+			</div>
+			<button type="button"
+					class="btn btn-outline-secondary btn-icon"
+					@onclick="() => LoadCharactersAsync(autoConnect: true)"
+					title="Refresh directory">
+				<Icon IconType="@Icons.Refresh" Size="18" />
+			</button>
+			<button type="button"
+					class="btn btn-primary d-inline-flex align-items-center gap-2"
+					@onclick="OnNoActiveCharacterSelected">
+				<Icon IconType="@Icons.Sparkles" Size="18" />
+				<span>Direct Assistant</span>
+			</button>
+		</div>
+	</div>
+</div>
 
 @switch (currentState)
 {
 	case State.Loading:
-		<p>Loading...</p>
+		<div class="card">
+			<div class="card-body py-5 text-center">
+				<div class="spinner-border text-primary mb-3" role="status"></div>
+				<div class="text-secondary">Loading character directory...</div>
+			</div>
+		</div>
 		break;
 
 	case State.Offline:
-		<p>Socket client is offline.</p>
-		return;
+		<div class="card border-danger">
+			<div class="card-body py-5 text-center">
+				<div class="text-danger mb-2">
+					<Icon IconType="@Icons.AlertCircle" Size="36" />
+				</div>
+				<h3 class="h4 mb-1">Socket Service Offline</h3>
+				<p class="text-secondary mb-3">
+					Unable to reach the Akagi backend socket server. Connect to browse and chat with characters.
+				</p>
+				<button type="button"
+						class="btn btn-primary d-inline-flex align-items-center gap-2"
+						@onclick="() => LoadCharactersAsync(autoConnect: true)">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Retry Connection</span>
+				</button>
+			</div>
+		</div>
+		break;
 
 	case State.Online:
+		<!-- Direct Assistant Banner Card -->
+		<div class="card bg-primary-lt border-primary mb-4">
+			<div class="card-body d-flex flex-column flex-sm-row align-items-start align-items-sm-center justify-content-between gap-3">
+				<div class="d-flex align-items-center gap-3">
+					<span class="avatar avatar-lg rounded-circle bg-primary text-white">
+						<Icon IconType="@Icons.Sparkles" Size="24" />
+					</span>
+					<div>
+						<div class="d-flex align-items-center gap-2">
+							<h3 class="card-title m-0">Direct AI Assistant</h3>
+							<span class="badge bg-primary text-white">Unbound</span>
+						</div>
+						<div class="text-secondary small mt-1">
+							Fast, general-purpose AI assistant without character persona constraints.
+						</div>
+					</div>
+				</div>
+				<button type="button"
+						class="btn btn-primary flex-shrink-0 d-inline-flex align-items-center gap-2"
+						@onclick="OnNoActiveCharacterSelected">
+					<Icon IconType="@Icons.Messages" Size="16" />
+					<span>Start Direct Chat</span>
+				</button>
+			</div>
+		</div>
 
-		<Button BackgroundColor="TablerColor.Green"
-				OnClick="OnNoActiveCharacterSelected">
-			Without active character
-		</Button>
-
-		<div class="my-3" />
-
-		@if (_characters.Length == 0)
+		@if (FilteredCharacters.Length == 0)
 		{
-			<p>No characters found :(</p>
-			return;
+			<div class="card">
+				<div class="card-body py-5 text-center">
+					<div class="text-secondary mb-2">
+						<Icon IconType="@Icons.Search" Size="32" />
+					</div>
+					<h3 class="h4 mb-1">No matching characters</h3>
+					<p class="text-secondary mb-0">
+						@(string.IsNullOrWhiteSpace(_searchQuery)
+							? "No character cards were returned by the backend."
+							: $"No characters matched \"{_searchQuery}\".")
+					</p>
+				</div>
+			</div>
 		}
-
-		foreach (Character character in _characters)
+		else
 		{
-			<ChatCharacterElement Character="character"
-								  OnCharacterSelected="OnCharacterSelected" />
+			<div class="row row-cards">
+				@foreach (Character character in FilteredCharacters)
+				{
+					<div class="col-sm-6 col-lg-4">
+						<ChatCharacterElement Character="character"
+											  OnCharacterSelected="OnCharacterSelected" />
+					</div>
+				}
+			</div>
 		}
 		break;
 
@@ -56,23 +144,58 @@
 	}
 
 	private State currentState = State.Loading;
+	private Character[] _characters = [];
+	private string _searchQuery = string.Empty;
 
-	private Character[] _characters = Array.Empty<Character>();
+	private Character[] FilteredCharacters =>
+		string.IsNullOrWhiteSpace(_searchQuery)
+			? _characters
+			: [.. _characters.Where(c => c.Name.Contains(_searchQuery.Trim(), StringComparison.OrdinalIgnoreCase))];
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
 
 	protected override async Task OnParametersSetAsync()
 	{
-		SocketClient? client = SocketClientContainer.Client;
+		await LoadCharactersAsync(autoConnect: true);
+	}
 
-		if (client is null)
+	private async Task LoadCharactersAsync(bool autoConnect)
+	{
+		currentState = State.Loading;
+
+		SocketClient? client = autoConnect
+			? await SocketClientContainer.EnsureConnectedAsync()
+			: SocketClientContainer.Client;
+
+		if (client is null || !SocketClientContainer.IsConnected)
 		{
 			currentState = State.Offline;
 			return;
 		}
 
-		CharacterListRequest request = new();
-		_characters = await request.Get(client);
+		try
+		{
+			CharacterListRequest request = new();
+			Character[] loaded = await request.Get(client);
+			_characters = [.. loaded.OrderByDescending(c => c.LastMessageTime ?? DateTime.MinValue).ThenBy(c => c.Name)];
+			currentState = State.Online;
+		}
+		catch
+		{
+			currentState = State.Offline;
+		}
+	}
 
-		currentState = State.Online;
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			await LoadCharactersAsync(autoConnect: false);
+			StateHasChanged();
+		});
 	}
 
 	private void OnNoActiveCharacterSelected()
@@ -83,5 +206,10 @@
 	private void OnCharacterSelected(Character character)
 	{
 		NavigationManager.NavigateTo($"/Chat/{character.Id}/");
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
 	}
 }

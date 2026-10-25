@@ -1,4 +1,4 @@
-﻿using Akagi.Bridge.Chat.Transmissions;
+using Akagi.Bridge.Chat.Transmissions;
 using Akagi.Web.Models;
 using Akagi.Web.Models.Chat;
 using Akagi.Web.Services.Sockets.Requests;
@@ -13,15 +13,25 @@ public class SocketClient : NetCoreServer.TcpClient
 {
     public delegate void OnMessageRecieved(string? characterId, Message message);
 
+    public delegate void OnStreamChunkReceived(
+        string streamId,
+        string? characterId,
+        string delta,
+        bool isComplete,
+        string? fullText);
+
     public User User { get; init; }
     public string CircuitId { get; init; }
     public event OnMessageRecieved? MessageRecieved;
+    public event OnStreamChunkReceived? StreamChunkReceived;
+    public event Action? ConnectionStateChanged;
 
     private readonly SocketTransmissionHandler[] _transmissionHandlers;
     private readonly SocketService _socketService;
     private readonly TransmissionPackageBuilder _packagedBuilder;
     private readonly ConcurrentDictionary<IRequest, byte> _requests = new();
     private readonly ILogger<SocketClient> _logger;
+    private TaskCompletionSource<bool>? _connectedTcs;
 
     public SocketClient(IPAddress address,
                         int port,
@@ -40,17 +50,63 @@ public class SocketClient : NetCoreServer.TcpClient
         _packagedBuilder = new TransmissionPackageBuilder(OptionSendBufferSize);
     }
 
+    public async Task<bool> ConnectAndWaitAsync(TimeSpan timeout)
+    {
+        if (IsConnected)
+        {
+            return true;
+        }
+
+        TaskCompletionSource<bool> tcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        _connectedTcs = tcs;
+
+        if (!ConnectAsync())
+        {
+            return IsConnected;
+        }
+
+        if (IsConnected)
+        {
+            tcs.TrySetResult(true);
+            return true;
+        }
+
+        using CancellationTokenSource cts = new(timeout);
+        await using CancellationTokenRegistration reg = cts.Token.Register(() => tcs.TrySetResult(false));
+
+        return await tcs.Task;
+    }
+
+    protected override void OnConnected()
+    {
+        base.OnConnected();
+        _connectedTcs?.TrySetResult(true);
+        ConnectionStateChanged?.Invoke();
+    }
+
+    protected override void OnDisconnected()
+    {
+        base.OnDisconnected();
+        _connectedTcs?.TrySetResult(false);
+        ConnectionStateChanged?.Invoke();
+    }
+
     protected override void Dispose(bool disposingManagedResources)
     {
+        bool wasDisposed = IsDisposed;
+
+        _connectedTcs?.TrySetResult(false);
         base.Dispose(disposingManagedResources);
 
-        if (IsDisposed)
+        if (wasDisposed)
         {
             return;
         }
 
         _socketService.OnDeleted(this);
         MessageRecieved = null;
+        StreamChunkReceived = null;
+        ConnectionStateChanged = null;
     }
 
     protected override void OnReceived(byte[] buffer, long offset, long size)
@@ -122,7 +178,11 @@ public class SocketClient : NetCoreServer.TcpClient
 
             foreach (byte[] package in packages)
             {
-                SendAsync(package);
+                if (!SendAsync(package))
+                {
+                    _logger.LogWarning("SendAsync returned false for transmission {MessageType} (IsConnected={IsConnected})",
+                        transmission.MessageType, IsConnected);
+                }
             }
         }
         catch (Exception ex)
@@ -151,8 +211,19 @@ public class SocketClient : NetCoreServer.TcpClient
         MessageRecieved?.Invoke(characterId, message);
     }
 
+    public void OnStreamChunkReceivedInternal(
+        string streamId,
+        string? characterId,
+        string delta,
+        bool isComplete,
+        string? fullText)
+    {
+        StreamChunkReceived?.Invoke(streamId, characterId, delta, isComplete, fullText);
+    }
+
     protected override void OnError(SocketError error)
     {
+        _connectedTcs?.TrySetResult(false);
         _logger.LogError("Socket client caught an error with code {ErrorCode}", error);
     }
 }

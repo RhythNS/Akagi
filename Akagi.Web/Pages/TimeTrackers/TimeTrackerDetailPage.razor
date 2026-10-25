@@ -1,4 +1,4 @@
-﻿@using Akagi.Web.Data
+@using Akagi.Web.Data
 @using Akagi.Web.Icons
 @using Akagi.Web.Models
 @using Akagi.Web.Models.TimeTrackers
@@ -10,86 +10,144 @@
 
 @page "/TimeTracking/{Id}/detail"
 
+<PageTitle>@(_definition?.Name ?? "Time Tracker") - Akagi</PageTitle>
+
 <Dimmer Active="isLoading">
-	<PagePretitle>
-		TimeTracking
-	</PagePretitle>
+	<div class="page-header d-print-none mb-4">
+		<div class="row g-2 align-items-center">
+			<div class="col">
+				<div class="page-pretitle">Time Tracking</div>
+				<div class="d-flex align-items-center gap-2">
+					<h2 class="page-title m-0">@(_definition?.Name ?? "Time Tracker")</h2>
+					@if (_definition != null)
+					{
+						<span class="badge bg-azure-lt">@_entries.Count Entries</span>
+					}
+				</div>
+			</div>
+			<div class="col-auto ms-auto d-print-none">
+				<div class="btn-list">
+					<button type="button"
+							class="btn btn-outline-secondary d-inline-flex align-items-center gap-2"
+							@onclick="ReturnToList">
+						<Icon IconType="@Icons.ArrowLeft" Size="16" />
+						<span>Back to List</span>
+					</button>
+					@if (_definition != null)
+					{
+						<button type="button"
+								class="btn btn-primary d-inline-flex align-items-center gap-2"
+								@onclick="OnCreateClicked">
+							<Icon IconType="@Icons.Plus" Size="16" />
+							<span>New Entry</span>
+						</button>
+					}
+				</div>
+			</div>
+		</div>
+	</div>
 
 	<Card>
 		@if (_definition == null)
 		{
 			<CardHeader>
-				<CardTitle>
-					Time Tracker Not Found
-				</CardTitle>
+				<CardTitle>Time Tracker Not Found</CardTitle>
 			</CardHeader>
+			<CardBody>
+				<p class="text-secondary mb-3">The requested time tracker definition does not exist or you do not have access to it.</p>
+				<button type="button" class="btn btn-outline-primary" @onclick="ReturnToList">
+					Return to List
+				</button>
+			</CardBody>
 		}
 		else
 		{
 			<CardHeader>
-				<CardTitle>
-					@_definition.Name
-				</CardTitle>
+				<CardTitle>Recorded Entries</CardTitle>
 				<div class="flex-grow-1" />
-				<Button Type="ButtonType.Button"
-						OnClick="OnCreateClicked">
-					Create New Entry
-				</Button>
-				<Button Type="ButtonType.Button"
-						OnClick="ReturnToList">
-					Return to List
-				</Button>
+				<button type="button"
+						class="btn btn-sm btn-ghost-secondary d-inline-flex align-items-center gap-1"
+						@onclick="Refresh">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Refresh</span>
+				</button>
 			</CardHeader>
 			<CardBody>
-				<Table Item="Entry"
-					   Items="_entries">
-					<HeaderTemplate>
-						<strong>
-							Time Tracker Entries
-						</strong>
-					</HeaderTemplate>
-					<ChildContent>
-						<Column Item="Entry"
-								Property="x => x.CreatedAt"
-								Title="Created At"
-								Sortable />
-						@foreach (FieldDefinition item in _entries.Count == 0 ? [] : _definition.Fields)
-						{
+				@if (_entries.Count == 0)
+				{
+					<div class="empty py-5">
+						<div class="empty-icon text-secondary">
+							<Icon IconType="@Icons.Clock" Size="36" />
+						</div>
+						<p class="empty-title">No entries recorded yet</p>
+						<p class="empty-subtitle text-secondary">
+							Start tracking time by logging your first entry for <strong>@_definition.Name</strong>.
+						</p>
+						<div class="empty-action">
+							<button type="button"
+									class="btn btn-primary d-inline-flex align-items-center gap-2"
+									@onclick="OnCreateClicked">
+								<Icon IconType="@Icons.Plus" Size="16" />
+								<span>Record First Entry</span>
+							</button>
+						</div>
+					</div>
+				}
+				else
+				{
+					<Table Item="Entry"
+						   Items="_entries">
+						<HeaderTemplate>
+							<strong>Time Tracker Entries</strong>
+						</HeaderTemplate>
+						<ChildContent>
 							<Column Item="Entry"
-									Property="x => x.Id"
-									Title="@item.Name"
-									Searchable
-									Sortable
-									Groupable>
+									Property="x => x.CreatedAt"
+									Title="Created At"
+									Sortable>
 								<Template>
-									@context.Values[item.Name]
+									<span class="text-secondary small">@context.CreatedAt.ToLocalTime().ToString("g")</span>
 								</Template>
 							</Column>
-						}
-						<Column Item="Entry"
-								Title="Edit"
-								ActionColumn>
-							<Template>
-								<span @onclick="(() => OnEntryEditClicked(context))" @onclick:stopPropagation>
-									<span class="clickable-text">Edit</span>
-								</span>
-							</Template>
-						</Column>
-						<Column Item="Entry"
-								Title="Delete"
-								ActionColumn>
-							<Template>
-								<span @onclick="(() => OnEntryDeleteClicked(context))" @onclick:stopPropagation>
-									<span class="clickable-text">Delete</span>
-								</span>
-							</Template>
-						</Column>
-					</ChildContent>
-				</Table>
+							@foreach (FieldDefinition item in _definition.Fields)
+							{
+								<Column Item="Entry"
+										Property="x => x.Id"
+										Title="@item.Name"
+										Searchable
+										Sortable
+										Groupable>
+									<Template>
+										@(context.Values.TryGetValue(item.Name, out object? val) ? val : "")
+									</Template>
+								</Column>
+							}
+							<Column Item="Entry"
+									Title="Actions"
+									ActionColumn>
+								<Template>
+									<div class="btn-list flex-nowrap" @onclick:stopPropagation>
+										<button type="button"
+												class="btn btn-sm btn-ghost-primary btn-icon"
+												title="Edit entry"
+												@onclick="@(() => OnEntryEditClicked(context))">
+											<Icon IconType="@Icons.Edit" Size="16" />
+										</button>
+										<button type="button"
+												class="btn btn-sm btn-ghost-danger btn-icon"
+												title="Delete entry"
+												@onclick="@(() => OnEntryDeleteClicked(context))">
+											<Icon IconType="@Icons.Trash" Size="16" />
+										</button>
+									</div>
+								</Template>
+							</Column>
+						</ChildContent>
+					</Table>
+				}
 			</CardBody>
 		}
 	</Card>
-
 </Dimmer>
 
 @code {
@@ -120,14 +178,14 @@
 
 		if (_definition == null || CurrentUser == null || _definition.UserId != CurrentUser.Id)
 		{
+			_definition = null;
 			isLoading = false;
 			return;
 		}
 
 		FilterDefinition<Entry> filter = Builders<Entry>.Filter.Eq(x => x.DefinitionId, _definition.Id);
 		_entries = await EntryDatabase.GetDocumentsByPredicateAsync(filter);
-		_entries.Sort((x, y) => x.CreatedAt.CompareTo(y.CreatedAt));
-
+		_entries.Sort((x, y) => y.CreatedAt.CompareTo(x.CreatedAt));
 
 		isLoading = false;
 	}

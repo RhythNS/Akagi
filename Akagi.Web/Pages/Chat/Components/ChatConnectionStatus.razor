@@ -1,22 +1,42 @@
-﻿@using Akagi.Web.Icons
+@using Akagi.Web.Icons
 @using Akagi.Web.Services.Sockets
 
+@implements IDisposable
 @inject ISocketClientContainer SocketClientContainer
 
-<PagePretitle>
-	<Dimmer Active=_loading>
-		@(SocketClientContainer.IsConnected ? "Connected" : "Disconnected")
+<button type="button"
+		class="btn btn-sm @(SocketClientContainer.IsConnected ? "btn-ghost-success" : "btn-ghost-danger") d-inline-flex align-items-center gap-2 px-2 py-1"
+		disabled="@_loading"
+		@onclick="ToggleConnection"
+		title="@(SocketClientContainer.IsConnected ? "Socket connected (click to disconnect)" : "Socket disconnected (click to connect)")">
+	@if (_loading)
+	{
+		<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+		<span class="small fw-medium">Connecting...</span>
+	}
+	else
+	{
+		<span class="status-dot @(SocketClientContainer.IsConnected ? "status-dot-animated bg-success" : "bg-danger")"></span>
+		<span class="small fw-medium">@(SocketClientContainer.IsConnected ? "Connected" : "Disconnected")</span>
 		<Icon IconType="@Icons.Power"
-			  TextColor="@(SocketClientContainer.IsConnected? TablerColor.Green: TablerColor.Red)"
-			  Size="12"
-			  Filled="true"
-			  OnClick="ToggleConnection" />
-	</Dimmer>
-</PagePretitle>
+			  TextColor="@(SocketClientContainer.IsConnected ? TablerColor.Green : TablerColor.Red)"
+			  Size="14" />
+	}
+</button>
 
 @code
 {
 	private bool _loading = false;
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(StateHasChanged);
+	}
 
 	private async Task ToggleConnection()
 	{
@@ -30,5 +50,10 @@
 			await SocketClientContainer.TryConnectAsync();
 		}
 		_loading = false;
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
 	}
 }

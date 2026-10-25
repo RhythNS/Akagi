@@ -1,5 +1,5 @@
-﻿@page "/"
-@namespace TabBlazor.Templates.Server.Pages
+@page "/"
+@namespace Akagi.Web.Pages
 @using Akagi.Web
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 @{
@@ -7,21 +7,42 @@
 }
 
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>TabBlazor.Templates.Server</title>
+    <title>Akagi - AI Companion & Workspace</title>
     <base href="~/" />
-   
-     <link rel="stylesheet" href="@("https://unpkg.com/@tabler/core@1.0.0-beta2/dist/css/tabler.min.css")">
+
+    <link rel="stylesheet" href="@("https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/css/tabler.min.css")" />
     <link rel="stylesheet" href="_content/TabBlazor/css/tabblazor.min.css" />
     <script src="_content/TabBlazor/js/tabblazor.js"></script>
 
     <link href="css/site.css" rel="stylesheet" />
-    <link href="TabBlazor.Templates.Server.styles.css" rel="stylesheet" />
+    <link href="Akagi.Web.styles.css" rel="stylesheet" />
+
+    <script>
+        window.akagiTheme = {
+            get: function () {
+                return document.documentElement.getAttribute('data-bs-theme') || 'dark';
+            },
+            set: function (theme) {
+                document.documentElement.setAttribute('data-bs-theme', theme);
+                try { localStorage.setItem('akagi-theme', theme); } catch (e) { }
+            },
+            init: function () {
+                try {
+                    var saved = localStorage.getItem('akagi-theme');
+                    if (saved === 'light' || saved === 'dark') {
+                        document.documentElement.setAttribute('data-bs-theme', saved);
+                    }
+                } catch (e) { }
+            }
+        };
+        window.akagiTheme.init();
+    </script>
 </head>
-<body>
+<body class="antialiased">
     <component type="typeof(App)" render-mode="ServerPrerendered" />
 
     <div id="blazor-error-ui">
@@ -35,9 +56,7 @@
         <a class="dismiss">🗙</a>
     </div>
 
+    <script src="@("https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0-beta20/dist/js/tabler.min.js")"></script>
     <script src="_framework/blazor.server.js"></script>
-    <script src="_content/Blazority/lib/webcomponents/custom-elements/custom-elements.min.js"></script>
-    <script src="_content/Blazority/lib/clr/icons/clr-icons.min.js"></script>
-    <script src="_content/Blazority/blazority.min.js"></script>
 </body>
 </html>

@@ -1,12 +1,369 @@
-﻿@page "/"
+@page "/"
 
+@using Akagi.Web.Data
 @using Akagi.Web.Icons
+@using Akagi.Web.Models
+@using Akagi.Web.Models.Chat
+@using Akagi.Web.Models.TimeTrackers
+@using Akagi.Web.Services.Circuits
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+@using MongoDB.Driver
 
-<PagePretitle>
-	TabBlazor
-	<Icon class="align-text-top" IconType="@Icons.Heart"
-		  TextColor="TablerColor.Red" Size="12" Filled="true" />
-</PagePretitle>
-<PageTitle>
-	Home
-</PageTitle>
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject ICircuitIdAccessor CircuitIdAccessor
+@inject IDefinitionDatabase DefinitionDatabase
+@inject IEntryDatabase EntryDatabase
+@inject NavigationManager NavigationManager
+
+<PageTitle>Dashboard - Akagi</PageTitle>
+
+<!-- Hero Welcome Banner -->
+<div class="card bg-primary-lt border-primary mb-4">
+	<div class="card-body py-4 px-4">
+		<div class="row align-items-center g-3">
+			<div class="col-12 col-lg">
+				<div class="page-pretitle text-primary">Akagi Workspace Hub</div>
+				<h1 class="h2 mb-1">Welcome back, @(CurrentUser?.Name ?? "Explorer")</h1>
+				<p class="text-secondary mb-0">
+					Real-time AI companion studio and personal time tracking workspace.
+				</p>
+			</div>
+			<div class="col-12 col-lg-auto d-flex flex-wrap gap-2">
+				<a href="/Chat/0/" class="btn btn-primary d-inline-flex align-items-center gap-2">
+					<Icon IconType="@Icons.Sparkles" Size="18" />
+					<span>Start New Chat</span>
+				</a>
+				<a href="/TimeTracking/list" class="btn btn-outline-primary d-inline-flex align-items-center gap-2">
+					<Icon IconType="@Icons.Clock" Size="18" />
+					<span>Log Time</span>
+				</a>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Executive Metrics Row -->
+<div class="row row-cards mb-4">
+	<div class="col-sm-6 col-lg-3">
+		<div class="card card-sm">
+			<div class="card-body">
+				<div class="row align-items-center">
+					<div class="col-auto">
+						<span class="avatar @(SocketClientContainer.IsConnected ? "bg-success-lt text-success" : "bg-danger-lt text-danger")">
+							<Icon IconType="@Icons.Power" Size="20" />
+						</span>
+					</div>
+					<div class="col">
+						<div class="fw-medium">
+							@(SocketClientContainer.IsConnected ? "Socket Online" : "Socket Offline")
+						</div>
+						<div class="text-secondary small">
+							@(SocketClientContainer.IsConnected ? "Streaming ready" : "Click header status to connect")
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="col-sm-6 col-lg-3">
+		<div class="card card-sm">
+			<div class="card-body">
+				<div class="row align-items-center">
+					<div class="col-auto">
+						<span class="avatar bg-primary-lt text-primary">
+							<Icon IconType="@Icons.Messages" Size="20" />
+						</span>
+					</div>
+					<div class="col">
+						<div class="fw-medium">@_characters.Length Companions</div>
+						<div class="text-secondary small">@RecentCharacters.Length with recent chats</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="col-sm-6 col-lg-3">
+		<div class="card card-sm">
+			<div class="card-body">
+				<div class="row align-items-center">
+					<div class="col-auto">
+						<span class="avatar bg-azure-lt text-azure">
+							<Icon IconType="@Icons.Clock" Size="20" />
+						</span>
+					</div>
+					<div class="col">
+						<div class="fw-medium">@_definitions.Count Trackers</div>
+						<div class="text-secondary small">Active definitions</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="col-sm-6 col-lg-3">
+		<div class="card card-sm">
+			<div class="card-body">
+				<div class="row align-items-center">
+					<div class="col-auto">
+						<span class="avatar bg-purple-lt text-purple">
+							<Icon IconType="@Icons.Check" Size="20" />
+						</span>
+					</div>
+					<div class="col">
+						<div class="fw-medium">@_entriesThisWeek Entries This Week</div>
+						<div class="text-secondary small">@_totalEntries total recorded</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="row row-cards">
+	<!-- Left Column: Recent Conversations & Active Companions -->
+	<div class="col-12 col-lg-8">
+		<div class="card mb-4">
+			<div class="card-header d-flex align-items-center justify-content-between">
+				<h3 class="card-title m-0">Recent Conversations</h3>
+				<a href="/Chat/CharacterList" class="btn btn-sm btn-ghost-primary">View All</a>
+			</div>
+			<div class="card-body">
+				@if (RecentCharacters.Length == 0)
+				{
+					<div class="d-flex flex-column flex-sm-row align-items-start align-items-sm-center justify-content-between gap-3">
+						<div>
+							<div class="fw-medium">No recent character conversations</div>
+							<div class="text-secondary small">Launch the Direct Assistant or pick a character from the directory to start chatting.</div>
+						</div>
+						<a href="/Chat/0/" class="btn btn-sm btn-primary flex-shrink-0">Open Assistant</a>
+					</div>
+				}
+				else
+				{
+					<div class="row row-cards">
+						@foreach (Character recent in RecentCharacters.Take(4))
+						{
+							<div class="col-12 col-md-6">
+								<div class="card card-sm border">
+									<div class="card-body d-flex align-items-center justify-content-between gap-2">
+										<div class="d-flex align-items-center gap-2 min-w-0">
+											<Avatar Rounded="AvatarRounded.Circle"
+													Size="AvatarSize.Medium"
+													Data="@($"/socket/cards/{recent.CardId}/image.png?circuitId={CircuitIdAccessor.CircuitId}")" />
+											<div class="min-w-0">
+												<div class="fw-medium text-truncate">@recent.Name</div>
+												<div class="text-secondary small text-truncate">
+													@recent.LastMessageTime?.ToLocalTime().ToString("g")
+												</div>
+											</div>
+										</div>
+										<a href="@($"/Chat/{recent.Id}/")" class="btn btn-sm btn-primary flex-shrink-0">
+											Resume
+										</a>
+									</div>
+								</div>
+							</div>
+						}
+					</div>
+				}
+			</div>
+		</div>
+
+		<div class="card">
+			<div class="card-header d-flex align-items-center justify-content-between">
+				<h3 class="card-title m-0">Available Companions</h3>
+				<a href="/Chat" class="btn btn-sm btn-ghost-primary">Open Chat Lobby</a>
+			</div>
+			<div class="card-body">
+				@if (_characters.Length == 0)
+				{
+					<div class="text-secondary small">
+						@(SocketClientContainer.IsConnected
+							? "No character cards found on the server."
+							: "Socket is currently disconnected. Connect to browse character companions.")
+					</div>
+				}
+				else
+				{
+					<div class="row g-3">
+						@foreach (Character character in _characters.Take(6))
+						{
+							<div class="col-12 col-sm-6 col-md-4">
+								<a href="@($"/Chat/{character.Id}/")" class="card card-link card-sm border text-decoration-none text-reset h-100">
+									<div class="card-body d-flex align-items-center gap-2">
+										<Avatar Rounded="AvatarRounded.Circle"
+												Size="AvatarSize.Medium"
+												Data="@($"/socket/cards/{character.CardId}/image.png?circuitId={CircuitIdAccessor.CircuitId}")" />
+										<div class="min-w-0">
+											<div class="fw-medium text-truncate">@character.Name</div>
+											<div class="text-secondary small">Chat now →</div>
+										</div>
+									</div>
+								</a>
+							</div>
+						}
+					</div>
+				}
+			</div>
+		</div>
+	</div>
+
+	<!-- Right Column: Time Tracking Activity & Quick Entry -->
+	<div class="col-12 col-lg-4">
+		<div class="card h-100">
+			<div class="card-header d-flex align-items-center justify-content-between">
+				<h3 class="card-title m-0">Time Tracking Shortcuts</h3>
+				<a href="/TimeTracking/create" class="btn btn-sm btn-ghost-primary">+ New</a>
+			</div>
+			<div class="card-body">
+				@if (_definitions.Count == 0)
+				{
+					<div class="text-center py-4">
+						<div class="text-secondary mb-2">
+							<Icon IconType="@Icons.Clock" Size="28" />
+						</div>
+						<div class="fw-medium mb-1">No Time Trackers Yet</div>
+						<p class="text-secondary small mb-3">
+							Create a custom time tracker definition to log activities and export metrics.
+						</p>
+						<a href="/TimeTracking/create" class="btn btn-sm btn-primary">Create Definition</a>
+					</div>
+				}
+				else
+				{
+					<div class="divide-y">
+						@foreach (Definition def in _definitions)
+						{
+							<div class="py-2 d-flex align-items-center justify-content-between gap-2">
+								<div class="min-w-0">
+									<a href="@($"/TimeTracking/{def.Id}/detail")" class="fw-medium text-reset text-decoration-none text-truncate d-block">
+										@def.Name
+									</a>
+									<div class="text-secondary small">
+										@def.Fields.Count field@(def.Fields.Count == 1 ? "" : "s")
+									</div>
+								</div>
+								<div class="d-flex gap-1 flex-shrink-0">
+									<a href="@($"/TimeTracking/{def.Id}/entry/new")"
+									   class="btn btn-sm btn-outline-primary"
+									   title="Log new entry">
+										+ Log
+									</a>
+									<a href="@($"/TimeTracking/{def.Id}/detail")"
+									   class="btn btn-sm btn-ghost-secondary"
+									   title="View entries">
+										View
+									</a>
+								</div>
+							</div>
+						}
+					</div>
+				}
+			</div>
+		</div>
+	</div>
+</div>
+
+@code {
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	private Character[] _characters = [];
+	private List<Definition> _definitions = [];
+	private int _totalEntries = 0;
+	private int _entriesThisWeek = 0;
+
+	private Character[] RecentCharacters =>
+		[.. _characters
+			.Where(c => c.LastMessageTime.HasValue && c.LastMessageTime.Value > DateTime.MinValue.AddYears(1))
+			.OrderByDescending(c => c.LastMessageTime)];
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override async Task OnInitializedAsync()
+	{
+		await Task.WhenAll(LoadTimeTrackingSummaryAsync(), LoadCharactersAsync());
+	}
+
+	private async Task LoadTimeTrackingSummaryAsync()
+	{
+		if (CurrentUser?.Id == null)
+		{
+			return;
+		}
+
+		try
+		{
+			FilterDefinition<Definition> defFilter = Builders<Definition>.Filter.Eq(x => x.UserId, CurrentUser.Id);
+			_definitions = await DefinitionDatabase.GetDocumentsByPredicateAsync(defFilter);
+
+			if (_definitions.Count > 0)
+			{
+				List<string> defIds = [.. _definitions.Where(d => !string.IsNullOrEmpty(d.Id)).Select(d => d.Id!)];
+				FilterDefinition<Entry> entryFilter = Builders<Entry>.Filter.In(x => x.DefinitionId, defIds);
+				List<Entry> entries = await EntryDatabase.GetDocumentsByPredicateAsync(entryFilter);
+
+				_totalEntries = entries.Count;
+				DateTime weekStartUtc = DateTime.UtcNow.AddDays(-7);
+				_entriesThisWeek = entries.Count(e => e.CreatedAt >= weekStartUtc);
+			}
+		}
+		catch
+		{
+			// Ignore database connectivity errors on dashboard preview
+		}
+	}
+
+	private async Task LoadCharactersAsync()
+	{
+		try
+		{
+			SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+			if (client != null && SocketClientContainer.IsConnected)
+			{
+				CharacterListRequest request = new();
+				_characters = await request.Get(client);
+			}
+		}
+		catch
+		{
+			_characters = [];
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (SocketClientContainer.IsConnected && _characters.Length == 0)
+			{
+				SocketClient? client = SocketClientContainer.Client;
+				if (client != null)
+				{
+					try
+					{
+						CharacterListRequest request = new();
+						_characters = await request.Get(client);
+					}
+					catch
+					{
+						_characters = [];
+					}
+				}
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+	}
+}

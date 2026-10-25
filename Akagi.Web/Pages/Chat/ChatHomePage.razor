@@ -1,11 +1,235 @@
-﻿@using Akagi.Web.Pages.Chat.Components
+@using Akagi.Web.Icons
+@using Akagi.Web.Models.Chat
+@using Akagi.Web.Pages.Chat.Components
+@using Akagi.Web.Services.Circuits
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject ICircuitIdAccessor CircuitIdAccessor
+@inject NavigationManager NavigationManager
 
 @page "/Chat"
 
-<ChatConnectionStatus />
+<PageTitle>Chat Hub - Akagi</PageTitle>
 
-<p>Hi :)</p>
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Chat Studio</div>
+			<h2 class="page-title">AI Companion Lobby</h2>
+		</div>
+		<div class="col-auto ms-auto d-print-none d-flex align-items-center gap-2">
+			<a href="/Chat/CharacterList" class="btn btn-outline-primary d-inline-flex align-items-center gap-2">
+				<Icon IconType="@Icons.Messages" Size="16" />
+				<span>Full Directory</span>
+			</a>
+			<a href="/Chat/0/" class="btn btn-primary d-inline-flex align-items-center gap-2">
+				<Icon IconType="@Icons.Sparkles" Size="16" />
+				<span>Quick Assistant</span>
+			</a>
+		</div>
+	</div>
+</div>
+
+<!-- Search & Filter Bar -->
+<div class="card mb-4">
+	<div class="card-body py-3">
+		<div class="row g-2 align-items-center">
+			<div class="col-12 col-md-6">
+				<div class="input-group">
+					<span class="input-group-text">
+						<Icon IconType="@Icons.Search" Size="16" />
+					</span>
+					<input type="text"
+						   class="form-control"
+						   placeholder="Search companions by name..."
+						   @bind="_searchQuery"
+						   @bind:event="oninput" />
+				</div>
+			</div>
+			<div class="col-12 col-md-6 d-flex justify-content-md-end gap-2">
+				<div class="btn-group" role="group">
+					<button type="button"
+							class="btn btn-sm @(_filter == FilterMode.All ? "btn-primary" : "btn-outline-secondary")"
+							@onclick="() => _filter = FilterMode.All">
+						All (@_characters.Length)
+					</button>
+					<button type="button"
+							class="btn btn-sm @(_filter == FilterMode.Active ? "btn-primary" : "btn-outline-secondary")"
+							@onclick="() => _filter = FilterMode.Active">
+						Recent Chats
+					</button>
+				</div>
+				<button type="button"
+						class="btn btn-sm btn-ghost-secondary"
+						@onclick="() => LoadLobbyAsync(autoConnect: true)"
+						title="Refresh companions">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<!-- Intelligent Unbound Assistant Spotlight -->
+<div class="card bg-primary-lt border-primary mb-4">
+	<div class="card-body d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+		<div class="d-flex align-items-center gap-3">
+			<span class="avatar avatar-lg rounded-circle bg-primary text-white">
+				<Icon IconType="@Icons.Sparkles" Size="24" />
+			</span>
+			<div>
+				<div class="d-flex align-items-center gap-2">
+					<h3 class="card-title m-0">Intelligent Assistant (Character 0)</h3>
+					<span class="badge bg-primary text-white">Unbound Mode</span>
+				</div>
+				<div class="text-secondary small mt-1">
+					Ask coding, research, or general questions directly without character persona constraints.
+				</div>
+			</div>
+		</div>
+		<a href="/Chat/0/" class="btn btn-primary flex-shrink-0 d-inline-flex align-items-center gap-2">
+			<Icon IconType="@Icons.Send" Size="16" />
+			<span>Chat Now</span>
+		</a>
+	</div>
+</div>
+
+@if (_loading)
+{
+	<div class="card">
+		<div class="card-body py-5 text-center">
+			<div class="spinner-border text-primary mb-3" role="status"></div>
+			<div class="text-secondary">Connecting to companion lobby...</div>
+		</div>
+	</div>
+}
+else if (!SocketClientContainer.IsConnected)
+{
+	<div class="card">
+		<div class="card-body py-5 text-center">
+			<div class="text-danger mb-2">
+				<Icon IconType="@Icons.AlertCircle" Size="36" />
+			</div>
+			<h3 class="h4 mb-1">Socket Connection Offline</h3>
+			<p class="text-secondary mb-3">Connect to the Akagi socket server to load your character lobby.</p>
+			<button type="button"
+					class="btn btn-primary d-inline-flex align-items-center gap-2"
+					@onclick="() => LoadLobbyAsync(autoConnect: true)">
+				<Icon IconType="@Icons.Refresh" Size="16" />
+				<span>Connect & Load</span>
+			</button>
+		</div>
+	</div>
+}
+else if (FilteredCharacters.Length == 0)
+{
+	<div class="card">
+		<div class="card-body py-5 text-center">
+			<h3 class="h4 mb-1">No companions found</h3>
+			<p class="text-secondary mb-0">Try clearing your search filter or refreshing the lobby.</p>
+		</div>
+	</div>
+}
+else
+{
+	<div class="row row-cards">
+		@foreach (Character character in FilteredCharacters)
+		{
+			<div class="col-sm-6 col-lg-4">
+				<ChatCharacterElement Character="character"
+									  OnCharacterSelected="OnCharacterSelected" />
+			</div>
+		}
+	</div>
+}
 
 @code {
+	private enum FilterMode
+	{
+		All,
+		Active
+	}
 
+	private bool _loading = true;
+	private Character[] _characters = [];
+	private string _searchQuery = string.Empty;
+	private FilterMode _filter = FilterMode.All;
+
+	private Character[] FilteredCharacters
+	{
+		get
+		{
+			IEnumerable<Character> query = _characters;
+
+			if (_filter == FilterMode.Active)
+			{
+				query = query.Where(c => c.LastMessageTime.HasValue && c.LastMessageTime.Value > DateTime.MinValue.AddYears(1));
+			}
+
+			if (!string.IsNullOrWhiteSpace(_searchQuery))
+			{
+				string term = _searchQuery.Trim();
+				query = query.Where(c => c.Name.Contains(term, StringComparison.OrdinalIgnoreCase));
+			}
+
+			return [.. query];
+		}
+	}
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override async Task OnInitializedAsync()
+	{
+		await LoadLobbyAsync(autoConnect: true);
+	}
+
+	private async Task LoadLobbyAsync(bool autoConnect)
+	{
+		_loading = true;
+
+		SocketClient? client = autoConnect
+			? await SocketClientContainer.EnsureConnectedAsync()
+			: SocketClientContainer.Client;
+
+		if (client != null && SocketClientContainer.IsConnected)
+		{
+			try
+			{
+				CharacterListRequest request = new();
+				Character[] result = await request.Get(client);
+				_characters = [.. result.OrderByDescending(c => c.LastMessageTime ?? DateTime.MinValue).ThenBy(c => c.Name)];
+			}
+			catch
+			{
+				_characters = [];
+			}
+		}
+
+		_loading = false;
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			await LoadLobbyAsync(autoConnect: false);
+			StateHasChanged();
+		});
+	}
+
+	private void OnCharacterSelected(Character character)
+	{
+		NavigationManager.NavigateTo($"/Chat/{character.Id}/");
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+	}
 }

@@ -1,4 +1,6 @@
-﻿@using Akagi.Web.Models
+@using Akagi.Web.Icons
+@using Akagi.Web.Models
+@using Akagi.Web.Pages.Chat.Components
 @using Akagi.Web.Services
 @using Akagi.Web.Services.Sockets
 @using Akagi.Web.Services.Users
@@ -6,14 +8,30 @@
 @inherits LayoutComponentBase
 
 @inject IUserState UserState
+@inject IJSRuntime JS
 
 @if (IsLoading)
 {
-	<p>Loading user...</p>
+	<div class="page page-center">
+		<div class="container container-slim py-4 text-center">
+			<div class="spinner-border text-primary mb-3" role="status"></div>
+			<div class="text-secondary">Loading workspace...</div>
+		</div>
+	</div>
 }
 else if (CurrentUser is null || !CurrentUser.Valid)
 {
-	<p>User not authorized...</p>
+	<div class="page page-center">
+		<div class="container container-tight py-4">
+			<div class="card card-md">
+				<div class="card-body text-center">
+					<h2 class="h3 mb-2">User not authorized</h2>
+					<p class="text-secondary mb-4">Please sign in with an authorized account to access Akagi.</p>
+					<a href="Auth/login" class="btn btn-primary w-100">Sign in</a>
+				</div>
+			</div>
+		</div>
+	</div>
 }
 else
 {
@@ -21,25 +39,132 @@ else
 		<ModalContainer />
 		<ToastContainer />
 
-		<div>
-			<MainNavigation />
+		<div class="page">
+			<!-- Sidebar Navigation -->
+			<aside class="navbar navbar-vertical navbar-expand-lg navbar-dark bg-dark" data-bs-theme="dark">
+				<MainNavigation CurrentUser="@CurrentUser" />
+			</aside>
+
 			<div class="page-wrapper">
-				<div class="container-fluid">
-					@Body
-				</div>
+				<!-- Sticky Top Navigation Bar -->
+				<header class="navbar navbar-expand-md d-none d-lg-flex d-print-none border-bottom px-3 py-2 topbar-sticky">
+					<div class="container-fluid d-flex justify-content-between align-items-center">
+						<!-- Page Title / Breadcrumb Slot -->
+						<div class="d-flex align-items-center gap-2">
+							<span class="badge bg-primary-lt">Akagi Core</span>
+							<span class="text-muted small">v2.0</span>
+						</div>
+
+						<!-- Right Header Actions -->
+						<div class="d-flex align-items-center gap-3">
+							<ChatConnectionStatus />
+							<button type="button"
+									class="btn btn-icon btn-ghost-secondary"
+									@onclick="ToggleTheme"
+									title="Toggle theme">
+								<Icon IconType="@(_isDark ? Icons.Sun : Icons.Moon)" />
+							</button>
+							<!-- User Profile Dropdown -->
+							<div class="dropdown">
+								<a href="javascript:void(0)"
+								   class="nav-link d-flex lh-1 text-reset p-0"
+								   data-bs-toggle="dropdown"
+								   aria-expanded="@(_userMenuOpen ? "true" : "false")"
+								   @onclick="ToggleUserMenu">
+									<Avatar Rounded="AvatarRounded.Circle" Size="AvatarSize.Medium">
+										@UserInitial
+									</Avatar>
+									<div class="d-none d-xl-block ps-2">
+										<div class="fw-medium">@CurrentUser.Name</div>
+										<div class="mt-1 small text-muted">@CurrentUser.Email</div>
+									</div>
+								</a>
+								<div class="dropdown-menu dropdown-menu-end @(_userMenuOpen ? "show" : "")"
+									 data-bs-popper="@(_userMenuOpen ? "static" : null)">
+									<a href="/Profile" class="dropdown-item" @onclick="CloseUserMenu">
+										<Icon class="dropdown-item-icon" IconType="@Icons.User" Size="16" />
+										Profile
+									</a>
+									<div class="dropdown-divider"></div>
+									<a href="Auth/logout" class="dropdown-item text-danger" @onclick="CloseUserMenu">
+										<Icon class="dropdown-item-icon text-danger" IconType="@Icons.Logout" Size="16" />
+										Logout
+									</a>
+								</div>
+							</div>
+						</div>
+					</div>
+				</header>
+
+				<!-- Main Body -->
+				<main class="page-body m-0 p-0">
+					<div class="container-fluid py-3">
+						@Body
+					</div>
+				</main>
 			</div>
 		</div>
 	</CascadingValue>
 }
 
-
 @code {
 	private User? CurrentUser { get; set; }
 	private bool IsLoading { get; set; } = true;
+	private bool _isDark = true;
+	private bool _userMenuOpen = false;
+
+	private string UserInitial =>
+		!string.IsNullOrWhiteSpace(CurrentUser?.Name)
+			? CurrentUser.Name[..1].ToUpperInvariant()
+			: "U";
 
 	protected override async Task OnInitializedAsync()
 	{
 		CurrentUser = await UserState.GetCurrentUserAsync();
 		IsLoading = false;
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			try
+			{
+				string currentTheme = await JS.InvokeAsync<string>("window.akagiTheme.get");
+				bool isDark = !string.Equals(currentTheme, "light", StringComparison.OrdinalIgnoreCase);
+				if (isDark != _isDark)
+				{
+					_isDark = isDark;
+					StateHasChanged();
+				}
+			}
+			catch
+			{
+				// Ignore JS interop errors during prerendering
+			}
+		}
+	}
+
+	private async Task ToggleTheme()
+	{
+		_isDark = !_isDark;
+		try
+		{
+			await JS.InvokeVoidAsync("window.akagiTheme.set", _isDark ? "dark" : "light");
+		}
+		catch
+		{
+			// Ignore JS interop errors
+		}
+	}
+
+	private void ToggleUserMenu()
+	{
+		_userMenuOpen = !_userMenuOpen;
+	}
+
+	private void CloseUserMenu()
+	{
+		_userMenuOpen = false;
 	}
 }

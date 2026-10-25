@@ -16,3 +16,38 @@
         right: 0.75rem;
         top: 0.5rem;
     }
+
+.toast {
+    --tblr-toast-bg: var(--tblr-bg-surface);
+    --tblr-toast-color: var(--tblr-body-color);
+    --tblr-toast-border-color: var(--tblr-border-color);
+    --tblr-toast-header-bg: var(--tblr-bg-surface-secondary, var(--tblr-bg-surface));
+    --tblr-toast-header-color: var(--tblr-body-color);
+    --tblr-toast-header-border-color: var(--tblr-border-color);
+    background-color: var(--tblr-bg-surface) !important;
+    color: var(--tblr-body-color) !important;
+    border: 1px solid var(--tblr-border-color) !important;
+    border-radius: var(--tblr-border-radius-lg, 0.5rem);
+    box-shadow: 0 0.5rem 1.25rem rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(8px);
+}
+
+.toast .toast-header {
+    background-color: var(--tblr-bg-surface-secondary, var(--tblr-bg-surface)) !important;
+    color: var(--tblr-body-color) !important;
+    border-bottom: 1px solid var(--tblr-border-color) !important;
+}
+
+.toast .toast-body {
+    background-color: var(--tblr-bg-surface) !important;
+    color: var(--tblr-body-color) !important;
+}
+
+[data-bs-theme="dark"] .toast .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.navbar-brand-image {
+    filter: none !important;
+}
+

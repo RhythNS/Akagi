@@ -1,4 +1,8 @@
-﻿@using Akagi.Web.Models.Chat
+@using System.Net
+@using System.Text
+@using System.Text.RegularExpressions
+@using Akagi.Web.Icons
+@using Akagi.Web.Models.Chat
 @using Akagi.Web.Pages.Chat.Components
 @using Akagi.Web.Services.Sockets
 @using Akagi.Web.Services.Sockets.Requests
@@ -17,22 +21,119 @@
 
 @page "/Chat/{CharacterId}/"
 
-<ChatConnectionStatus />
+<PageTitle>@DisplayName - Akagi Chat</PageTitle>
 
 @if (_loading)
 {
-	<p>Loading character...</p>
+	<div class="d-flex flex-column align-items-center justify-content-center py-5 my-5">
+		<div class="spinner-border text-primary mb-3" role="status"></div>
+		<div class="text-secondary fw-medium">Loading character workspace...</div>
+	</div>
 	return;
 }
 
-<div class="chat-shell">
-	<div class="chat-page">
-		<div class="chat-scroll" @ref="_scrollEl">
-			<div class="chat-thread">
+<div class="chat-shell card shadow-sm border">
+	<!-- Sticky Top Header -->
+	<div class="card-header chat-header py-2 px-3 d-flex align-items-center justify-content-between gap-2">
+		<div class="d-flex align-items-center gap-3 min-w-0">
+			<a href="/Chat/CharacterList"
+			   class="btn btn-icon btn-ghost-secondary"
+			   title="Back to Character Directory">
+				<Icon IconType="@Icons.ArrowLeft" Size="18" />
+			</a>
+
+			<div class="d-flex align-items-center gap-2 min-w-0">
+				@if (_character != null && !string.IsNullOrEmpty(_character.CardId))
+				{
+					<Avatar Rounded="AvatarRounded.Circle"
+							Size="AvatarSize.Medium"
+							Data="@($"/socket/cards/{_character.CardId}/image.png?circuitId={SocketClientContainer.Client?.CircuitId}")" />
+				}
+				else
+				{
+					<Avatar Rounded="AvatarRounded.Circle"
+							Size="AvatarSize.Medium">
+						<Icon IconType="@Icons.Sparkles" Size="18" />
+					</Avatar>
+				}
+
+				<div class="min-w-0">
+					<div class="d-flex align-items-center gap-2">
+						<h3 class="card-title m-0 text-truncate">@DisplayName</h3>
+						@if (IsStreamingActive || _isSending)
+						{
+							<span class="badge bg-primary-lt d-inline-flex align-items-center gap-1">
+								<span class="status-dot status-dot-animated bg-primary"></span>
+								Generating...
+							</span>
+						}
+						else if (SocketClientContainer.IsConnected)
+						{
+							<span class="badge bg-success-lt d-inline-flex align-items-center gap-1">
+								<span class="status-dot bg-success"></span>
+								Online
+							</span>
+						}
+						else
+						{
+							<span class="badge bg-danger-lt d-inline-flex align-items-center gap-1">
+								<span class="status-dot bg-danger"></span>
+								Offline
+							</span>
+						}
+					</div>
+					<div class="text-secondary small text-truncate">
+						@(IsDirectAssistant ? "Direct AI Assistant • Unbound Mode" : $"Companion ID: {_character?.Id ?? CharacterId}")
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="d-flex align-items-center gap-1">
+			<button type="button"
+					class="btn btn-icon btn-ghost-secondary"
+					@onclick="RefreshAllMessages"
+					title="Refresh conversation">
+				<Icon IconType="@Icons.Refresh" Size="18" />
+			</button>
+			<button type="button"
+					class="btn btn-icon btn-ghost-secondary"
+					@onclick="ExportConversationMarkdownAsync"
+					title="Export conversation as Markdown">
+				<Icon IconType="@Icons.FileExport" Size="18" />
+			</button>
+			<button type="button"
+					class="btn btn-icon btn-ghost-danger"
+					@onclick="ClearConversationView"
+					title="Clear current view">
+				<Icon IconType="@Icons.Trash" Size="18" />
+			</button>
+		</div>
+	</div>
+
+	<!-- Conversation Thread Area -->
+	<div class="chat-scroll" @ref="_scrollEl">
+		<div class="chat-thread">
+			@if (_conversations.Length == 0 || _conversations.All(c => c.Messages.Count == 0))
+			{
+				<div class="empty py-5 my-auto">
+					<div class="empty-icon text-primary">
+						<Icon IconType="@Icons.Sparkles" Size="36" />
+					</div>
+					<p class="empty-title">Start a conversation with @DisplayName</p>
+					<p class="empty-subtitle text-secondary">
+						Send a message below to begin streaming responses in real time.
+					</p>
+				</div>
+			}
+			else
+			{
 				@foreach (Conversation conv in _conversations)
 				{
 					<div class="conversation-separator">
-						<span>Conversation @conv.Id • @conv.Time.ToLocalTime().ToString("g") @(conv.IsCompleted ? "(completed)" : "")</span>
+						<span class="badge bg-surface text-secondary border px-2 py-1">
+							Conversation #@conv.Id • @conv.Time.ToLocalTime().ToString("g") @(conv.IsCompleted ? "(completed)" : "")
+						</span>
 					</div>
 
 					DateTime? lastDate = null;
@@ -48,298 +149,287 @@
 						if (lastDate.HasValue && currentDate != lastDate.Value)
 						{
 							<div class="day-separator">
-								<span>@currentDate.ToString("dddd, MMM d, yyyy")</span>
+								<span class="badge bg-surface text-secondary border px-2 py-1">
+									@currentDate.ToString("dddd, MMM d, yyyy")
+								</span>
 							</div>
 						}
 						lastDate = currentDate;
 
 						bool fromUser = textMessage.From == Message.Type.User;
-						string senderName = fromUser ? "You" : _character?.Name ?? "?";
+						bool isSystem = textMessage.From == Message.Type.System;
+						bool isStreaming = IsMessageStreaming(textMessage);
+						string senderName = fromUser ? "You" : (isSystem ? "System" : DisplayName);
 
 						<div class="message-row @(fromUser ? "from-user" : "from-character")">
 							@if (!fromUser)
 							{
-								@if (_character == null)
-								{
-									<Avatar class="me-2 d-none d-sm-block"
-											Rounded="AvatarRounded.Circle"
-											Size="AvatarSize.Large" />
-								}
-								else
-								{
-									<Avatar class="me-2 d-none d-sm-block"
-											Rounded="AvatarRounded.Circle"
-											Size="AvatarSize.Large"
-											Data="@($"/socket/cards/{_character.CardId}/image.png?circuitId={SocketClientContainer.Client?.CircuitId}")" />
-								}
+								<div class="message-avatar me-2 d-none d-sm-flex">
+									@if (_character != null && !string.IsNullOrEmpty(_character.CardId))
+									{
+										<Avatar Rounded="AvatarRounded.Circle"
+												Size="AvatarSize.Small"
+												Data="@($"/socket/cards/{_character.CardId}/image.png?circuitId={SocketClientContainer.Client?.CircuitId}")" />
+									}
+									else
+									{
+										<Avatar Rounded="AvatarRounded.Circle"
+												Size="AvatarSize.Small">
+											<Icon IconType="@Icons.Sparkles" Size="14" />
+										</Avatar>
+									}
+								</div>
 							}
-							<div class="bubble">
+
+							<div class="bubble rounded-3 @(fromUser ? "bg-primary text-white" : "bg-surface border text-body") @(isStreaming ? "is-streaming" : "")">
 								<div class="meta">
 									<strong>@senderName</strong>
 									<span class="time">@textMessage.Time.ToLocalTime().ToString("t")</span>
-								</div>
-								<div class="content">
-									@foreach (string line in (textMessage.Text ?? string.Empty).Split(Environment.NewLine))
+									@if (isStreaming)
 									{
-										<span>@line</span>
-
-										<br />
+										<span class="badge bg-primary-lt ms-1" style="font-size: 0.6rem;">LIVE</span>
 									}
+								</div>
+								<div class="bubble-text">
+									@RenderMarkdown(textMessage.Text)
 								</div>
 							</div>
 						</div>
 					}
 				}
-			</div>
+			}
 		</div>
+	</div>
 
-		<div class="composer" id="composer">
-			<label class="form-label mb-1">Message</label>
-			<InputTextArea class="form-control composer-input"
-						   placeholder="Type a message. Enter = send, Shift+Enter = newline"
-						   rows="3"
-						   @bind-Value="_newMessage"
-						   @oninput="OnComposerInput"
-						   @onkeydown="OnMessageKeyDown" />
-
-			<div class="mt-2 d-flex gap-2 align-items-center flex-wrap">
-				<InputFile OnChange="OnFileSelected" />
-				@if (_selectedFile is not null)
-				{
-					<span class="small text-muted">
-						Attachment: @_selectedFile.Name (@(_selectedFile.Size / 1024) KB)
-					</span>
-					<Button BackgroundColor="TablerColor.Red" OnClick="ClearSelectedFile" Size="ButtonSize.Small">
-						Remove
-					</Button>
-				}
-			</div>
-
-			<div class="mt-2 d-flex gap-2 align-items-center">
-				<Button BackgroundColor="TablerColor.Green"
-						OnClick="SendMessageAsync"
-						Disabled="@(_isSending || (string.IsNullOrWhiteSpace(_newMessage) && _selectedFile is null))">
-					Send
-				</Button>
-				@if (_isSending)
-				{
-					<span class="text-muted small">Sending...</span>
-				}
-				<span class="shortcut-hint text-muted ms-auto small d-none d-md-inline">
-					Enter to send • Shift+Enter newline
+	<!-- Floating Pill Composer -->
+	<div class="composer-wrapper p-2 p-md-3 border-top bg-surface">
+		@if (_selectedFile is not null)
+		{
+			<div class="mb-2 d-flex align-items-center">
+				<span class="badge bg-primary-lt d-inline-flex align-items-center gap-2 py-1 px-2">
+					<Icon IconType="@Icons.Paperclip" Size="14" />
+					<span class="text-truncate" style="max-width: 240px;">@_selectedFile.Name</span>
+					<span class="text-secondary">(@(Math.Max(1, _selectedFile.Size / 1024)) KB)</span>
+					<button type="button"
+							class="btn-close btn-close-sm ms-1"
+							aria-label="Remove file"
+							@onclick="ClearSelectedFile"></button>
 				</span>
 			</div>
+		}
+
+		<div class="composer-pill d-flex align-items-end gap-2 px-3 py-2 rounded-4 border">
+			<label class="btn btn-icon btn-ghost-secondary rounded-circle mb-0 flex-shrink-0"
+				   title="Attach file"
+				   style="cursor: pointer;">
+				<Icon IconType="@Icons.Paperclip" Size="18" />
+				<InputFile OnChange="OnFileSelected" class="d-none" />
+			</label>
+
+			<textarea class="form-control border-0 bg-transparent shadow-none composer-input px-1 py-1"
+					  placeholder="Message @DisplayName... (Enter to send, Shift+Enter for newline)"
+					  rows="1"
+					  value="@_newMessage"
+					  @oninput="OnComposerInput"
+					  @onkeydown="OnMessageKeyDown"></textarea>
+
+			@if (IsStreamingActive)
+			{
+				<button type="button"
+						class="btn btn-danger btn-icon rounded-circle flex-shrink-0"
+						@onclick="StopActiveStreams"
+						title="Stop streaming display">
+					<span class="spinner-grow spinner-grow-sm" role="status" aria-hidden="true"></span>
+				</button>
+			}
+			else
+			{
+				<button type="button"
+						class="btn btn-primary btn-icon rounded-circle flex-shrink-0"
+						@onclick="SendMessageAsync"
+						disabled="@(_isSending || (string.IsNullOrWhiteSpace(_newMessage) && _selectedFile is null))"
+						title="Send message">
+					<Icon IconType="@Icons.Send" Size="18" />
+				</button>
+			}
+		</div>
+
+		<div class="d-flex justify-content-between align-items-center mt-1 px-2">
+			<span class="text-secondary" style="font-size: 0.72rem;">
+				@if (IsStreamingActive)
+				{
+					<span>Receiving live token stream...</span>
+				}
+				else if (_isSending)
+				{
+					<span>Sending message...</span>
+				}
+				else
+				{
+					<span>Markdown supported</span>
+				}
+			</span>
+			<span class="text-secondary d-none d-md-inline" style="font-size: 0.72rem;">
+				<kbd>Enter</kbd> to send • <kbd>Shift + Enter</kbd> for newline
+			</span>
 		</div>
 	</div>
 </div>
 
 <style>
 	.chat-shell {
-		height: 100dvh;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.chat-page {
-		flex: 1;
+		height: calc(100dvh - 5.5rem);
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
-		gap: .75rem;
-		padding: .5rem .5rem .75rem;
-		box-sizing: border-box;
+	}
+
+	.chat-header {
+		flex-shrink: 0;
+		background: var(--tblr-bg-surface);
+		z-index: 5;
 	}
 
 	.chat-scroll {
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
-		padding: .75rem .75rem 1rem;
-		border: 1px solid var(--tblr-border-color,#dee2e6);
-		border-radius: .75rem;
-		background: var(--tblr-body-bg,#fff);
+		padding: 1rem 1.25rem;
+		background: var(--tblr-body-bg);
 		scroll-behavior: smooth;
 	}
 
 	.chat-thread {
 		display: flex;
 		flex-direction: column;
-		gap: .6rem;
+		gap: 0.75rem;
+		max-width: 960px;
+		margin: 0 auto;
+		min-height: 100%;
 	}
 
-	.conversation-separator {
-		text-align: center;
-		margin: 1.4rem 0 .9rem;
-		position: relative;
-		font-size: .65rem;
-		text-transform: uppercase;
-		letter-spacing: .05em;
-		color: #6c757d;
-		font-weight: 600;
-	}
-
-		.conversation-separator:before,
-		.conversation-separator:after {
-			content: "";
-			position: absolute;
-			top: 50%;
-			width: 38%;
-			height: 1px;
-			background: #e5e7eb;
-		}
-
-		.conversation-separator:before {
-			left: 0;
-		}
-
-		.conversation-separator:after {
-			right: 0;
-		}
-
+	.conversation-separator,
 	.day-separator {
 		text-align: center;
-		margin: .8rem 0 .5rem;
+		margin: 0.75rem 0;
 		position: relative;
-		font-size: .60rem;
-		text-transform: uppercase;
-		letter-spacing: .04em;
-		color: #6c757d;
-		font-weight: 600;
 	}
-
-		.day-separator:before,
-		.day-separator:after {
-			content: "";
-			position: absolute;
-			top: 50%;
-			width: 38%;
-			height: 1px;
-			background: #e5e7eb;
-		}
-
-		.day-separator:before {
-			left: 0;
-		}
-
-		.day-separator:after {
-			right: 0;
-		}
 
 	.message-row {
 		display: flex;
 		align-items: flex-end;
 	}
 
-		.message-row.from-user {
-			justify-content: flex-end;
-		}
+	.message-row.from-user {
+		justify-content: flex-end;
+	}
 
 	.bubble {
-		max-width: 70ch;
-		padding: .60rem .90rem .70rem;
-		border-radius: 1.15rem;
-		box-shadow: 0 1px 2px rgba(0,0,0,.08);
+		max-width: min(72ch, 82%);
+		padding: 0.65rem 0.95rem;
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 		position: relative;
 		display: flex;
 		flex-direction: column;
-		gap: .30rem;
-		font-size: .92rem;
-		line-height: 1.28rem;
-		white-space: pre-wrap;
+		gap: 0.25rem;
+		font-size: 0.93rem;
+		line-height: 1.45;
 		word-break: break-word;
 	}
 
-	.message-row.from-character .bubble {
-		background: #f1f3f5;
-		color: #212529;
-		border-bottom-left-radius: .40rem;
-	}
-
-	.message-row.from-user .bubble {
-		background: var(--tblr-primary,#4c6ef5);
-		color: #fff;
-		border-bottom-right-radius: .40rem;
-	}
-
 	.bubble .meta {
-		font-size: .60rem;
-		opacity: .75;
+		font-size: 0.68rem;
+		opacity: 0.78;
 		display: flex;
 		align-items: center;
-		gap: .4rem;
-		margin-bottom: .05rem;
-		font-weight: 500;
+		gap: 0.45rem;
 	}
 
 	.message-row.from-user .bubble .meta {
-		color: rgba(255,255,255,.85);
+		color: rgba(255, 255, 255, 0.85);
+		justify-content: flex-end;
 	}
 
-	.message-row.from-character .bubble:after,
-	.message-row.from-user .bubble:after {
-		content: "";
-		position: absolute;
-		bottom: 0;
-		width: 12px;
-		height: 12px;
-		background: inherit;
+	.bubble-text {
+		white-space: normal;
 	}
 
-	.message-row.from-character .bubble:after {
-		left: -4px;
-		clip-path: polygon(0 100%, 0 0, 100% 100%);
+	.bubble-text p {
+		margin-bottom: 0.45rem;
 	}
 
-	.message-row.from-user .bubble:after {
-		right: -4px;
-		clip-path: polygon(0 100%, 100% 0, 100% 100%);
+	.bubble-text p:last-child {
+		margin-bottom: 0;
 	}
 
-	.composer {
-		border: 1px solid var(--tblr-border-color,#dee2e6);
-		border-radius: .75rem;
-		padding: .9rem .9rem 1rem;
-		background: var(--tblr-body-bg,#fff);
-		box-shadow: 0 2px 4px -2px rgba(0,0,0,.05);
+	.bubble-text pre.chat-code-block {
+		background: rgba(0, 0, 0, 0.28);
+		color: #f8f9fa;
+		padding: 0.65rem 0.85rem;
+		border-radius: 0.5rem;
+		overflow-x: auto;
+		margin: 0.45rem 0;
+		font-size: 0.84rem;
+	}
+
+	.bubble-text code:not(pre code) {
+		background: rgba(128, 128, 128, 0.18);
+		padding: 0.1rem 0.35rem;
+		border-radius: 0.25rem;
+		font-size: 0.86em;
+	}
+
+	.bubble.is-streaming .bubble-text::after {
+		content: "▊";
+		display: inline-block;
+		margin-left: 2px;
+		vertical-align: baseline;
+		color: var(--tblr-primary, #206bc4);
+		animation: blink-caret 0.8s infinite;
+	}
+
+	@@keyframes blink-caret {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0; }
+	}
+
+	.composer-wrapper {
+		flex-shrink: 0;
+	}
+
+	.composer-pill {
+		max-width: 960px;
+		margin: 0 auto;
+		background: var(--tblr-body-bg);
+		transition: border-color 0.15s ease, box-shadow 0.15s ease;
+	}
+
+	.composer-pill:focus-within {
+		border-color: var(--tblr-primary) !important;
+		box-shadow: 0 0 0 2px rgba(var(--tblr-primary-rgb), 0.15);
 	}
 
 	.composer-input {
-		resize: vertical;
-		min-height: 90px;
-		max-height: 35vh;
+		resize: none;
+		min-height: 36px;
+		max-height: 180px;
+		overflow-y: auto;
+		line-height: 1.4;
 	}
 
-	.shortcut-hint {
-		opacity: .65;
+	@@media (max-width: 991.98px) {
+		.chat-shell {
+			height: calc(100dvh - 5rem);
+		}
 	}
 
 	@@media (max-width: 576px) {
 		.bubble {
-			max-width: 85%;
-		}
-
-		.chat-page {
-			gap: .5rem;
-			padding: .5rem;
+			max-width: 90%;
 		}
 
 		.chat-scroll {
-			padding: .6rem .6rem .9rem;
-		}
-
-		.composer {
-			padding: .75rem .75rem .85rem;
-		}
-
-		.composer-input {
-			min-height: 70px;
-		}
-	}
-
-	@@media (max-height: 540px) {
-		.composer-input {
-			min-height: 60px;
-			max-height: 28vh;
+			padding: 0.75rem;
 		}
 	}
 </style>
@@ -352,11 +442,12 @@
 
 	private Character? _character = null;
 	private Conversation[] _conversations = [];
+	private readonly Dictionary<string, TextMessage> _activeStreams = new();
 
 	private string _newMessage = string.Empty;
 	private bool _skipNextInputUpdate = false;
 	private bool _isSending = false;
-	private bool registeredForMessages = false;
+	private SocketClient? _subscribedClient;
 
 	private IBrowserFile? _selectedFile = null;
 	private const long MaxUploadBytes = 50 * 1024 * 1024; // 50 MB
@@ -365,49 +456,52 @@
 	private ElementReference _scrollEl;
 	private IJSObjectReference? _jsModule;
 	private bool _pendingScroll;
+	private bool _forceScroll;
+
+	private bool IsDirectAssistant =>
+		string.Equals(CharacterId, "0", StringComparison.OrdinalIgnoreCase);
+
+	private string DisplayName =>
+		IsDirectAssistant ? "Direct Assistant" : (_character?.Name ?? $"Character {CharacterId}");
+
+	private bool IsStreamingActive => _activeStreams.Count > 0;
 
 	public void Dispose()
 	{
-		SocketClient? client = SocketClientContainer.Client;
-		if (client == null)
-		{
-			return;
-		}
-
-		client.MessageRecieved -= OnClientMessageReceived;
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+		UnsubscribeFromClient();
 	}
 
 	protected override async Task OnInitializedAsync()
 	{
-		SocketClient? client = SocketClientContainer.Client;
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
 		if (client == null)
 		{
+			EnsureDefaultConversation();
+			_loading = false;
 			return;
 		}
-		if (!registeredForMessages)
-		{
-			client.MessageRecieved += OnClientMessageReceived;
-			registeredForMessages = true;
-		}
+
+		SubscribeToClient(client);
 
 		if (string.IsNullOrWhiteSpace(CharacterId))
 		{
 			throw new ArgumentException("CharacterId cannot be null or empty.", nameof(CharacterId));
 		}
 
-		if (string.Equals(CharacterId, "0", StringComparison.OrdinalIgnoreCase) == false)
+		if (!IsDirectAssistant)
 		{
 			CharacterListRequest request = new CharacterListRequest
 			{
 				Ids = [CharacterId]
 			};
 			Character[] characters = await request.Get(client);
-			if (characters.Length == 0 || characters[0] == null || characters[0].Id != CharacterId)
+			if (characters.Length > 0 && characters[0] != null && characters[0].Id == CharacterId)
 			{
-				throw new InvalidOperationException($"Character with ID '{CharacterId}' not found.");
+				_character = characters[0];
 			}
-
-			_character = characters[0];
 		}
 
 		await RefreshAllMessages();
@@ -415,22 +509,91 @@
 		_loading = false;
 	}
 
+	private void SubscribeToClient(SocketClient client)
+	{
+		if (ReferenceEquals(_subscribedClient, client))
+		{
+			return;
+		}
+
+		UnsubscribeFromClient();
+		client.MessageRecieved += OnClientMessageReceived;
+		client.StreamChunkReceived += OnClientStreamChunkReceived;
+		_subscribedClient = client;
+	}
+
+	private void UnsubscribeFromClient()
+	{
+		if (_subscribedClient != null)
+		{
+			_subscribedClient.MessageRecieved -= OnClientMessageReceived;
+			_subscribedClient.StreamChunkReceived -= OnClientStreamChunkReceived;
+			_subscribedClient = null;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			SocketClient? client = SocketClientContainer.Client;
+			if (client != null && SocketClientContainer.IsConnected)
+			{
+				SubscribeToClient(client);
+
+				if (!IsDirectAssistant && _character == null)
+				{
+					try
+					{
+						CharacterListRequest request = new CharacterListRequest
+						{
+							Ids = [CharacterId]
+						};
+						Character[] characters = await request.Get(client);
+						if (characters.Length > 0 && characters[0] != null && characters[0].Id == CharacterId)
+						{
+							_character = characters[0];
+						}
+
+						await RefreshAllMessages();
+					}
+					catch
+					{
+						// Ignore transient load errors on reconnect
+					}
+				}
+			}
+			StateHasChanged();
+		});
+	}
+
 	protected override async Task OnAfterRenderAsync(bool firstRender)
 	{
 		if (firstRender)
 		{
-			_jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Chat/ChatCharacterChatPage.razor.js");
-			_pendingScroll = true;
+			try
+			{
+				_jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Chat/ChatCharacterChatPage.razor.js");
+				_pendingScroll = true;
+				_forceScroll = true;
+			}
+			catch
+			{
+				// Ignore JS import issues
+			}
 		}
 
 		if (_pendingScroll)
 		{
+			bool force = _forceScroll;
 			_pendingScroll = false;
+			_forceScroll = false;
+
 			if (_jsModule != null)
 			{
 				try
 				{
-					await _jsModule.InvokeVoidAsync("scrollToBottom", _scrollEl);
+					await _jsModule.InvokeVoidAsync("scrollToBottom", _scrollEl, force);
 				}
 				catch
 				{
@@ -440,24 +603,40 @@
 		}
 	}
 
+	private Conversation EnsureDefaultConversation()
+	{
+		Conversation? current = _conversations.MaxBy(x => x.Time);
+		if (current != null)
+		{
+			return current;
+		}
+
+		Conversation created = new Conversation
+		{
+			Id = 0,
+			Time = DateTime.UtcNow
+		};
+		_conversations = [created];
+		return created;
+	}
+
 	private async Task RefreshAllMessages()
 	{
-		SocketClient? client = SocketClientContainer.Client;
+		_activeStreams.Clear();
+
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
 		if (client == null)
 		{
+			EnsureDefaultConversation();
+			StateHasChanged();
 			return;
 		}
 
-		if (CharacterId == "0")
+		SubscribeToClient(client);
+
+		if (IsDirectAssistant)
 		{
-			_conversations =
-				[
-					new Conversation
-					{
-						Id = 0,
-						Time = DateTime.UtcNow
-					}
-				];
+			EnsureDefaultConversation();
 		}
 		else
 		{
@@ -466,37 +645,69 @@
 				CharacterId = CharacterId,
 			};
 			_conversations = await request.Get(client);
+			if (_conversations.Length == 0)
+			{
+				EnsureDefaultConversation();
+			}
 		}
+
 		_pendingScroll = true;
+		_forceScroll = true;
 		StateHasChanged();
 	}
 
 	private async Task SendMessageAsync()
 	{
-		if (_isSending || string.IsNullOrWhiteSpace(_newMessage))
+		if (_isSending || (string.IsNullOrWhiteSpace(_newMessage) && _selectedFile is null))
 		{
 			return;
 		}
 
-		SocketClient? client = SocketClientContainer.Client;
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
 		if (client == null)
 		{
+			await ToastService.AddToastAsync(new ToastModel
+			{
+				Title = "Offline",
+				Message = "Socket connection is currently unavailable."
+			});
 			return;
 		}
 
+		SubscribeToClient(client);
+
 		string messageToSend = _newMessage?.Trim() ?? string.Empty;
+		IBrowserFile? attachedFile = _selectedFile;
 
 		_isSending = true;
 		_newMessage = string.Empty;
+		_selectedFile = null;
+
+		// Optimistic user message bubble rendered immediately
+		Conversation conv = EnsureDefaultConversation();
+		string optimisticText = attachedFile != null && string.IsNullOrEmpty(messageToSend)
+			? $"[Attachment: {attachedFile.Name}]"
+			: messageToSend;
+
+		TextMessage optimisticMessage = new TextMessage
+		{
+			From = Message.Type.User,
+			Text = optimisticText,
+			Time = DateTime.UtcNow,
+		};
+		conv.Messages.Add(optimisticMessage);
+		_pendingScroll = true;
+		_forceScroll = true;
 		StateHasChanged();
 
 		try
 		{
-			if (_selectedFile is not null)
+			if (attachedFile is not null)
 			{
-				FileTemp? file = await GetFileContent(_selectedFile);
+				FileTemp? file = await GetFileContent(attachedFile);
 				if (file == null)
 				{
+					conv.Messages.Remove(optimisticMessage);
 					await ToastService.AddToastAsync(new ToastModel
 					{
 						Title = "Upload failed",
@@ -505,16 +716,15 @@
 					return;
 				}
 
-				await SendFile(client, messageToSend, file);
+				await SendFile(client, messageToSend, file, conv, optimisticMessage);
 			}
 			else
 			{
-				await SendText(client, messageToSend);
+				await SendText(client, messageToSend, conv, optimisticMessage);
 			}
 		}
 		finally
 		{
-			_selectedFile = null;
 			_isSending = false;
 			StateHasChanged();
 		}
@@ -546,7 +756,7 @@
 		}
 	}
 
-	private async Task SendText(SocketClient client, string messageToSend)
+	private async Task SendText(SocketClient client, string messageToSend, Conversation conv, TextMessage optimisticMessage)
 	{
 		try
 		{
@@ -559,30 +769,13 @@
 			TextMessageResult result = await request.Get(client);
 			if (!string.IsNullOrEmpty(result.Error))
 			{
+				conv.Messages.Remove(optimisticMessage);
 				await ToastService.AddToastAsync(new ToastModel
 				{
 					Title = "Message Response",
 					Message = $"Error from character: {result.Error}"
 				});
-				return;
 			}
-			Conversation? conv = _conversations.MaxBy(x => x.Time);
-			if (conv == null)
-			{
-				await ToastService.AddToastAsync(new ToastModel
-				{
-					Title = "Message Response",
-					Message = "No active conversation found. Please refresh the page and try again."
-				});
-				return;
-			}
-			conv.Messages.Add(new TextMessage
-			{
-				From = Message.Type.User,
-				Text = messageToSend,
-				Time = DateTime.UtcNow,
-			});
-			_pendingScroll = true;
 		}
 		catch (Exception)
 		{
@@ -594,7 +787,7 @@
 		}
 	}
 
-	private async Task SendFile(SocketClient client, string messageToSend, FileTemp fileToSend)
+	private async Task SendFile(SocketClient client, string messageToSend, FileTemp fileToSend, Conversation conv, TextMessage optimisticMessage)
 	{
 		try
 		{
@@ -610,31 +803,13 @@
 			FileMessageResult result = await request.Get(client);
 			if (!string.IsNullOrEmpty(result.Error))
 			{
+				conv.Messages.Remove(optimisticMessage);
 				await ToastService.AddToastAsync(new ToastModel
 				{
 					Title = "Message Response",
 					Message = $"Error from character: {result.Error}"
 				});
-				return;
 			}
-			Conversation? conv = _conversations.MaxBy(x => x.Time);
-			if (conv == null)
-			{
-				await ToastService.AddToastAsync(new ToastModel
-				{
-					Title = "Message Response",
-					Message = "No active conversation found. Please refresh the page and try again."
-				});
-				return;
-			}
-			conv.Messages.Add(new TextMessage
-			{
-				From = Message.Type.User,
-				Text = messageToSend,
-				Time = DateTime.UtcNow,
-			});
-			_pendingScroll = true;
-
 		}
 		catch (Exception)
 		{
@@ -668,9 +843,228 @@
 
 	private void OnClientMessageReceived(string? characterId, Message message)
 	{
-		_conversations.MaxBy(x => x.Time)?.Messages.Add(message);
-		_pendingScroll = true;
-		InvokeAsync(StateHasChanged);
+		if (!string.IsNullOrEmpty(characterId) &&
+			!string.Equals(characterId, CharacterId, StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		InvokeAsync(() =>
+		{
+			Conversation conv = EnsureDefaultConversation();
+			conv.Messages.Add(message);
+			_pendingScroll = true;
+			StateHasChanged();
+		});
+	}
+
+	private void OnClientStreamChunkReceived(
+		string streamId,
+		string? characterId,
+		string delta,
+		bool isComplete,
+		string? fullText)
+	{
+		if (!string.IsNullOrEmpty(characterId) &&
+			!string.Equals(characterId, CharacterId, StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		InvokeAsync(() =>
+		{
+			Conversation currentConv = EnsureDefaultConversation();
+
+			if (!_activeStreams.TryGetValue(streamId, out TextMessage? liveMessage))
+			{
+				if (isComplete && string.IsNullOrWhiteSpace(fullText) && string.IsNullOrWhiteSpace(delta))
+				{
+					return;
+				}
+
+				liveMessage = new TextMessage
+				{
+					From = Message.Type.Character,
+					Time = DateTime.UtcNow,
+					Text = delta
+				};
+
+				currentConv.Messages.Add(liveMessage);
+				_activeStreams[streamId] = liveMessage;
+			}
+			else
+			{
+				liveMessage.Text += delta;
+			}
+
+			if (isComplete)
+			{
+				if (!string.IsNullOrEmpty(fullText))
+				{
+					liveMessage.Text = fullText;
+				}
+				_activeStreams.Remove(streamId);
+			}
+
+			_pendingScroll = true;
+			StateHasChanged();
+		});
+	}
+
+	private bool IsMessageStreaming(TextMessage message)
+	{
+		foreach (TextMessage active in _activeStreams.Values)
+		{
+			if (ReferenceEquals(active, message))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	private void StopActiveStreams()
+	{
+		_activeStreams.Clear();
+		StateHasChanged();
+	}
+
+	private void ClearConversationView()
+	{
+		_activeStreams.Clear();
+		_conversations =
+		[
+			new Conversation
+			{
+				Id = 0,
+				Time = DateTime.UtcNow
+			}
+		];
+		StateHasChanged();
+	}
+
+	private async Task ExportConversationMarkdownAsync()
+	{
+		StringBuilder sb = new();
+		sb.AppendLine($"# Chat Export - {DisplayName}");
+		sb.AppendLine($"Exported: {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
+		sb.AppendLine();
+
+		foreach (Conversation conv in _conversations)
+		{
+			sb.AppendLine($"## Conversation #{conv.Id} ({conv.Time.ToLocalTime():g})");
+			sb.AppendLine();
+
+			foreach (Message msg in conv.Messages)
+			{
+				if (msg is TextMessage textMsg)
+				{
+					string sender = textMsg.From == Message.Type.User ? "You" : DisplayName;
+					sb.AppendLine($"**{sender}** ({textMsg.Time.ToLocalTime():t}):");
+					sb.AppendLine(textMsg.Text);
+					sb.AppendLine();
+				}
+			}
+		}
+
+		if (_jsModule != null)
+		{
+			string safeName = Regex.Replace(DisplayName, @"[^a-zA-Z0-9_-]", "_");
+			await _jsModule.InvokeVoidAsync("downloadTextFile", $"{safeName}-chat.md", sb.ToString());
+		}
+	}
+
+	private static MarkupString RenderMarkdown(string? rawText)
+	{
+		if (string.IsNullOrEmpty(rawText))
+		{
+			return new MarkupString(string.Empty);
+		}
+
+		string encoded = WebUtility.HtmlEncode(rawText);
+
+		// Extract fenced code blocks first so inner content is not altered by inline rules
+		List<string> codeBlocks = [];
+		encoded = Regex.Replace(
+			encoded,
+			@"```(?:[a-zA-Z0-9_+-]+)?\r?\n?([\s\S]*?)```",
+			match =>
+			{
+				string code = match.Groups[1].Value.TrimEnd('\r', '\n');
+				string placeholder = $"@@CODEBLOCK_{codeBlocks.Count}@@";
+				codeBlocks.Add($"<pre class=\"chat-code-block\"><code>{code}</code></pre>");
+				return placeholder;
+			});
+
+		// Inline code
+		encoded = Regex.Replace(encoded, @"`([^`\r\n]+)`", "<code>$1</code>");
+
+		// Bold & Italic
+		encoded = Regex.Replace(encoded, @"\*\*(.+?)\*\*", "<strong>$1</strong>");
+		encoded = Regex.Replace(encoded, @"(?<!\*)\*([^*\r\n]+)\*(?!\*)", "<em>$1</em>");
+		encoded = Regex.Replace(encoded, @"~~(.+?)~~", "<del>$1</del>");
+
+		// Process line-by-line for lists, headings, and paragraphs
+		string[] lines = encoded.Replace("\r\n", "\n").Split('\n');
+		StringBuilder html = new();
+		bool inList = false;
+
+		for (int i = 0; i < lines.Length; i++)
+		{
+			string line = lines[i];
+			string trimmed = line.TrimStart();
+
+			if (trimmed.StartsWith("- ") || trimmed.StartsWith("* "))
+			{
+				if (!inList)
+				{
+					html.Append("<ul class=\"mb-1 ps-3\">");
+					inList = true;
+				}
+				html.Append("<li>").Append(trimmed[2..]).Append("</li>");
+				continue;
+			}
+
+			if (inList)
+			{
+				html.Append("</ul>");
+				inList = false;
+			}
+
+			if (trimmed.StartsWith("### "))
+			{
+				html.Append("<div class=\"fw-bold mt-1\">").Append(trimmed[4..]).Append("</div>");
+			}
+			else if (trimmed.StartsWith("## "))
+			{
+				html.Append("<div class=\"fw-bold fs-4 mt-1\">").Append(trimmed[3..]).Append("</div>");
+			}
+			else if (trimmed.StartsWith("# "))
+			{
+				html.Append("<div class=\"fw-bold fs-3 mt-1\">").Append(trimmed[2..]).Append("</div>");
+			}
+			else
+			{
+				html.Append(line);
+				if (i < lines.Length - 1)
+				{
+					html.Append("<br />");
+				}
+			}
+		}
+
+		if (inList)
+		{
+			html.Append("</ul>");
+		}
+
+		string finalHtml = html.ToString();
+		for (int i = 0; i < codeBlocks.Count; i++)
+		{
+			finalHtml = finalHtml.Replace($"@@CODEBLOCK_{i}@@", codeBlocks[i]);
+		}
+
+		return new MarkupString(finalHtml);
 	}
 
 	private void OnFileSelected(InputFileChangeEventArgs e)

@@ -1,4 +1,4 @@
-﻿@using Akagi.Web.Data
+@using Akagi.Web.Data
 @using Akagi.Web.Icons
 @using Akagi.Web.Models
 @using Akagi.Web.Models.TimeTrackers
@@ -10,52 +10,105 @@
 
 @page "/TimeTracking/create"
 
-<PagePretitle>
-	Create TimeTracking
-</PagePretitle>
+<PageTitle>Create Time Tracker - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Time Tracking</div>
+			<h2 class="page-title">New Tracker Definition</h2>
+		</div>
+		<div class="col-auto ms-auto">
+			<a href="/TimeTracking/list" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
+				<Icon IconType="@Icons.ArrowLeft" Size="16" />
+				<span>Back to List</span>
+			</a>
+		</div>
+	</div>
+</div>
 
 <Card>
+	<CardHeader>
+		<CardTitle>Definition Schema</CardTitle>
+	</CardHeader>
 	<CardBody>
 		<TablerForm Model="ToAdd"
 					OnValidSubmit="Submit">
-			<Button Type="ButtonType.Button"
-					OnClick="OnCreateClicked">
-				<Icon IconType="@Icons.New"
-					  BackgroundColor="TablerColor.Green" />
-			</Button>
-
-			<div class="mb-3">
-				<label class="form-label">
-					Name
-				</label>
+			<div class="mb-4">
+				<label class="form-label required">Tracker Name</label>
 				<InputText class="form-control"
+						   placeholder="e.g., Work Sessions, Exercise Log, Project Hours..."
 						   @bind-Value="ToAdd.Name" />
 				<TabValidationMessage For="(() => ToAdd.Name)" />
 			</div>
 
-			@foreach (FieldDefinition field in ToAdd.Fields)
+			<div class="d-flex align-items-center justify-content-between mb-3">
+				<div>
+					<h4 class="m-0">Custom Fields</h4>
+					<div class="text-secondary small">Define the columns recorded for each entry in this tracker.</div>
+				</div>
+				<button type="button"
+						class="btn btn-outline-primary btn-sm d-inline-flex align-items-center gap-1"
+						@onclick="OnCreateClicked">
+					<Icon IconType="@Icons.Plus" Size="16" />
+					<span>Add Field</span>
+				</button>
+			</div>
+
+			@if (ToAdd.Fields.Count == 0)
 			{
-				<div class="mb-3">
-					<label class="form-label">
-						@field.Name
-					</label>
-					<InputText class="form-control"
-							   @bind-Value="field.Name" />
-					<ItemSelect Items="FieldTypes"
-								@bind-SelectedValue="field.Type"
-								SelectedTextExpression="x => x.ToString()" />
-					<Button Type="ButtonType.Button"
-							OnClick="@(() => OnFieldDeleteClicked(field))">
-						<Icon IconType="@Icons.Delete"
-							  BackgroundColor="TablerColor.Green" />
-					</Button>
-					<TabValidationMessage For="(() => field)" />
+				<div class="alert alert-secondary d-flex align-items-center justify-content-between mb-4">
+					<div>No fields added yet. Click <strong>Add Field</strong> to add schema columns.</div>
+					<button type="button" class="btn btn-sm btn-primary" @onclick="OnCreateClicked">
+						+ Add First Field
+					</button>
+				</div>
+			}
+			else
+			{
+				<div class="d-flex flex-column gap-2 mb-4">
+					@foreach (FieldDefinition field in ToAdd.Fields)
+					{
+						<div class="card card-sm bg-surface-secondary border">
+							<div class="card-body py-2 px-3">
+								<div class="row g-2 align-items-center">
+									<div class="col-12 col-md-6">
+										<label class="form-label small mb-1">Field Name</label>
+										<InputText class="form-control"
+												   placeholder="Field name"
+												   @bind-Value="field.Name" />
+									</div>
+									<div class="col-9 col-md-5">
+										<label class="form-label small mb-1">Data Type</label>
+										<ItemSelect Items="FieldTypes"
+													@bind-SelectedValue="field.Type"
+													SelectedTextExpression="x => x.ToString()" />
+									</div>
+									<div class="col-3 col-md-1 d-flex align-items-end justify-content-end pt-md-4">
+										<button type="button"
+												class="btn btn-outline-danger btn-icon"
+												title="Remove field"
+												@onclick="@(() => OnFieldDeleteClicked(field))">
+											<Icon IconType="@Icons.Trash" Size="16" />
+										</button>
+									</div>
+								</div>
+								<TabValidationMessage For="(() => field)" />
+							</div>
+						</div>
+					}
 				</div>
 			}
 
-			<Button Type="ButtonType.Submit"
-					Text="Save"
-					class="mt-1" />
+			<div class="d-flex align-items-center gap-2 pt-2 border-top">
+				<button type="submit" class="btn btn-primary d-inline-flex align-items-center gap-2">
+					<Icon IconType="@Icons.Check" Size="16" />
+					<span>Save Definition</span>
+				</button>
+				<a href="/TimeTracking/list" class="btn btn-ghost-secondary">
+					Cancel
+				</a>
+			</div>
 		</TablerForm>
 	</CardBody>
 </Card>
@@ -95,7 +148,7 @@
 		await ToastService.AddToastAsync(new ToastModel
 		{
 			Title = "Success",
-			Message = "Entry saved successfully!"
+			Message = "Definition saved successfully!"
 		});
 		Navigation.NavigateTo("/TimeTracking/list");
 	}
@@ -104,7 +157,7 @@
 	{
 		ToAdd.Fields.Add(new FieldDefinition
 		{
-			Name = "New Field",
+			Name = $"Field {ToAdd.Fields.Count + 1}",
 			Type = FieldType.Text
 		});
 	}

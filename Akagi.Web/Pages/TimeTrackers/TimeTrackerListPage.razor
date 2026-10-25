@@ -1,4 +1,4 @@
-﻿@using Akagi.Web.Data
+@using Akagi.Web.Data
 @using Akagi.Web.Exporters
 @using Akagi.Web.Icons
 @using Akagi.Web.Models
@@ -7,60 +7,144 @@
 @using TabBlazor.Services
 
 @inject IDefinitionDatabase DefinitionDatabase
+@inject IEntryDatabase EntryDatabase
 @inject IMySqlExporter MySqlExporter
 @inject ToastService ToastService
 @inject NavigationManager Navigation
 
 @page "/TimeTracking/list"
 
-<Dimmer Active="isLoading">
-	<PagePretitle>
-		TimeTracking
-	</PagePretitle>
+<PageTitle>Time Tracking - Akagi</PageTitle>
 
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Time Tracking</div>
+			<div class="d-flex align-items-center gap-2 flex-wrap">
+				<h2 class="page-title m-0">Tracker Definitions</h2>
+				<span class="badge bg-primary-lt">@_definitions.Count Definitions</span>
+				<span class="badge bg-azure-lt">@_totalEntries Total Entries</span>
+			</div>
+		</div>
+		<div class="col-auto ms-auto d-print-none">
+			<div class="btn-list">
+				<button type="button"
+						class="btn btn-outline-secondary d-inline-flex align-items-center gap-2"
+						@onclick="Refresh"
+						disabled="@isLoading">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Refresh</span>
+				</button>
+				<button type="button"
+						class="btn btn-outline-success d-inline-flex align-items-center gap-2"
+						@onclick="OnExportClicked"
+						disabled="@(isLoading || _isExporting)">
+					<Icon IconType="@Icons.FileExport" Size="16" />
+					<span>@(_isExporting ? "Exporting..." : "Export to MySQL")</span>
+				</button>
+				<button type="button"
+						class="btn btn-primary d-inline-flex align-items-center gap-2"
+						@onclick="OnCreateClicked">
+					<Icon IconType="@Icons.Plus" Size="16" />
+					<span>New Definition</span>
+				</button>
+			</div>
+		</div>
+	</div>
+</div>
+
+<Dimmer Active="isLoading">
 	<Card>
 		<CardHeader>
-			<CardTitle>Time Tracker List</CardTitle>
-			<div class="flex-grow-1" />
-			<Button Type="ButtonType.Button"
-					OnClick="Refresh">
-				<Icon IconType="@Icons.Refresh"
-					  BackgroundColor="TablerColor.Success" />
-			</Button>
-			<Button Type="ButtonType.Button"
-					OnClick="OnCreateClicked">
-				<Icon IconType="@Icons.New"
-					  BackgroundColor="TablerColor.Green" />
-			</Button>
-			<Button Type="ButtonType.Button"
-					OnClick="OnExportClicked">
-				<Icon IconType="@Icons.Home"
-					  BackgroundColor="TablerColor.Success" />
-			</Button>
+			<CardTitle>Configured Time Trackers</CardTitle>
 		</CardHeader>
 
 		<CardBody>
-			<Table Item="Definition"
-				   Items="_definitions"
-				   OnRowClicked="OnRowClicked">
-				<HeaderTemplate>
-					<strong>
-						Definitions
-					</strong>
-				</HeaderTemplate>
-				<ChildContent>
-					<Column Item="Definition"
-							Property="x => x.Name"
-							Sortable
-							Searchable>
-						<EditorTemplate>
-							<Input type="text"
-								   class="form-control"
-								   @bind-value="@context.Name" />
-						</EditorTemplate>
-					</Column>
-				</ChildContent>
-			</Table>
+			@if (!isLoading && _definitions.Count == 0)
+			{
+				<div class="empty py-5">
+					<div class="empty-icon text-secondary">
+						<Icon IconType="@Icons.Clock" Size="36" />
+					</div>
+					<p class="empty-title">No time tracker definitions found</p>
+					<p class="empty-subtitle text-secondary">
+						Create your first custom tracker definition to start logging structured entries.
+					</p>
+					<div class="empty-action">
+						<button type="button"
+								class="btn btn-primary d-inline-flex align-items-center gap-2"
+								@onclick="OnCreateClicked">
+							<Icon IconType="@Icons.Plus" Size="16" />
+							<span>Create Definition</span>
+						</button>
+					</div>
+				</div>
+			}
+			else
+			{
+				<Table Item="Definition"
+					   Items="_definitions"
+					   OnRowClicked="OnRowClicked">
+					<HeaderTemplate>
+						<strong>Definitions</strong>
+					</HeaderTemplate>
+					<ChildContent>
+						<Column Item="Definition"
+								Property="x => x.Name"
+								Title="Tracker Name"
+								Sortable
+								Searchable>
+							<Template>
+								<div class="d-flex align-items-center gap-2">
+									<span class="avatar avatar-xs rounded bg-primary-lt text-primary">
+										<Icon IconType="@Icons.Clock" Size="14" />
+									</span>
+									<span class="fw-medium">@context.Name</span>
+								</div>
+							</Template>
+						</Column>
+						<Column Item="Definition"
+								Property="x => x.Fields.Count"
+								Title="Fields"
+								Sortable>
+							<Template>
+								<div class="d-flex flex-wrap gap-1">
+									@foreach (FieldDefinition field in context.Fields)
+									{
+										<span class="badge bg-secondary-lt">@field.Name (@field.Type)</span>
+									}
+								</div>
+							</Template>
+						</Column>
+						<Column Item="Definition"
+								Property="x => x.Id"
+								Title="Entries">
+							<Template>
+								<span class="badge bg-azure-lt">
+									@(_entryCountsByDefinition.TryGetValue(context.Id ?? string.Empty, out int count) ? count : 0) entries
+								</span>
+							</Template>
+						</Column>
+						<Column Item="Definition"
+								Title="Actions"
+								ActionColumn>
+							<Template>
+								<div class="btn-list flex-nowrap" @onclick:stopPropagation>
+									<a href="@($"/TimeTracking/{context.Id}/entry/new")"
+									   class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1">
+										<Icon IconType="@Icons.Plus" Size="14" />
+										<span>Log Entry</span>
+									</a>
+									<a href="@($"/TimeTracking/{context.Id}/detail")"
+									   class="btn btn-sm btn-outline-secondary">
+										Details
+									</a>
+								</div>
+							</Template>
+						</Column>
+					</ChildContent>
+				</Table>
+			}
 		</CardBody>
 	</Card>
 </Dimmer>
@@ -70,8 +154,11 @@
 	public User? CurrentUser { get; set; }
 
 	private List<Definition> _definitions = [];
+	private readonly Dictionary<string, int> _entryCountsByDefinition = new();
+	private int _totalEntries = 0;
 
 	private bool isLoading = true;
+	private bool _isExporting = false;
 
 	protected override Task OnInitializedAsync() => Refresh();
 
@@ -87,11 +174,29 @@
 
 		FilterDefinition<Definition> filter = Builders<Definition>.Filter.Eq(x => x.UserId, CurrentUser.Id);
 		_definitions = await DefinitionDatabase.GetDocumentsByPredicateAsync(filter);
+
+		_entryCountsByDefinition.Clear();
+		_totalEntries = 0;
+
+		if (_definitions.Count > 0)
+		{
+			List<string> defIds = [.. _definitions.Where(d => !string.IsNullOrEmpty(d.Id)).Select(d => d.Id!)];
+			FilterDefinition<Entry> entryFilter = Builders<Entry>.Filter.In(x => x.DefinitionId, defIds);
+			List<Entry> entries = await EntryDatabase.GetDocumentsByPredicateAsync(entryFilter);
+
+			_totalEntries = entries.Count;
+			foreach (IGrouping<string, Entry> group in entries.GroupBy(e => e.DefinitionId))
+			{
+				_entryCountsByDefinition[group.Key] = group.Count();
+			}
+		}
+
 		isLoading = false;
 	}
 
 	private async Task OnExportClicked()
 	{
+		_isExporting = true;
 		try
 		{
 			await MySqlExporter.ExportAsync();
@@ -114,6 +219,10 @@
 				}
 			);
 		}
+		finally
+		{
+			_isExporting = false;
+		}
 	}
 
 	private void OnRowClicked(Definition definition)
@@ -123,6 +232,6 @@
 
 	private void OnCreateClicked()
 	{
-		Navigation.NavigateTo($"/TimeTracking/create");
+		Navigation.NavigateTo("/TimeTracking/create");
 	}
 }
