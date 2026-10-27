@@ -9,6 +9,15 @@ internal class HealthDay
     public int? SleepMinutes { get; set; }
     public DateTime? SleepStartUtc { get; set; }
     public DateTime? SleepEndUtc { get; set; }
+    /// <summary>Sleep stages from a tracker; null when only the duration is known.</summary>
+    public int? DeepSleepMinutes { get; set; }
+    public int? RemSleepMinutes { get; set; }
+    public int? LightSleepMinutes { get; set; }
+    public int? AwakeMinutes { get; set; }
+    /// <summary>Percentage of time in bed spent asleep, as reported by the tracker.</summary>
+    public int? SleepEfficiency { get; set; }
+    /// <summary>Daytime sleep besides the main night.</summary>
+    public int? NapMinutes { get; set; }
     public int? Steps { get; set; }
     public int? RestingHeartRate { get; set; }
     public string Source { get; set; } = string.Empty;
@@ -80,6 +89,11 @@ internal class HealthSummary
                 sleep += " - short night";
             }
             parts.Add(sleep);
+            string quality = DescribeQuality(LastSleep);
+            if (quality.Length > 0)
+            {
+                parts.Add(quality);
+            }
         }
         if (StepsToday.HasValue || StepsYesterday.HasValue)
         {
@@ -104,4 +118,40 @@ internal class HealthSummary
         }
         return string.Join(Environment.NewLine, parts);
     }
+
+    /// <summary>
+    /// Stages, efficiency and naps of one night, e.g. "Deep 1h05m, REM 1h30m, awake 40m, efficiency 84%".
+    /// </summary>
+    internal static string DescribeQuality(HealthDay day)
+    {
+        List<string> parts = [];
+        if (day.DeepSleepMinutes is int deep)
+        {
+            parts.Add($"deep {LifeClock.FormatDuration(TimeSpan.FromMinutes(deep))}");
+        }
+        if (day.RemSleepMinutes is int rem)
+        {
+            parts.Add($"REM {LifeClock.FormatDuration(TimeSpan.FromMinutes(rem))}");
+        }
+        if (day.AwakeMinutes is int awake)
+        {
+            parts.Add($"awake {LifeClock.FormatDuration(TimeSpan.FromMinutes(awake))}");
+        }
+        if (day.SleepEfficiency is int efficiency)
+        {
+            parts.Add($"efficiency {efficiency}%");
+        }
+        if (day.NapMinutes is int nap and > 0)
+        {
+            parts.Add($"napped {LifeClock.FormatDuration(TimeSpan.FromMinutes(nap))}");
+        }
+        return parts.Count == 0 ? string.Empty : "Sleep quality: " + string.Join(", ", parts);
+    }
+
+    /// <summary>
+    /// Little deep sleep, many wake-ups or low efficiency: a night that was long enough can still be a bad one.
+    /// </summary>
+    public bool LastNightWasRestless =>
+        LastSleepIsLastNight && LastSleep != null
+        && (LastSleep.SleepEfficiency is < 80 || LastSleep.AwakeMinutes is > 60 || LastSleep.DeepSleepMinutes is < 40);
 }

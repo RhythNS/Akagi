@@ -51,6 +51,11 @@ internal static class ToneAdvisor
                 : "Their energy is low.";
             advice.Add((Tone.Gentle, $"{reason} Be gentle, keep messages short and do not pile on tasks; suggest rest where it fits."));
         }
+        else if (health?.LastNightWasRestless == true)
+        {
+            advice.Add((Tone.Gentle, $"Last night was restless ({HealthSummary.DescribeQuality(health.LastSleep!).Replace("Sleep quality: ", string.Empty)}). " +
+                "They may feel worse than the hours suggest; be protective and suggest a short nap or an early night."));
+        }
         if (work != null && work.Today >= LongWorkDay)
         {
             advice.Add((Tone.Gentle, $"They have already worked {LifeClock.FormatDuration(work.Today)} today. Encourage wrapping up and resting."));

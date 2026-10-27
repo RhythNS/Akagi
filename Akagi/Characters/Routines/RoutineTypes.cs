@@ -277,6 +277,7 @@ internal class ShortSleepRoutine : Routine
 {
     private double _minSleepHours = 6;
     private string _notBefore = "08:00";
+    private bool _reactToRestless = true;
 
     public double MinSleepHours
     {
@@ -287,6 +288,12 @@ internal class ShortSleepRoutine : Routine
     {
         get => _notBefore;
         set => SetProperty(ref _notBefore, value);
+    }
+    [NodeDocu("Also react to a long but restless night (little deep sleep, low efficiency, long awake), as tracked by Fitbit.")]
+    public bool ReactToRestless
+    {
+        get => _reactToRestless;
+        set => SetProperty(ref _reactToRestless, value);
     }
 
     protected override string DefaultInstruction =>
@@ -310,11 +317,15 @@ internal class ShortSleepRoutine : Routine
         {
             return RoutineDecision.No("no sleep data for last night");
         }
-        if (minutes >= MinSleepHours * 60)
+        if (minutes < MinSleepHours * 60)
         {
-            return RoutineDecision.No("slept enough");
+            return RoutineDecision.Yes($"slept {LifeClock.FormatDuration(TimeSpan.FromMinutes(minutes))}", health.Describe());
         }
-        return RoutineDecision.Yes($"slept {LifeClock.FormatDuration(TimeSpan.FromMinutes(minutes))}", health.Describe());
+        if (ReactToRestless && health.LastNightWasRestless)
+        {
+            return RoutineDecision.Yes("restless night", health.Describe());
+        }
+        return RoutineDecision.No("slept enough");
     }
 }
 
