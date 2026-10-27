@@ -37,6 +37,30 @@ internal class AggregateConversation : Conversation
         set => _master.IsCompleted = value;
     }
 
+    public override bool IsSession
+    {
+        get => _master.IsSession;
+        set => _master.IsSession = value;
+    }
+
+    public override string SessionTopic
+    {
+        get => _master.SessionTopic;
+        set => _master.SessionTopic = value;
+    }
+
+    public override ConversationEndMode EndMode
+    {
+        get => _master.EndMode;
+        set => _master.EndMode = value;
+    }
+
+    public override DateTime? EndedAt
+    {
+        get => _master.EndedAt;
+        set => _master.EndedAt = value;
+    }
+
     public override bool Dirty
     {
         get => _master.Dirty || _targets.Any(t => t.Dirty);

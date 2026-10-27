@@ -36,7 +36,9 @@ internal abstract class MessageCompiler : Savable
         ConversationContainer conversationContainer = context.Group != null ? context.Group.Conversations : context.Character.Conversations;
 
         List<Conversation> filteredConversations = [];
+        // Incognito conversations stay in the history for display only
         foreach (Conversation conversation in conversationContainer.List
+            .Where(c => !c.IsIncognito)
             .OrderBy(c => c.Time)
             .Select(c => c.Copy()))
         {

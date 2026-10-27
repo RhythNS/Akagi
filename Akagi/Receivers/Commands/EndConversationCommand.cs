@@ -36,12 +36,18 @@ internal class EndConversationCommand : Command
         {
             return Task.FromResult(Array.Empty<Command>());
         }
+        if (context.Conversation.IsActiveSession)
+        {
+            context.Conversation.AddMessage(CreateCommandMessage("This is a session the user started; only the user can end it with /session end."));
+            return Task.FromResult(Array.Empty<Command>());
+        }
         if (index.Value > context.Conversation.Messages.Count)
         {
             throw new ArgumentException("MessageIndex argument exceeds the number of messages in the conversation.");
         }
 
         context.Conversation = context.Character.Conversations.CompleteCurrentConversationAtIndex(index.Value);
+        context.ConversationEnded = true;
 
         string output = $"Conversation ended at message index {index.Value}.";
         context.Conversation.AddMessage(CreateCommandMessage(output));

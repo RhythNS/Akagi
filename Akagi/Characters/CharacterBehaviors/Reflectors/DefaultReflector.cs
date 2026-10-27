@@ -48,7 +48,7 @@ internal class DefaultReflector : Reflector
     protected virtual List<Conversation> GetConversationsToReflect()
     {
         return [.. Character.Conversations.List.Where(c =>
-            c.IsCompleted && Character.Memory.Conversations.Thoughts.FirstOrDefault(t => t.ConversationId == c.Id) == null)];
+            c.IsCompleted && !c.IsIncognito && Character.Memory.Conversations.Thoughts.FirstOrDefault(t => t.ConversationId == c.Id) == null)];
     }
 
     protected virtual async Task ReflectConversation(ILLM llm, SystemProcessor systemProcessor, Conversation conversation)

@@ -47,6 +47,55 @@ internal class ConversationContainer : DirtyTrackable
         return newConv;
     }
 
+    /// <summary>
+    /// The running conversation, without creating one.
+    /// </summary>
+    public Conversation? Current
+    {
+        get
+        {
+            Conversation? conv = List.MaxBy(c => c.Time);
+            return conv != null && !conv.IsCompleted ? conv : null;
+        }
+    }
+
+    public Conversation? ActiveSession => Current is { IsSession: true } session ? session : null;
+
+    /// <summary>
+    /// Finishes the running conversation with the given mode and opens a fresh one.
+    /// Returns the finished conversation, or null when nothing was running.
+    /// </summary>
+    public Conversation? EndCurrent(ConversationEndMode mode, DateTime nowUtc)
+    {
+        Conversation? current = Current;
+        if (current == null)
+        {
+            return null;
+        }
+
+        current.EndMode = mode;
+        current.EndedAt = nowUtc;
+        StartNewConversation();
+        return current;
+    }
+
+    /// <summary>
+    /// Ends the running conversation the usual way and starts a session that stays open until the user ends it.
+    /// </summary>
+    public Conversation StartSession(string topic, DateTime nowUtc)
+    {
+        Conversation? current = Current;
+        if (current != null)
+        {
+            current.EndedAt = nowUtc;
+        }
+
+        Conversation session = StartNewConversation();
+        session.IsSession = true;
+        session.SessionTopic = topic;
+        return session;
+    }
+
     public Conversation StartNewConversation()
     {
         Conversation? conv = List.MaxBy(c => c.Time);

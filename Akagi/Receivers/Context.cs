@@ -17,6 +17,10 @@ internal class Context : ContextBase
     public required ILLMFactory LLMFactory { get; set; }
     public CharacterGroup? Group { get; set; }
     public IEmbeddingService? EmbeddingService { get; set; }
+    /// <summary>
+    /// Set when a tool ended the conversation during this turn, so ConversationEnded triggers fire afterwards.
+    /// </summary>
+    public bool ConversationEnded { get; set; }
 
     protected override Savable[] ToTrack => Group != null ? [Character, User, Group] : [Character, User];
 }

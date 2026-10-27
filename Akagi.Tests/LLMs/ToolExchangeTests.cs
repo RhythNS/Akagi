@@ -35,7 +35,7 @@ public class ToolExchangeTests
         Assert.Equal(3, messages.Count);
         OpenRouterPayload.ToolRequestMessage request = Assert.IsType<OpenRouterPayload.ToolRequestMessage>(messages[0]);
         Assert.Equal(OpenRouterPayload.MessageRoleEnum.Assistant, request.Role);
-        Assert.Equal(["RecordMood", "StopExecution"], request.ToolCalls.Select(c => c.Function.Name));
+        Assert.Equal(["RecordMood", "StopExecution"], request.ToolCalls.Select(c => c.Function!.Name));
         Assert.Equal(2, request.ToolCalls.Select(c => c.Id).Distinct().Count());
         Assert.Equal(2, sequence);
 

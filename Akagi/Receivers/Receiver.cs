@@ -26,6 +26,14 @@ internal interface IReceiver
     public Task OnGroupSystemEvent(User user, CharacterGroup group, Message message);
     public Task OnPromptContinue(ICommunicator? from, Character character, User user);
     public Task Reflect(Character character, User user, string name);
+    /// <summary>
+    /// Runs every reflector of the character over one finished conversation.
+    /// </summary>
+    public Task ReflectConversation(Character character, User user, int conversationId);
+    /// <summary>
+    /// Fires the character's ConversationEnded trigger points.
+    /// </summary>
+    public Task OnConversationEnded(Character character, User user);
     public Task OnSystemEvent(Character character, User user, Message message);
 }
 internal class Receiver : IReceiver, ICleanable
@@ -73,10 +81,40 @@ internal class Receiver : IReceiver, ICleanable
     }
     public async Task Reflect(Character character, User user, string name)
     {
+        if (character.Conversations.ActiveSession != null)
+        {
+            _logger.LogInformation("Reflection {ReflectorName} for character {CharacterId} deferred until the running session ends", name, character.Id);
+            return;
+        }
+        _logger.LogInformation("Starting reflection for user {UserId} and character {CharacterId} with reflector name {ReflectorName}", user.Id, character.Id, name);
+        await RunReflectorsAsync(character, user, r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase), null);
+    }
+    public async Task ReflectConversation(Character character, User user, int conversationId)
+    {
+        Conversation? conversation = character.Conversations.List.FirstOrDefault(c => c.Id == conversationId);
+        if (conversation == null || conversation.IsIncognito)
+        {
+            return;
+        }
+        _logger.LogInformation("Reflecting conversation {ConversationId} for user {UserId} and character {CharacterId}", conversationId, user.Id, character.Id);
+        await RunReflectorsAsync(character, user, _ => true, conversation);
+    }
+    public async Task OnConversationEnded(Character character, User user)
+    {
+        try
+        {
+            await TriggerForCharacter(TriggerType.ConversationEnded, character, user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "ConversationEnded triggers failed for user {UserId} and character {CharacterId}", user.Id, character.Id);
+        }
+    }
+    private async Task RunReflectorsAsync(Character character, User user, Func<Reflector, bool> filter, Conversation? conversation)
+    {
         LockCharacter(character, user);
         try
         {
-            _logger.LogInformation("Starting reflection for user {UserId} and character {CharacterId} with reflector name {ReflectorName}", user.Id, character.Id, name);
             ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (communicator == null)
             {
@@ -84,12 +122,16 @@ internal class Receiver : IReceiver, ICleanable
                 return;
             }
             await using Context context = GetContext(character, user, communicator);
+            if (conversation != null)
+            {
+                context.Conversation = conversation;
+            }
             bool reflected = false;
             foreach (string id in character.ReflectorIds)
             {
                 Reflector reflector = await _reflectorDatabase.GetDocumentByIdAsync(id)
                         ?? throw new Exception($"Reflector with ID {id} not found for character {character.Id}");
-                if (string.Equals(reflector.Name, name, StringComparison.OrdinalIgnoreCase) == false)
+                if (!filter(reflector))
                 {
                     continue;
                 }
@@ -319,6 +361,10 @@ internal class Receiver : IReceiver, ICleanable
         await puppeteer.Init(logger, context, _systemProcessorDatabase);
         await puppeteer.ProcessAsync();
         await TriggerForCharacter(TriggerType.MessageProcessed, context.Character, context.User);
+        if (context.ConversationEnded)
+        {
+            await OnConversationEnded(context.Character, context.User);
+        }
     }
     private Context GetContext(Character character, User user, ICommunicator communicator)
     {

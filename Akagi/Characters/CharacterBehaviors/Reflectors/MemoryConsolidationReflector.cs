@@ -79,6 +79,8 @@ internal class MemoryConsolidationReflector : Reflector
     {
         return [.. Character.Conversations.List.Where(c =>
             c.Messages.Count >= MinMessagesToConsolidate &&
+            !c.IsIncognito &&
+            !c.IsActiveSession &&
             Character.Memory.Conversations.Thoughts.FirstOrDefault(t => t.ConversationId == c.Id) == null)];
     }
 
