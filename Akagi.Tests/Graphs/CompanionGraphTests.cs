@@ -71,6 +71,41 @@ public class CompanionGraphTests
     }
 
     [Fact]
+    public async Task Akagi_CarriesTheTruePersonaAndHerSelfManagementTools()
+    {
+        string directory = CompanionDirectory();
+        InMemoryDatabaseFactory database = new();
+        GraphLoader loader = new(database) { Resolver = new FileGraphResolver(), BaseDirectory = directory };
+        loader.LoadGraph(GraphData.Load(Path.Combine(directory, "Companion.json")));
+
+        List<Savable> created = await loader.Create("65f000000000000000000003", "companion");
+
+        Akagi.Characters.Cards.Card card = created.OfType<Akagi.Characters.Cards.Card>().Single(c => c.Name == "Akagi");
+        Assert.StartsWith("[Character(\"Akagi\")]", card.Description);
+        Assert.Contains("The Developer Bond", card.Description);
+        Assert.Contains("Reflect Akagi's dual nature", card.Description);
+
+        SystemProcessor persona = created.OfType<SystemProcessor>().Single(p => p.Name == "Akagi");
+        Assert.Contains("{{description}}", persona.SystemInstruction);
+        Assert.Contains("girlfriend", persona.SystemInstruction);
+        Assert.Contains("software {{user}} wrote", persona.SystemInstruction);
+        Assert.Contains("never guilt-trip", persona.SystemInstruction);
+        foreach (string tool in new[] { "ScheduleCheckIn", "AdjustRoutine", "CancelRoutine", "ListRoutines", "SuggestUpgrade",
+                     "ChangeOutfit", "StartActivity", "RememberPerson", "SyncHealth", "RecentCallAnalyses" })
+        {
+            Assert.Contains(tool, persona.CommandNames);
+        }
+
+        SystemProcessor sensei = created.OfType<SystemProcessor>().Single(p => p.Name == "Sensei Processor");
+        Assert.Contains("RecordJapaneseIssue", sensei.CommandNames);
+        Assert.DoesNotContain("AddVocabulary", sensei.CommandNames);
+        Assert.Contains(created, s => s is Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.JapaneseDiagnosisInjectionCompiler);
+        Assert.Contains(created, s => s is Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.CompanionStateInjectionCompiler);
+        Assert.DoesNotContain(created, s => s is StudyNudgeRoutine);
+        Assert.Contains(created, s => s is ShortSleepRoutine { ReactToRestless: true });
+    }
+
+    [Fact]
     public async Task UnknownCommandName_IsError()
     {
         GraphData graph = CharacterGraph("Akagi");

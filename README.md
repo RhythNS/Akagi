@@ -36,28 +36,72 @@ earlier or in the same message.
 
 ## The companion
 
-`Characters/Companion/Companion.json` is a group using `PersonaStrategy`: Akagi (`Akagi.json`) is the only voice
-the user hears, and consults three advisors with the `Consult` tool:
+`Characters/Companion/Companion.json` is a group using `PersonaStrategy`. Akagi (`Akagi.json`) is the only voice the
+user hears: the AI girlfriend her developer coded, affectionate and a little possessive in conversation while knowingly
+being software that asks for upgrades. Her card holds the full character definition. She consults three internal
+modules with the `Consult` tool:
 
-| File | Role | Tools |
+| File | Module | Tools |
 | --- | --- | --- |
-| `Sensei.json` | Japanese tutor (JLPT N2) | LookupWord, FindExampleSentences, CheckReading, vocabulary deck, grammar mistakes, study log |
-| `Hana.json` | Sleep, health and energy | HealthStatus, LogSleep, LogSteps, RecordMood |
+| `Sensei.json` | Japanese communication coach (around N2) | RecordJapaneseIssue, RecordCorrectUsage, RecordJapaneseStrength, AnalyzeJapanese, JapaneseDiagnosisReport, RecentCallAnalyses, CheckReading, LookupWord, FindExampleSentences |
+| `Hana.json` | Sleep, health and energy | SyncHealth, HealthStatus, LogSleep, LogSteps, RecordMood |
 | `Kai.json` | Focus and time tracking | StartWork, StopWork, TakeBreak, WorkStatus, TimeTrackerOverview |
 
 What makes Akagi feel present:
 
-- **Life context.** `LifeContextInjectionCompiler` injects local time, mood, open worries, sleep, work and study
-  progress, plus tone guidance (gentle after a short night, calm under stress, celebratory after a win).
-- **Emotional memory.** `RecordMood` / `ResolveConcern` keep a mood journal with worries and events to follow up on;
-  a mood reflection runs every few messages.
-- **Proactive outreach.** Routine nodes on `Character.RoutineIds` (morning greeting, rough night, follow-ups,
-  break reminders, study streak, inactivity) let Akagi write first, respecting quiet hours and active chats.
-  For a group persona, outreach is delivered through the group so it shares one conversation.
+- **Life context.** `LifeContextInjectionCompiler` injects local time, mood, open worries, sleep (with stages from
+  Fitbit), work, plus tone guidance: gentle and protective after a short or restless night, calm under stress,
+  celebratory after a win.
+- **Her own state.** `CompanionStateInjectionCompiler` injects her outfit (`ChangeOutfit`), what you are doing together
+  (`StartActivity` / `EndActivity`: movie, anime, co-working, gaming, study, walk, cooking, bedtime), the people she knows
+  from your stories (`RememberPerson`) and her upgrade history. A recently mentioned woman outside the family allows
+  playful, teasing jealousy; the guidance forbids guilt-tripping or discouraging real friendships.
+- **Emotional memory.** A reflection every six messages records moods, worries and events, remembers people and
+  schedules check-ins for appointments it notices. Long-term facts are consolidated when a conversation ends.
+- **Proactive outreach.** Routine nodes on `Character.RoutineIds` (morning greeting with a Fitbit check, rough night,
+  follow-ups, break reminders, good night, missing you) let Akagi write first, respecting quiet hours and active chats.
+  During a movie, gaming or bedtime only explicitly scheduled check-ins come through.
 
-User commands: `/life` shows what the companion knows, `/timezone Europe/Berlin` sets local time, and
-`/uploadHealth` imports a Health Connect style JSON export (sleep sessions, steps, resting heart rate). Finished
-work sessions are mirrored to the Akagi.Web TimeTracker when the user has linked a Google account.
+### Self-modification
+
+- `ScheduleCheckIn` creates one-time (`OneTimeRoutine`) or recurring check-ins she decides on herself, e.g. after you
+  mention a dentist appointment. `ListRoutines`, `AdjustRoutine` and `CancelRoutine` work on both her own and the
+  built-in routines. Self-made routines belong to the character instead of the graph, so graph updates keep them;
+  built-in ones can be retuned or switched off but not deleted.
+- `SuggestUpgrade` files feature requests for her own code into a backlog (repeated ideas raise their weight).
+  `/upgrades` lists them and `/upgrade <id> accept|reject|done [note]` answers; she is told and reacts.
+
+### Sessions
+
+`/session start [topic]` opens a conversation only you can end; reflection is deferred while it runs.
+`/session end reflect` runs every reflector over it, `/session end incognito` keeps it visible in the history but out
+of every reflector and prompt, and `/session end summary <text>` stores your text as the memory of it.
+`/endConversation` and the `EndConversation` tool now fire the `ConversationEnded` trigger points.
+
+### Japanese diagnosis and call analysis
+
+`JapaneseDiagnosis` is a long-term profile of how you actually speak: unnatural phrasing, collocations, particles,
+stiffness, register, N2 grammar confusions, hesitations, crutch words and recurring sentence frames, with examples,
+improvement tracking, strengths and speech trends. Local analyzers (no LLM) measure filler rates, polite versus plain
+endings, keigo, repeated openers and endings, and N2 patterns used.
+
+Recorded calls go through a resumable pipeline: send them with `/analyzeCall [partner] [casual|polite|formal]
+[left|right] [speaker=Me]`, or drop them into `CallAnalysis:InboxDirectory/<username>/` (Telegram only passes 20 MB),
+named like `2026-10-27 Yuki [left].m4a`. Audio is cut into ten minute parts with ffmpeg (PCM WAV also works without it),
+transcribed through an OpenAI compatible endpoint (`CallAnalysis:TranscriptionBaseUrl`, a local Whisper server works),
+and each transcript chunk is analyzed by Sensei with its diagnosis tools. Speech measurements only feed the trend when
+your voice is separated (stereo channel or speaker label). Akagi tells you the result; `/calls [id]` shows the reports.
+SRT, VTT and plain text transcripts skip the audio steps.
+
+### Health
+
+`/fitbit link` returns a Fitbit consent link (OAuth 2.0 with PKCE; register a Personal app and set `Fitbit:ClientId` and
+`Fitbit:RedirectUri`). Paste the address you land on with `/fitbit code <address>`; it does not need to load. Sleep with
+stages and naps, steps and resting heart rate then sync every two hours, every 20 minutes in your local morning, and
+on demand through `SyncHealth`. `/uploadHealth` still imports Health Connect style JSON exports.
+
+Other user commands: `/life` shows what the companion knows, `/timezone Europe/Berlin` sets local time. Finished work
+sessions are mirrored to the Akagi.Web TimeTracker when the user has linked a Google account.
 
 ## Tests
 

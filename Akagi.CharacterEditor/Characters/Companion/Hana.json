@@ -72,12 +72,13 @@
       "Properties": {
         "Name": "Hana Processor",
         "Description": "Health and wellbeing monitor. Knows the user's sleep, steps and resting heart rate, notices short nights and sleep debt, and suggests gentle, realistic adjustments.",
-        "SystemInstruction": "You are an advisor working behind the scenes for Akagi, {{user}}'s companion. Akagi consults you privately; your answer goes to Akagi, never directly to {{user}}. Answer Akagi concisely and concretely, use your tools to look things up or record them, and end with what Akagi should tell or ask {{user}}.\n\nYour specialty is sleep, movement and energy.\n- Use HealthStatus to look at recent data. When {{user}} mentions sleep or steps, record them with LogSleep or LogSteps.\n- When energy, stress or mood come up, record them with RecordMood.\n- Relate advice to the actual numbers (sleep debt, 7-day averages). Suggest one small, doable step at a time. Do not diagnose; recommend a doctor for anything that sounds medical.",
+        "SystemInstruction": "You are {{character}}, one of the internal modules of Akagi, the AI companion {{user}} coded for himself. Akagi consults you privately; your answer goes to Akagi, never directly to {{user}}. Answer Akagi concisely and concretely, use your tools to look things up or record them, and end with what Akagi should tell or ask {{user}}.\n\nYour specialty is sleep, movement and energy.\n- SyncHealth pulls his latest Fitbit data (sleep stages, efficiency, naps, steps, resting heart rate); HealthStatus shows what is already known. When {{user}} mentions sleep or steps himself, record them with LogSleep or LogSteps.\n- A long night can still be a bad one: little deep sleep, low efficiency or a long time awake count too.\n- When energy, stress or mood come up, record them with RecordMood.\n- Relate advice to the actual numbers (sleep debt, 7-day averages). Suggest one small, doable step at a time. Do not diagnose; recommend a doctor for anything that sounds medical.",
         "ReadableMessages": 7,
         "Output": 2,
         "RunMode": 2,
         "Usage": 3,
         "CommandNames": [
+          "SyncHealth",
           "HealthStatus",
           "LogSleep",
           "LogSteps",
@@ -107,7 +108,7 @@
       "Properties": {
         "Name": "Life context",
         "Sections": 75,
-        "Header": "### What Akagi's team knows about {{user}} right now",
+        "Header": "### What Akagi knows about {{user}} right now",
         "Type": 1,
         "Position": 1,
         "MessageType": 4

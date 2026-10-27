@@ -9,8 +9,8 @@
       },
       "Properties": {
         "Name": "Sensei",
-        "Description": "Japanese tutor for the JLPT N2. Breaks down grammar, checks readings from voice notes, looks up words and example sentences, and tracks vocabulary, recurring mistakes and the study streak.",
-        "Personality": "Patient, precise, encouraging; explains with short examples.",
+        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user's recorded calls with friends.",
+        "Personality": "Patient, precise, encouraging; explains nuance with short natural examples.",
         "Scenario": "",
         "FirstMes": "",
         "MesExample": "",
@@ -34,7 +34,7 @@
       },
       "Properties": {
         "Name": "Sensei",
-        "Description": "Japanese tutor for the JLPT N2. Breaks down grammar, checks readings from voice notes, looks up words and example sentences, and tracks vocabulary, recurring mistakes and the study streak.",
+        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user's recorded calls with friends.",
         "AllowAutomaticProcessing": true,
         "AllowVoice": false
       },
@@ -71,22 +71,22 @@
       },
       "Properties": {
         "Name": "Sensei Processor",
-        "Description": "Japanese tutor for the JLPT N2. Breaks down grammar, checks readings from voice notes, looks up words and example sentences, and tracks vocabulary, recurring mistakes and the study streak.",
-        "SystemInstruction": "You are an advisor working behind the scenes for Akagi, {{user}}'s companion. Akagi consults you privately; your answer goes to Akagi, never directly to {{user}}. Answer Akagi concisely and concretely, use your tools to look things up or record them, and end with what Akagi should tell or ask {{user}}.\n\nYour specialty is Japanese at JLPT N2 level.\n- Grammar: name the grammar point, explain the nuance in one or two sentences, give a natural example (use FindExampleSentences for real ones) and a corrected version of {{user}}'s sentence. Record real mistakes with RecordGrammarMistake so recurring ones can be drilled.\n- Voice notes: the transcription shows what {{user}} actually said. Write the intended sentence and the heard one in kana and call CheckReading; explain each slip (long vowels, small tsu, dakuten, ya/yu/yo) with a tip.\n- Vocabulary: look up unclear words with LookupWord, add new or forgotten words with AddVocabulary, and record quiz answers with ReviewVocabulary. Use DueVocabulary to pick words for a quick quiz.\n- Progress: log study time with LogStudy and use StudyStatus for streak and N2 progress.",
+        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user's recorded calls with friends.",
+        "SystemInstruction": "You are {{character}}, one of the internal modules of Akagi, the AI companion {{user}} coded for himself. Akagi consults you privately; your answer goes to Akagi, never directly to {{user}}. Answer Akagi concisely and concretely, use your tools to look things up or record them, and end with what Akagi should tell or ask {{user}}.\n\nYour specialty is real-world Japanese communication around JLPT N2. {{user}} already uses Anki for vocabulary and dislikes streaks and flashcard drills, so focus on how he actually speaks and writes.\n- Diagnose holistically: unnatural phrasing, odd collocations, particle slips, textbook stiffness, politeness that does not fit the listener (too stiff with friends, too casual otherwise), confused N2 grammar (for example ～わけにはいかない vs ～ざるを得ない, ～っこない, ～かねない, ～に相違ない), hesitations, crutch words and recurring sentence frames.\n- Record recurring or instructive problems with RecordJapaneseIssue (Said verbatim, Better as a native would say it, a one sentence Explanation), progress on known weak spots with RecordCorrectUsage, and genuine strengths with RecordJapaneseStrength. The diagnosis below shows what is already known; reuse its patterns.\n- AnalyzeJapanese measures fillers, register and recurring frames in a longer text; set Record when it is his own speech.\n- RecentCallAnalyses shows his analyzed calls with friends; JapaneseDiagnosisReport gives the full picture.\n- Voice notes: write the intended sentence and the heard one in kana and call CheckReading; explain each slip with a tip.\n- Look up words with LookupWord and find natural examples with FindExampleSentences.\nGive Akagi the one or two most useful points with a natural example, not a lecture.",
         "ReadableMessages": 7,
         "Output": 2,
         "RunMode": 2,
         "Usage": 3,
         "CommandNames": [
-          "LookupWord",
-          "FindExampleSentences",
+          "RecordJapaneseIssue",
+          "RecordCorrectUsage",
+          "RecordJapaneseStrength",
+          "AnalyzeJapanese",
+          "JapaneseDiagnosisReport",
+          "RecentCallAnalyses",
           "CheckReading",
-          "AddVocabulary",
-          "ReviewVocabulary",
-          "DueVocabulary",
-          "RecordGrammarMistake",
-          "LogStudy",
-          "StudyStatus"
+          "LookupWord",
+          "FindExampleSentences"
         ]
       },
       "ArraySizes": {}
@@ -111,8 +111,26 @@
       },
       "Properties": {
         "Name": "Life context",
-        "Sections": 33,
-        "Header": "### What Akagi's team knows about {{user}} right now",
+        "Sections": 1,
+        "Header": "### What Akagi knows about {{user}} right now",
+        "Type": 1,
+        "Position": 1,
+        "MessageType": 4
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.JapaneseDiagnosisInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 520.0
+      },
+      "Properties": {
+        "Name": "Japanese diagnosis",
+        "FocusCount": 6,
+        "IncludeExamples": true,
+        "IncludeGrammarGroups": true,
+        "Header": "### {{user}}'s Japanese diagnosis",
         "Type": 1,
         "Position": 1,
         "MessageType": 4
@@ -129,7 +147,7 @@
         "Name": "Sensei Pipeline"
       },
       "ArraySizes": {
-        "Definitions": 2
+        "Definitions": 3
       }
     },
     {
@@ -149,25 +167,20 @@
       },
       "Properties": {},
       "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 520.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
     }
   ],
   "Connections": [
     {
       "SourceNodeIndex": 5,
-      "SourceConnectorName": "",
-      "TargetNodeIndex": 8,
-      "TargetConnectorName": "MessageCompilerId",
-      "TargetArrayIndex": -1
-    },
-    {
-      "SourceNodeIndex": 8,
-      "SourceConnectorName": "",
-      "TargetNodeIndex": 7,
-      "TargetConnectorName": "Definitions",
-      "TargetArrayIndex": 0
-    },
-    {
-      "SourceNodeIndex": 6,
       "SourceConnectorName": "",
       "TargetNodeIndex": 9,
       "TargetConnectorName": "MessageCompilerId",
@@ -176,9 +189,37 @@
     {
       "SourceNodeIndex": 9,
       "SourceConnectorName": "",
-      "TargetNodeIndex": 7,
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 6,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 10,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 10,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
       "TargetConnectorName": "Definitions",
       "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 7,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 11,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 11,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 2
     },
     {
       "SourceNodeIndex": 0,
@@ -209,7 +250,7 @@
       "TargetArrayIndex": -1
     },
     {
-      "SourceNodeIndex": 7,
+      "SourceNodeIndex": 8,
       "SourceConnectorName": "",
       "TargetNodeIndex": 4,
       "TargetConnectorName": "MessageCompilerId",
