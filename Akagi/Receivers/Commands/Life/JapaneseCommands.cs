@@ -1,4 +1,5 @@
 using Akagi.Life.Japanese;
+using Akagi.Life.Japanese.Calls;
 
 namespace Akagi.Receivers.Commands.Life;
 
@@ -217,5 +218,30 @@ internal class JapaneseDiagnosisReportCommand : JapaneseCommand
         }
 
         return Reply(context, diagnosis.Describe(now, Math.Clamp(GetIntArgument("Count") ?? 6, 1, 20), withExamples: true));
+    }
+}
+
+internal class RecentCallAnalysesCommand : JapaneseCommand
+{
+    public override string Name => "RecentCallAnalyses";
+
+    public override string Description => "Read the reports of the user's recently analyzed Japanese calls, e.g. when they ask how their last call went.";
+
+    public override Argument[] GetDefaultArguments() =>
+    [
+        Integer("Count", "How many recent calls (default 1).")
+    ];
+
+    public override async Task<Command[]> Execute(Context context)
+    {
+        List<CallJob> jobs = await context.DatabaseFactory
+            .GetDatabase<ICallJobDatabase>().GetForUser(context.User.Id!);
+        List<string> reports = [.. jobs
+            .OrderByDescending(j => j.CreatedAt)
+            .Take(Math.Clamp(GetIntArgument("Count") ?? 1, 1, 5))
+            .Select(j => j.Status == CallJobStatus.Completed
+                ? j.Report
+                : CallAnalysisPipeline.DescribeProgress(j))];
+        return Reply(context, reports.Count == 0 ? "No calls analyzed yet." : string.Join(Environment.NewLine + Environment.NewLine, reports));
     }
 }

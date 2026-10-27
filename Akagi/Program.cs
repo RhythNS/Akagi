@@ -34,7 +34,7 @@ internal class Program
         builder.Services.AddTTSs();
         builder.Services.AddCommunications(builder.Configuration);
         builder.Services.AddScheduling();
-        builder.Services.AddLife();
+        builder.Services.AddLife(builder.Configuration);
 
         using IHost host = builder.Build();
 
