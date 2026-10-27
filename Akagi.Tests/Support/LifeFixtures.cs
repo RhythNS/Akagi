@@ -5,6 +5,7 @@ using Akagi.Characters.Upgrades;
 using Akagi.Communication;
 using Akagi.Communication.Commands;
 using Akagi.Life;
+using Akagi.Life.Japanese;
 using Akagi.LLMs;
 using Akagi.Receivers;
 using Akagi.Receivers.Commands;
@@ -48,6 +49,26 @@ internal class InMemoryRoutineDatabase : InMemoryDatabase<Routine>, IRoutineData
 
     public Task<List<string>> GetOwnerCharacterIds() =>
         Task.FromResult(Items.Where(r => r.Enabled && !string.IsNullOrEmpty(r.OwnerCharacterId)).Select(r => r.OwnerCharacterId).Distinct().ToList());
+}
+
+internal class InMemoryJapaneseDiagnosisDatabase : InMemoryDatabase<JapaneseDiagnosis>, IJapaneseDiagnosisDatabase
+{
+    public InMemoryJapaneseDiagnosisDatabase() : base("japanese_diagnoses")
+    {
+    }
+
+    public Task<JapaneseDiagnosis?> GetForUser(string userId) => Task.FromResult(Items.FirstOrDefault(d => d.UserId == userId));
+
+    public async Task<JapaneseDiagnosis> GetOrCreate(string userId)
+    {
+        JapaneseDiagnosis? diagnosis = await GetForUser(userId);
+        if (diagnosis == null)
+        {
+            diagnosis = new JapaneseDiagnosis { UserId = userId };
+            await SaveDocumentAsync(diagnosis);
+        }
+        return diagnosis;
+    }
 }
 
 internal class InMemoryUpgradeProposalDatabase : InMemoryDatabase<UpgradeProposal>, IUpgradeProposalDatabase
@@ -126,6 +147,7 @@ internal class LifeTestContext
     public InMemoryLifeProfileDatabase Profiles { get; } = new();
     public InMemoryRoutineDatabase Routines { get; } = new();
     public InMemoryUpgradeProposalDatabase Upgrades { get; } = new();
+    public InMemoryJapaneseDiagnosisDatabase Diagnoses { get; } = new();
     public User User { get; } = new() { Id = ObjectId.GenerateNewId().ToString(), Name = "Tester" };
     public Character Character { get; } = new() { Id = ObjectId.GenerateNewId().ToString(), Name = "Akagi" };
     public Conversation Conversation { get; } = new();
@@ -136,6 +158,7 @@ internal class LifeTestContext
         Database.Register(Profiles);
         Database.Register(Routines);
         Database.Register(Upgrades);
+        Database.Register(Diagnoses);
         Context = new Context
         {
             Character = Character,
