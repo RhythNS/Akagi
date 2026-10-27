@@ -31,11 +31,12 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
     private readonly IVoiceClipsDatabase _voiceClipsDatabase;
     private readonly ICommandFactory _commandFactory;
     private readonly ILogger<OpenRouterClient> _logger;
-    private readonly JsonSerializerOptions _jsonOptions = new()
+    internal static readonly JsonSerializerOptions PayloadJsonOptions = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }
     };
+    private readonly JsonSerializerOptions _jsonOptions = PayloadJsonOptions;
 
     private sealed class ToolCallAccumulator
     {
@@ -56,6 +57,56 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         _logger = logger;
     }
 
+    /// <summary>
+    /// Turns consecutive command messages into an assistant tool call message followed by one tool result per call.
+    /// Only commands this processor offers are replayed; other characters' tools would reference undefined functions.
+    /// </summary>
+    internal static List<OpenRouterPayload.Message> BuildToolExchange(IEnumerable<CommandMessage> commandMessages, IEnumerable<string> commandNames, ref int sequence)
+    {
+        HashSet<string> offered = new(commandNames, StringComparer.OrdinalIgnoreCase);
+        List<ToolCall> toolCalls = [];
+        List<OpenRouterPayload.Message> responses = [];
+
+        foreach (CommandMessage commandMessage in commandMessages.Where(cm => offered.Contains(cm.Command.Name)))
+        {
+            // Ids must be unique within a request; several calls of one step share a timestamp
+            string id = $"call_{new DateTimeOffset(commandMessage.Time).ToUnixTimeMilliseconds()}_{sequence++}";
+            toolCalls.Add(new ToolCall
+            {
+                Id = id,
+                Type = "function",
+                Function = new FunctionCall
+                {
+                    Name = commandMessage.Command.Name,
+                    Arguments = JsonSerializer.Serialize(commandMessage.Command.Arguments.ToDictionary(kv => kv.Name, kv => kv.Value)),
+                },
+            });
+            responses.Add(new ToolResponseMessage
+            {
+                Role = MessageRoleEnum.Tool,
+                ToolCallId = id,
+                Content = commandMessage.Output,
+            });
+        }
+
+        if (toolCalls.Count == 0)
+        {
+            return [];
+        }
+
+        return
+        [
+            new ToolRequestMessage
+            {
+                // Tool calls are always made by the assistant, also for processors that output system messages
+                Role = MessageRoleEnum.Assistant,
+                Content = null,
+                ToolCalls = [.. toolCalls],
+            },
+            .. responses
+        ];
+    }
+
     private async Task<OpenRouterPayload> GetPayload(SystemProcessor systemProcessor, Context context)
     {
         Characters.Conversations.Message[] messages = await systemProcessor.MessageCompiler.CompileAsync(context);
@@ -68,6 +119,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
             Content = systemProcessor.CompileSystemPrompt(context.User, context.Character)
         });
 
+        int toolCallSequence = 0;
         for (int i = 0; i < messages.Length; i++)
         {
             Characters.Conversations.Message message = messages[i];
@@ -128,44 +180,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
                             break;
                         }
                     }
-                    commandMessages.RemoveAll(cm => systemProcessor.CommandNames.Contains(cm.Command.GetType().FullName
-                        , StringComparer.Ordinal) == false);
-
-                    if (commandMessages.Count == 0)
-                    {
-                        break;
-                    }
-
-                    List<ToolCall> toolCalls = [];
-                    List<ToolResponseMessage> responseMessages = [];
-                    foreach (CommandMessage cmdMsg in commandMessages)
-                    {
-                        toolCalls.Add(new ToolCall
-                        {
-                            Id = new DateTimeOffset(commandMessage.Time).ToUnixTimeMilliseconds().ToString(),
-                            Type = "function",
-                            Function = new FunctionCall
-                            {
-                                Name = cmdMsg.Command.Name,
-                                Arguments = JsonSerializer.Serialize(cmdMsg.Command.Arguments.ToDictionary(kv => kv.Name, kv => kv.Value)),
-                            },
-                        });
-
-                        responseMessages.Add(new ToolResponseMessage
-                        {
-                            Role = MessageRoleEnum.System,
-                            ToolCallId = new DateTimeOffset(commandMessage.Time).ToUnixTimeMilliseconds().ToString(),
-                            Content = cmdMsg.Output,
-                        });
-                    }
-                    input.Add(new ToolRequestMessage()
-                    {
-                        Role = messageRoleEnum,
-                        Content = null,
-                        ToolCalls = [.. toolCalls],
-                    });
-                    input.AddRange(responseMessages);
-
+                    input.AddRange(BuildToolExchange(commandMessages, systemProcessor.CommandNames, ref toolCallSequence));
                     break;
 
                 default:

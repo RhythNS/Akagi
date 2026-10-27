@@ -85,6 +85,8 @@ internal class OpenRouterPayload
         Assistant,
         [JsonPropertyName("system")]
         System,
+        [JsonPropertyName("tool")]
+        Tool,
     }
 
     internal class UserMessage : Message
