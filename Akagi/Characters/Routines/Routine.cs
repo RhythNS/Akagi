@@ -1,4 +1,5 @@
 using Akagi.Bridge.Attributes;
+using Akagi.Characters.Companions;
 using Akagi.Data;
 using Akagi.Life;
 using Akagi.Users;
@@ -15,6 +16,10 @@ internal class RoutineState
     public required LifeProfile Profile { get; init; }
     public DateTime? LastUserMessageUtc { get; init; }
     public DateTime? LastCharacterMessageUtc { get; init; }
+    /// <summary>
+    /// What the companion and the user are doing together right now, if anything.
+    /// </summary>
+    public SharedActivity? Activity { get; init; }
 
     public DateTime LocalNow => Profile.ToLocal(NowUtc);
     public string LocalToday => LifeClock.DateKey(LocalNow);
@@ -123,6 +128,11 @@ internal abstract class Routine : Savable
     protected abstract string DefaultInstruction { get; }
 
     /// <summary>
+    /// Whether a movie night, gaming or bedtime keeps this routine quiet. Only explicitly scheduled check-ins ignore it.
+    /// </summary>
+    protected virtual bool PausedByActivities => true;
+
+    /// <summary>
     /// When the routine fires, in the user's local time, e.g. "daily 08:00 on workdays".
     /// </summary>
     public abstract string DescribeSchedule(LifeProfile profile);
@@ -143,6 +153,10 @@ internal abstract class Routine : Savable
         if (IsQuietHours(state))
         {
             return RoutineDecision.No("quiet hours");
+        }
+        if (PausedByActivities && state.Activity is { IsImmersive: true })
+        {
+            return RoutineDecision.No("busy with a shared activity");
         }
         if (SkipWhenUserActiveMinutes > 0 && state.LastUserMessageUtc.HasValue
             && state.NowUtc - state.LastUserMessageUtc.Value < TimeSpan.FromMinutes(SkipWhenUserActiveMinutes))

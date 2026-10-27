@@ -411,6 +411,8 @@ internal class OneTimeRoutine : Routine
 
     public bool IsDone => LastFiredUtc.HasValue;
 
+    protected override bool PausedByActivities => false;
+
     protected override string DefaultInstruction =>
         "Check in with the user about the thing you planned to ask about.";
 

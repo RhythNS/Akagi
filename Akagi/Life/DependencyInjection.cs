@@ -1,3 +1,4 @@
+using Akagi.Characters.Companions;
 using Akagi.Characters.Groups;
 using Akagi.Characters.Routines;
 using Akagi.Characters.Upgrades;
@@ -17,6 +18,7 @@ static class DependencyInjection
         services.AddSingleton<ILifeProfileDatabase, LifeProfileDatabase>();
         services.AddSingleton<IRoutineDatabase, RoutineDatabase>();
         services.AddSingleton<IUpgradeProposalDatabase, UpgradeProposalDatabase>();
+        services.AddSingleton<ICompanionStateDatabase, CompanionStateDatabase>();
         services.AddSingleton<IJapaneseDiagnosisDatabase, JapaneseDiagnosisDatabase>();
         services.AddSingleton<ICallJobDatabase, CallJobDatabase>();
         services.AddSingleton<IProactiveDelivery, ProactiveDelivery>();

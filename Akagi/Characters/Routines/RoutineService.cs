@@ -1,3 +1,4 @@
+using Akagi.Characters.Companions;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Groups;
 using Akagi.Life;
@@ -19,14 +20,17 @@ internal class RoutineRunner
     private readonly ILifeProfileDatabase _profiles;
     private readonly Func<Character, User, Message, Task> _deliver;
     private readonly ILogger _logger;
+    private readonly ICompanionStateDatabase? _companions;
 
     public RoutineRunner(ICharacterDatabase characters,
                          IUserDatabase users,
                          IRoutineDatabase routines,
                          ILifeProfileDatabase profiles,
                          Func<Character, User, Message, Task> deliver,
-                         ILogger logger)
+                         ILogger logger,
+                         ICompanionStateDatabase? companions = null)
     {
+        _companions = companions;
         _characters = characters;
         _users = users;
         _routines = routines;
@@ -83,12 +87,14 @@ internal class RoutineRunner
         await PruneFinished(routines, nowUtc);
         (DateTime? lastUser, DateTime? lastCharacter) = RoutineEngine.LastMessageTimes(character);
 
+        CompanionState? companion = _companions == null ? null : await _companions.Get(user.Id!, character.Id!);
         RoutineState state = new()
         {
             NowUtc = nowUtc,
             Profile = profile,
             LastUserMessageUtc = lastUser,
-            LastCharacterMessageUtc = lastCharacter
+            LastCharacterMessageUtc = lastCharacter,
+            Activity = companion?.RunningActivity(nowUtc)
         };
 
         (Routine Routine, RoutineDecision Decision)? selected = RoutineEngine.SelectDue(routines, state);
@@ -171,7 +177,8 @@ internal class RoutineService : BackgroundService
             _serviceProvider.GetRequiredService<IRoutineDatabase>(),
             _serviceProvider.GetRequiredService<ILifeProfileDatabase>(),
             delivery.DeliverAsync,
-            _logger);
+            _logger,
+            _serviceProvider.GetRequiredService<ICompanionStateDatabase>());
 
         while (!stoppingToken.IsCancellationRequested)
         {

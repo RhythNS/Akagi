@@ -1,4 +1,5 @@
 using Akagi.Characters;
+using Akagi.Characters.Companions;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Routines;
 using Akagi.Characters.Upgrades;
@@ -68,6 +69,27 @@ internal class InMemoryJapaneseDiagnosisDatabase : InMemoryDatabase<JapaneseDiag
             await SaveDocumentAsync(diagnosis);
         }
         return diagnosis;
+    }
+}
+
+internal class InMemoryCompanionStateDatabase : InMemoryDatabase<CompanionState>, ICompanionStateDatabase
+{
+    public InMemoryCompanionStateDatabase() : base("companion_states")
+    {
+    }
+
+    public Task<CompanionState?> Get(string userId, string characterId) =>
+        Task.FromResult(Items.FirstOrDefault(s => s.UserId == userId && s.CharacterId == characterId));
+
+    public async Task<CompanionState> GetOrCreate(string userId, string characterId)
+    {
+        CompanionState? state = await Get(userId, characterId);
+        if (state == null)
+        {
+            state = new CompanionState { UserId = userId, CharacterId = characterId };
+            await SaveDocumentAsync(state);
+        }
+        return state;
     }
 }
 
@@ -148,6 +170,7 @@ internal class LifeTestContext
     public InMemoryRoutineDatabase Routines { get; } = new();
     public InMemoryUpgradeProposalDatabase Upgrades { get; } = new();
     public InMemoryJapaneseDiagnosisDatabase Diagnoses { get; } = new();
+    public InMemoryCompanionStateDatabase Companions { get; } = new();
     public User User { get; } = new() { Id = ObjectId.GenerateNewId().ToString(), Name = "Tester" };
     public Character Character { get; } = new() { Id = ObjectId.GenerateNewId().ToString(), Name = "Akagi" };
     public Conversation Conversation { get; } = new();
@@ -159,6 +182,7 @@ internal class LifeTestContext
         Database.Register(Routines);
         Database.Register(Upgrades);
         Database.Register(Diagnoses);
+        Database.Register(Companions);
         Context = new Context
         {
             Character = Character,
