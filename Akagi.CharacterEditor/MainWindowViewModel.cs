@@ -389,7 +389,8 @@ public class MainWindowViewModel : INotifyPropertyChanged
         // Deserialize nodes
         foreach (NodeData nodeData in graphData.Nodes)
         {
-            Type? nodeType = Type.GetType(nodeData.TypeName);
+            // Resolves renamed types through [NodeAlias] as well
+            Type? nodeType = Akagi.Graphs.GraphNodeUtils.ResolveType(nodeData.TypeName);
             if (nodeType == null)
                 continue;
 
@@ -421,9 +422,9 @@ public class MainWindowViewModel : INotifyPropertyChanged
                             object? value = kvp.Value;
                             
                             // Handle JsonElement conversion
-                            if (value is JsonElement jsonElement)
+                            if (value is JsonElement)
                             {
-                                value = JsonSerializer.Deserialize(jsonElement.GetRawText(), property.PropertyType);
+                                value = Akagi.Graphs.GraphNodeUtils.ConvertValue(value, property.PropertyType);
                             }
                             
                             property.SetValue(node.NodeWrapper.WrappedInstance, value);

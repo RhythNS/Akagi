@@ -17,6 +17,7 @@ static class DependencyInjection
         services.AddSingleton<IFileDatabase, FileDatabase>();
         services.AddTransient<IDatabaseFactory, DatabaseFactory>();
         services.AddSingleton<IGraphInstanceDatabase, GraphInstanceDatabase>();
+        services.AddSingleton<IGraphDefinitionDatabase, GraphDefinitionDatabase>();
         services.AddSingleton<IMacroDatabase, MacroDatabase>();
 
         Type[] databaseTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<IDatabase>();

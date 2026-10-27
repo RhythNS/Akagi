@@ -10,6 +10,10 @@ internal class GraphInstance : Savable
         [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
         public string SavableId { get; set; } = string.Empty;
         public required string CollectionName { get; set; }
+        /// <summary>
+        /// Index of the node in the (composed) graph that created this savable. -1 for instances created before this was tracked.
+        /// </summary>
+        public int NodeIndex { get; set; } = -1;
     }
 
     private string _graphId = string.Empty;

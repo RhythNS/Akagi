@@ -8,7 +8,7 @@ internal class UploadGraphCommand : DocumentCommand
 {
     public override string Name => "/uploadGraph";
 
-    public override string Description => "Uploads a graph JSON file and creates all objects in the database. Usage: /uploadGraph <json file> [operation] [name]";
+    public override string Description => "Uploads graph JSON files and creates all objects in the database. Graph references are resolved against graphs uploaded before or in the same message. Usage: /uploadGraph <json files> [operation] [name]";
 
     private readonly IDatabaseFactory _databaseFactory;
 
@@ -54,6 +54,10 @@ internal class UploadGraphCommand : DocumentCommand
         List<string> successNames = [];
         List<string> errorMessages = [];
 
+        IGraphDefinitionDatabase definitionDatabase = _databaseFactory.GetDatabase<IGraphDefinitionDatabase>();
+        List<(Document Document, GraphData Graph)> graphs = [];
+
+        // Store every definition first so graphs in the same upload can reference each other.
         foreach (Document document in documents)
         {
             using MemoryStream? stream = await document.GetStream();
@@ -73,9 +77,27 @@ internal class UploadGraphCommand : DocumentCommand
                 }
 
                 stream.Position = 0;
+                using StreamReader reader = new(stream, Encoding.UTF8);
+                string json = await reader.ReadToEndAsync();
+                GraphData graph = GraphData.Parse(json);
+                await definitionDatabase.Store(graph.GraphId, document.Name, json, context.User.Id!);
+                graphs.Add((document, graph));
+            }
+            catch (Exception ex)
+            {
+                errorMessages.Add($"{document.Name}: {ex.Message}");
+            }
+        }
 
-                GraphLoader loader = new(_databaseFactory);
-                await loader.LoadGraphFromStream(stream);
+        foreach ((Document document, GraphData graph) in graphs)
+        {
+            try
+            {
+                GraphLoader loader = new(_databaseFactory)
+                {
+                    Resolver = new DatabaseGraphResolver(definitionDatabase, context.User.Id!)
+                };
+                loader.LoadGraph(graph);
                 List<Savable> createdObjects = [];
                 createdObjects = operation switch
                 {

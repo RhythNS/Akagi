@@ -275,7 +275,9 @@ public class NodeLibraryViewModel : INotifyPropertyChanged
 
     private static bool CanConnectToConnector(Type nodeType, ConnectorViewModel connector)
     {
-        return nodeType.IsAssignableTo(connector.AllowedType);
+        // Graph reference nodes can feed any input that accepts the type they export
+        return nodeType.IsAssignableTo(connector.AllowedType)
+            || (connector.IsInput && Akagi.Graphs.GraphNodeUtils.GetOutputType(nodeType).IsAssignableTo(connector.AllowedType));
     }
 
     public List<NodeTypeViewModel> GetAllNodeTypesHierarchical()

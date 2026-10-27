@@ -6,6 +6,7 @@ using MongoDB.Bson.Serialization.Attributes;
 namespace Akagi.Characters.CharacterBehaviors.Filters;
 
 [GraphNode]
+[NodeAlias("Akagi.Characters.CharacterBehaviors.MessageCompilers.FilterGroupMemberMessageCompiler")]
 internal class GroupMemberFilterCompiler : FilterMessageCompiler
 {
     private string[] _allowedCharacterIds = [];

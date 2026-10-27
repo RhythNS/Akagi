@@ -100,14 +100,16 @@ public static class NodeFactory
             }
         }
 
-        // For outputs, use the node's own base type for color
+        // For outputs, use the node's own base type for color.
+        // Graph references output the type they export, so they can be wired like the referenced node.
+        Type outputType = Akagi.Graphs.GraphNodeUtils.GetOutputType(nodeType);
         node.Output.Add(new ConnectorViewModel
         {
             Title = "Reference",
             ParentNode = node,
-            AllowedType = nodeType,
+            AllowedType = outputType,
             PropertyInfo = null,
-            ConnectorTypeName = baseTypeName,
+            ConnectorTypeName = outputType == nodeType ? baseTypeName : GetRootTypeName(outputType),
             IsOutput = true
         });
 
