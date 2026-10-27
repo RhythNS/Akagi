@@ -44,6 +44,9 @@ internal abstract class Routine : Savable
     private int _skipWhenUserActiveMinutes = 15;
     private DateTime? _lastFiredUtc;
     private string _userId = string.Empty;
+    private string _ownerCharacterId = string.Empty;
+    private bool _createdBySelf;
+    private DateTime? _createdAtUtc;
 
     public string Name
     {
@@ -94,7 +97,40 @@ internal abstract class Routine : Savable
         set => SetProperty(ref _userId, value);
     }
 
+    /// <summary>
+    /// The character that scheduled this routine for itself. Graph routines are attached through Character.RoutineIds instead,
+    /// so self-made routines survive graph updates.
+    /// </summary>
+    [NodeIgnore]
+    public string OwnerCharacterId
+    {
+        get => _ownerCharacterId;
+        set => SetProperty(ref _ownerCharacterId, value);
+    }
+    [NodeIgnore]
+    public bool CreatedBySelf
+    {
+        get => _createdBySelf;
+        set => SetProperty(ref _createdBySelf, value);
+    }
+    [NodeIgnore]
+    public DateTime? CreatedAtUtc
+    {
+        get => _createdAtUtc;
+        set => SetProperty(ref _createdAtUtc, value);
+    }
+
     protected abstract string DefaultInstruction { get; }
+
+    /// <summary>
+    /// When the routine fires, in the user's local time, e.g. "daily 08:00 on workdays".
+    /// </summary>
+    public abstract string DescribeSchedule(LifeProfile profile);
+
+    /// <summary>
+    /// Short id used by the routine tools; the last characters of the database id.
+    /// </summary>
+    public string ShortId => Id is { Length: > 6 } id ? id[^6..] : Id ?? string.Empty;
 
     public string EffectiveInstruction => string.IsNullOrWhiteSpace(Instruction) ? DefaultInstruction : Instruction;
 

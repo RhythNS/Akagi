@@ -54,6 +54,54 @@ internal class DailyRoutine : Routine
     protected override string DefaultInstruction =>
         "Greet the user for the day. Mention something relevant you know about their day or how they slept, and ask one caring question.";
 
+    public override string DescribeSchedule(LifeProfile profile) => $"daily {TimeOfDay} ({DescribeDays(Days)})";
+
+    private static readonly Weekdays[] SingleDays =
+        [Weekdays.Monday, Weekdays.Tuesday, Weekdays.Wednesday, Weekdays.Thursday, Weekdays.Friday, Weekdays.Saturday, Weekdays.Sunday];
+
+    internal static string DescribeDays(Weekdays days) => days switch
+    {
+        Weekdays.Every => "every day",
+        Weekdays.Workdays => "workdays",
+        Weekdays.Weekend => "weekends",
+        Weekdays.None => "never",
+        _ => string.Join(", ", SingleDays.Where(d => days.HasFlag(d)).Select(d => d.ToString()[..3]))
+    };
+
+    /// <summary>
+    /// Parses "daily", "weekdays", "weekends" or a list such as "mon,wed,fri".
+    /// </summary>
+    internal static Weekdays? ParseDays(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        string value = text.Trim().ToLowerInvariant();
+        switch (value)
+        {
+            case "daily" or "every day" or "everyday" or "every":
+                return Weekdays.Every;
+            case "weekdays" or "workdays":
+                return Weekdays.Workdays;
+            case "weekends" or "weekend":
+                return Weekdays.Weekend;
+        }
+
+        Weekdays result = Weekdays.None;
+        foreach (string part in value.Split([',', ' ', ';', '/'], StringSplitOptions.RemoveEmptyEntries))
+        {
+            Weekdays day = SingleDays.FirstOrDefault(d => part.Length >= 2 && d.ToString().StartsWith(part, StringComparison.OrdinalIgnoreCase));
+            if (day == Weekdays.None)
+            {
+                return null;
+            }
+            result |= day;
+        }
+        return result == Weekdays.None ? null : result;
+    }
+
     protected override RoutineDecision EvaluateCore(RoutineState state)
     {
         if (!LifeClock.TryParseTimeOfDay(TimeOfDay, out int start))
@@ -106,6 +154,8 @@ internal class InactivityRoutine : Routine
     protected override string DefaultInstruction =>
         "The user has not written in a while. Reach out warmly without guilt-tripping; reference something from your last conversation.";
 
+    public override string DescribeSchedule(LifeProfile profile) => $"after {AfterHours}h of silence";
+
     protected override RoutineDecision EvaluateCore(RoutineState state)
     {
         if (!state.LastUserMessageUtc.HasValue)
@@ -148,6 +198,8 @@ internal class BreakRoutine : Routine
     protected override string DefaultInstruction =>
         "The user has been working for a long stretch. Nudge them to take a short break (stretch, water, look away from the screen) in one or two sentences.";
 
+    public override string DescribeSchedule(LifeProfile profile) => $"after {WorkMinutes} minutes of tracked work without a break";
+
     protected override RoutineDecision EvaluateCore(RoutineState state)
     {
         WorkSession? active = state.Profile.Work.Active;
@@ -188,6 +240,8 @@ internal class FollowUpRoutine : Routine
 {
     protected override string DefaultInstruction =>
         "Follow up on what was on the user's mind. Ask how it went, be genuinely curious, and use ResolveConcern once you know the outcome.";
+
+    public override string DescribeSchedule(LifeProfile profile) => "when a recorded worry or event is due for a follow-up";
 
     protected override RoutineDecision EvaluateCore(RoutineState state)
     {
@@ -238,6 +292,8 @@ internal class ShortSleepRoutine : Routine
     protected override string DefaultInstruction =>
         "The user slept badly. Be supportive and light: acknowledge it, suggest going easy today, and offer to help them prioritize.";
 
+    public override string DescribeSchedule(LifeProfile profile) => $"from {NotBefore} after a night under {MinSleepHours.ToString("0.#", CultureInfo.InvariantCulture)}h";
+
     protected override RoutineDecision EvaluateCore(RoutineState state)
     {
         if (FiredToday(state))
@@ -285,6 +341,8 @@ internal class StudyNudgeRoutine : Routine
     protected override string DefaultInstruction =>
         "Playfully remind the user to keep their Japanese study streak alive. Offer a quick five minute review of due words.";
 
+    public override string DescribeSchedule(LifeProfile profile) => $"evenings from {TimeOfDay} when not studied yet";
+
     protected override RoutineDecision EvaluateCore(RoutineState state)
     {
         if (FiredToday(state))
@@ -306,5 +364,84 @@ internal class StudyNudgeRoutine : Routine
             return RoutineDecision.No("no streak to protect");
         }
         return RoutineDecision.Yes($"streak of {study.Streak} at risk", study.Describe());
+    }
+}
+
+/// <summary>
+/// A single check-in at a fixed time, usually scheduled by the character itself
+/// ("ask how the dentist went", "wake-up call before the exam").
+/// </summary>
+[NodeDocu("Reaches out once at a fixed time. Usually created by the character with the ScheduleCheckIn tool.")]
+internal class OneTimeRoutine : Routine
+{
+    private DateTime? _dueUtc;
+    private double _expireAfterHours = 12;
+
+    public OneTimeRoutine()
+    {
+        // The time was chosen on purpose, so quiet hours do not apply; only avoid cutting into a live exchange
+        QuietHoursStart = "00:00";
+        QuietHoursEnd = "00:00";
+        SkipWhenUserActiveMinutes = 3;
+    }
+
+    [NodeDocu("When to reach out (UTC).")]
+    public DateTime? DueUtc
+    {
+        get => _dueUtc;
+        set => SetProperty(ref _dueUtc, value);
+    }
+    [NodeDocu("Give up when the check-in could not be delivered for this many hours after it was due.")]
+    public double ExpireAfterHours
+    {
+        get => _expireAfterHours;
+        set => SetProperty(ref _expireAfterHours, value);
+    }
+
+    public bool IsDone => LastFiredUtc.HasValue;
+
+    protected override string DefaultInstruction =>
+        "Check in with the user about the thing you planned to ask about.";
+
+    public override string DescribeSchedule(LifeProfile profile)
+    {
+        if (DueUtc == null)
+        {
+            return "once (no time set)";
+        }
+        string when = profile.ToLocal(DueUtc.Value).ToString("ddd yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+        return IsDone ? $"once at {when} (done)" : $"once at {when}";
+    }
+
+    public bool IsExpired(DateTime nowUtc) => DueUtc.HasValue && !IsDone && nowUtc - DueUtc.Value > TimeSpan.FromHours(ExpireAfterHours);
+
+    protected override RoutineDecision EvaluateCore(RoutineState state)
+    {
+        if (IsDone)
+        {
+            return RoutineDecision.No("already done");
+        }
+        if (DueUtc == null)
+        {
+            return RoutineDecision.No("no time set");
+        }
+        if (state.NowUtc < DueUtc.Value)
+        {
+            return RoutineDecision.No("not due yet");
+        }
+        if (IsExpired(state.NowUtc))
+        {
+            return RoutineDecision.No("missed");
+        }
+        string scheduled = CreatedAtUtc.HasValue
+            ? $"You scheduled this check-in for yourself {LifeClock.FormatAge(state.NowUtc - CreatedAtUtc.Value)}."
+            : string.Empty;
+        return RoutineDecision.Yes("scheduled check-in", scheduled);
+    }
+
+    public override void OnFired(RoutineState state)
+    {
+        base.OnFired(state);
+        Enabled = false;
     }
 }

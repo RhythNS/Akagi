@@ -38,7 +38,16 @@ internal class RoutineRunner
     public async Task<int> TickAsync(DateTime nowUtc, CancellationToken cancellationToken = default)
     {
         int fired = 0;
-        foreach (Character character in await _characters.GetCharactersWithRoutines())
+        List<Character> characters = await _characters.GetCharactersWithRoutines();
+        foreach (string ownerId in await _routines.GetOwnerCharacterIds())
+        {
+            if (characters.All(c => c.Id != ownerId) && await _characters.GetCharacter(ownerId) is Character owner)
+            {
+                characters.Add(owner);
+            }
+        }
+
+        foreach (Character character in characters)
         {
             cancellationToken.ThrowIfCancellationRequested();
             if (!character.AllowAutomaticProcessing)
@@ -70,7 +79,8 @@ internal class RoutineRunner
         }
 
         LifeProfile profile = await _profiles.GetOrCreate(user.Id!);
-        List<Routine> routines = await _routines.GetRoutines(character.RoutineIds);
+        List<Routine> routines = await LoadRoutines(_routines, character);
+        await PruneFinished(routines, nowUtc);
         (DateTime? lastUser, DateTime? lastCharacter) = RoutineEngine.LastMessageTimes(character);
 
         RoutineState state = new()
@@ -107,6 +117,35 @@ internal class RoutineRunner
         };
         await _deliver(character, user, message);
         return true;
+    }
+
+    /// <summary>
+    /// The routines from the character's graph plus the ones it scheduled for itself.
+    /// </summary>
+    public static async Task<List<Routine>> LoadRoutines(IRoutineDatabase database, Character character)
+    {
+        List<Routine> routines = await database.GetRoutines(character.RoutineIds);
+        if (!string.IsNullOrEmpty(character.Id))
+        {
+            routines.AddRange((await database.GetOwnedRoutines(character.Id)).Where(r => routines.All(g => g.Id != r.Id)));
+        }
+        return routines;
+    }
+
+    /// <summary>
+    /// Deletes self-made one-time check-ins that are done or missed for a week, so the list stays readable.
+    /// </summary>
+    private async Task PruneFinished(List<Routine> routines, DateTime nowUtc)
+    {
+        foreach (OneTimeRoutine routine in routines.OfType<OneTimeRoutine>().Where(r => r.CreatedBySelf).ToList())
+        {
+            DateTime? finished = routine.LastFiredUtc ?? (routine.IsExpired(nowUtc) ? routine.DueUtc : null);
+            if (finished.HasValue && nowUtc - finished.Value > TimeSpan.FromDays(7) && routine.Id != null)
+            {
+                await _routines.DeleteDocumentByIdAsync(routine.Id);
+                routines.Remove(routine);
+            }
+        }
     }
 }
 

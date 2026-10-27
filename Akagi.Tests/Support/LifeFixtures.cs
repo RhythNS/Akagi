@@ -1,6 +1,7 @@
 using Akagi.Characters;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Routines;
+using Akagi.Characters.Upgrades;
 using Akagi.Communication;
 using Akagi.Communication.Commands;
 using Akagi.Life;
@@ -41,6 +42,21 @@ internal class InMemoryRoutineDatabase : InMemoryDatabase<Routine>, IRoutineData
 
     public Task<List<Routine>> GetRoutines(IEnumerable<string> ids) =>
         Task.FromResult(ids.Select(id => Items.FirstOrDefault(r => r.Id == id)).OfType<Routine>().ToList());
+
+    public Task<List<Routine>> GetOwnedRoutines(string characterId) =>
+        Task.FromResult(Items.Where(r => r.OwnerCharacterId == characterId).ToList());
+
+    public Task<List<string>> GetOwnerCharacterIds() =>
+        Task.FromResult(Items.Where(r => r.Enabled && !string.IsNullOrEmpty(r.OwnerCharacterId)).Select(r => r.OwnerCharacterId).Distinct().ToList());
+}
+
+internal class InMemoryUpgradeProposalDatabase : InMemoryDatabase<UpgradeProposal>, IUpgradeProposalDatabase
+{
+    public InMemoryUpgradeProposalDatabase() : base("upgrade_proposals")
+    {
+    }
+
+    public Task<List<UpgradeProposal>> GetForUser(string userId) => Task.FromResult(Items.Where(p => p.UserId == userId).ToList());
 }
 
 internal class InMemoryCharacterDatabase : InMemoryDatabase<Character>, ICharacterDatabase
@@ -108,6 +124,8 @@ internal class LifeTestContext
 {
     public InMemoryDatabaseFactory Database { get; } = new();
     public InMemoryLifeProfileDatabase Profiles { get; } = new();
+    public InMemoryRoutineDatabase Routines { get; } = new();
+    public InMemoryUpgradeProposalDatabase Upgrades { get; } = new();
     public User User { get; } = new() { Id = ObjectId.GenerateNewId().ToString(), Name = "Tester" };
     public Character Character { get; } = new() { Id = ObjectId.GenerateNewId().ToString(), Name = "Akagi" };
     public Conversation Conversation { get; } = new();
@@ -116,6 +134,8 @@ internal class LifeTestContext
     public LifeTestContext()
     {
         Database.Register(Profiles);
+        Database.Register(Routines);
+        Database.Register(Upgrades);
         Context = new Context
         {
             Character = Character,
