@@ -11,6 +11,8 @@ internal interface ICharacterDatabase : IDatabase<Character>
     public Task<Character?> GetCharacter(string id);
 
     public Task<List<Character>> GetCharactersForUser(User user);
+
+    public Task<List<Character>> GetCharactersWithRoutines();
 }
 
 internal class CharacterDatabase : Database<Character>, ICharacterDatabase
@@ -52,6 +54,19 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
         FilterDefinitionBuilder<Character> builder = Builders<Character>.Filter;
         FilterDefinition<Character> definition = builder.Eq(nameof(Character.UserId), user.Id);
         List<Character> characters = await GetDocumentsByPredicateAsync(definition);
+
+        foreach (Character character in characters)
+        {
+            await InitCharacter(character);
+        }
+
+        return characters;
+    }
+
+    public async Task<List<Character>> GetCharactersWithRoutines()
+    {
+        FilterDefinition<Character> filter = Builders<Character>.Filter.SizeGt(nameof(Character.RoutineIds), 0);
+        List<Character> characters = await GetDocumentsByPredicateAsync(filter);
 
         foreach (Character character in characters)
         {

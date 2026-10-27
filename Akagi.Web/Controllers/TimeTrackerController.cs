@@ -3,6 +3,8 @@ using Akagi.Web.Models;
 using Akagi.Web.Models.TimeTrackers;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
+using System.Globalization;
+using System.Text.Json;
 
 namespace Akagi.Web.Controllers;
 
@@ -118,6 +120,138 @@ public class TimeTrackerController : ControllerBase
         List<Entry> allEntries = await _entryDatabase.GetDocumentsByPredicateAsync(filter);
 
         return Ok(allEntries);
+    }
+
+    public class CreateDefinitionRequest
+    {
+        public string Name { get; set; } = string.Empty;
+        public List<FieldDefinition> Fields { get; set; } = [];
+    }
+
+    public class CreateEntryRequest
+    {
+        public string DefinitionId { get; set; } = string.Empty;
+        public DateTime? CreatedAt { get; set; }
+        public Dictionary<string, JsonElement> Values { get; set; } = [];
+    }
+
+    [HttpPost("Definitions")]
+    public async Task<ActionResult<Definition>> CreateDefinition([FromQuery] string googleId, [FromBody] CreateDefinitionRequest request)
+    {
+        if (!IsValidApiKey())
+        {
+            return Unauthorized("Invalid or missing API key.");
+        }
+
+        User? user = string.IsNullOrEmpty(googleId) ? null : await GetUserByGoogleIdAsync(googleId);
+        if (user == null || string.IsNullOrEmpty(user.Id))
+        {
+            return NotFound("User not found.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name) || request.Fields.Count == 0)
+        {
+            return BadRequest("A definition needs a name and at least one field.");
+        }
+
+        FilterDefinition<Definition> filter = Builders<Definition>.Filter.Eq(d => d.UserId, user.Id);
+        List<Definition> existing = await _definitionDatabase.GetDocumentsByPredicateAsync(filter);
+        if (existing.Any(d => string.Equals(d.Name, request.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+        {
+            return Conflict("A definition with this name already exists.");
+        }
+
+        Definition definition = new()
+        {
+            Name = request.Name.Trim(),
+            UserId = user.Id,
+            Fields = request.Fields
+        };
+        return Ok(await _definitionDatabase.SaveDocumentAsync(definition));
+    }
+
+    [HttpPost("Entries")]
+    public async Task<ActionResult<Entry>> CreateEntry([FromQuery] string googleId, [FromBody] CreateEntryRequest request)
+    {
+        if (!IsValidApiKey())
+        {
+            return Unauthorized("Invalid or missing API key.");
+        }
+
+        User? user = string.IsNullOrEmpty(googleId) ? null : await GetUserByGoogleIdAsync(googleId);
+        if (user == null || string.IsNullOrEmpty(user.Id))
+        {
+            return NotFound("User not found.");
+        }
+
+        Definition? definition = string.IsNullOrEmpty(request.DefinitionId) ? null : await _definitionDatabase.GetDocumentByIdAsync(request.DefinitionId);
+        if (definition == null || definition.UserId != user.Id)
+        {
+            return NotFound("Definition not found.");
+        }
+
+        Dictionary<string, object> values = [];
+        foreach (KeyValuePair<string, JsonElement> kvp in request.Values)
+        {
+            FieldDefinition? field = definition.Fields.FirstOrDefault(f => string.Equals(f.Name, kvp.Key, StringComparison.OrdinalIgnoreCase));
+            if (field == null)
+            {
+                return BadRequest($"Definition '{definition.Name}' has no field '{kvp.Key}'.");
+            }
+            if (!TryConvert(field.Type, kvp.Value, out object? value))
+            {
+                return BadRequest($"Value for '{field.Name}' is not a valid {field.Type}.");
+            }
+            if (value != null)
+            {
+                values[field.Name] = value;
+            }
+        }
+
+        Entry entry = new()
+        {
+            DefinitionId = definition.Id!,
+            CreatedAt = request.CreatedAt?.ToUniversalTime() ?? DateTime.UtcNow,
+            Values = values
+        };
+        return Ok(await _entryDatabase.SaveDocumentAsync(entry));
+    }
+
+    private static bool TryConvert(FieldType type, JsonElement element, out object? value)
+    {
+        value = null;
+        if (element.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return true;
+        }
+
+        string? text = element.ValueKind == JsonValueKind.String ? element.GetString() : element.GetRawText();
+        switch (type)
+        {
+            case FieldType.Boolean when element.ValueKind is JsonValueKind.True or JsonValueKind.False:
+                value = element.GetBoolean();
+                return true;
+            case FieldType.Int when element.ValueKind == JsonValueKind.Number && element.TryGetInt32(out int number):
+                value = number;
+                return true;
+            case FieldType.Float when element.ValueKind == JsonValueKind.Number:
+                value = element.GetDouble();
+                return true;
+            case FieldType.Text:
+                value = text ?? string.Empty;
+                return true;
+            case FieldType.DateTime when DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTimeOffset dateTime):
+                value = dateTime.UtcDateTime;
+                return true;
+            case FieldType.Time when TimeOnly.TryParse(text, CultureInfo.InvariantCulture, out TimeOnly time):
+                value = time;
+                return true;
+            case FieldType.Date when DateOnly.TryParse(text, CultureInfo.InvariantCulture, out DateOnly date):
+                value = date;
+                return true;
+            default:
+                return false;
+        }
     }
 
     [HttpGet("Definitions/{definitionId}")]

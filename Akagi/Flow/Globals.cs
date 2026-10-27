@@ -9,6 +9,11 @@ internal class Globals
     public static Globals Instance => _instance
         ?? throw new InvalidOperationException("Globals has not been initialized. Ensure that it is registered in the service provider.");
 
+    /// <summary>
+    /// False in unit tests and tools that run without the host.
+    /// </summary>
+    public static bool IsInitialized => _instance != null;
+
     public IServiceProvider ServiceProvider { get; private set; }
 
     private readonly ISystemInitializer[] _systemInitializers;

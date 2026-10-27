@@ -1,4 +1,5 @@
 using Akagi.Connectors.TimeTracker;
+using Akagi.Life;
 
 namespace Akagi.Communication.Commands.Web;
 
@@ -6,9 +7,9 @@ internal class GetTimeTrakerDefinitionCommand : WebCommand
 {
     public override string Name => "/GetTimeTrackerDefinition";
 
-    public override string Description => "Looks up a word in the JPDict database. Usage: /jpDictLookup <word>";
+    public override string Description => "Lists your TimeTracker definitions with their latest entries. Usage: /GetTimeTrackerDefinition [entriesPerTracker]";
 
-    private ITimeTrackerConnector _connector;
+    private readonly ITimeTrackerConnector _connector;
 
     public GetTimeTrakerDefinitionCommand(ITimeTrackerConnector connector)
     {
@@ -22,19 +23,24 @@ internal class GetTimeTrakerDefinitionCommand : WebCommand
         {
             return CommandResult.Fail(UserNotConfiguredError);
         }
-
-        TimeTrackerUserConfig userConfig = new() { GoogleId = googleId };
-
-        if (args.Length == 0)
+        if (!_connector.IsConfigured)
         {
-            List<Definition> definitions = await _connector.GetDefinitionsAsync(userConfig);
-            
-            // Do like a tostring method for everything. Should probs be using json serilizing
-            // which can be reused in the acctual command for the llm.
-
-            return CommandResult.Ok;
+            await Communicator.SendMessage(context.User, "TimeTracker is not configured on the server.");
+            return CommandResult.Fail("TimeTracker not configured.");
         }
 
-        throw new NotImplementedException();
+        int entries = 3;
+        if (args.Length > 0 && (!int.TryParse(args[0], out entries) || entries < 0))
+        {
+            await Communicator.SendMessage(context.User, "Usage: /GetTimeTrackerDefinition [entriesPerTracker]");
+            return CommandResult.Fail("Invalid entry count.");
+        }
+
+        LifeProfile profile = await context.DatabaseFactory.GetDatabase<ILifeProfileDatabase>().GetForUser(context.User.Id!)
+            ?? new LifeProfile { UserId = context.User.Id! };
+
+        string overview = await TimeTrackerWorkLog.DescribeAsync(_connector, new TimeTrackerUserConfig { GoogleId = googleId }, profile, entries);
+        await Communicator.SendMessage(context.User, overview);
+        return CommandResult.Ok;
     }
 }

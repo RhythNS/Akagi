@@ -5,6 +5,7 @@ using Akagi.Characters.CharacterBehaviors.Puppeteers;
 using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Memories;
+using Akagi.Characters.Routines;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Data;
 using Akagi.Users;
@@ -22,6 +23,7 @@ internal class Character : Savable
     private string _puppeteerId = string.Empty;
     private string[] _reflectorIds = [];
     private string[] _interceptorIds = [];
+    private string[] _routineIds = [];
     private string _userId = string.Empty;
     private string[] _triggerPointIds = [];
     private bool _allowAutomaticProcessing = true;
@@ -90,6 +92,14 @@ internal class Character : Savable
     {
         get => _interceptorIds;
         set => SetProperty(ref _interceptorIds, value);
+    }
+    [NodeReference(typeof(Routine), Optional = true)]
+    [NodeDocu("Routines that make this character reach out on its own (greetings, check-ins, break reminders, follow-ups).")]
+    [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
+    public string[] RoutineIds
+    {
+        get => _routineIds;
+        set => SetProperty(ref _routineIds, value);
     }
     [NodeReference(typeof(User))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
