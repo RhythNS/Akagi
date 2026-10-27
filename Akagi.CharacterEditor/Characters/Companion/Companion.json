@@ -1,0 +1,145 @@
+{
+  "GraphId": "6f1b2c4e-7a3d-4c55-9a61-5e0b6c2d1a10",
+  "Nodes": [
+    {
+      "TypeName": "Akagi.Characters.Groups.CharacterGroup, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 760.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Companion",
+        "AllowAutomaticProcessing": true,
+        "UserVisibility": 0,
+        "ErrorBehavior": 1,
+        "ErrorMessage": "Akagi got tangled up for a moment ({{error}}). Try again?"
+      },
+      "ArraySizes": {
+        "MemberCharacterIds": 4
+      }
+    },
+    {
+      "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Placeholder"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 260.0
+      },
+      "Properties": {
+        "GraphPath": "Akagi.json"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 520.0
+      },
+      "Properties": {
+        "GraphPath": "Sensei.json"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 780.0
+      },
+      "Properties": {
+        "GraphPath": "Hana.json"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 1040.0
+      },
+      "Properties": {
+        "GraphPath": "Kai.json"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Groups.Strategies.PersonaStrategy, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 380.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Akagi speaks",
+        "Description": "Akagi answers; the others advise."
+      },
+      "ArraySizes": {}
+    }
+  ],
+  "Connections": [
+    {
+      "SourceNodeIndex": 1,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 3,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 4,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 2
+    },
+    {
+      "SourceNodeIndex": 5,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 3
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 6,
+      "TargetConnectorName": "PersonaCharacterId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 6,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "StrategyId",
+      "TargetArrayIndex": -1
+    }
+  ],
+  "ViewportLocation": {
+    "X": 0.0,
+    "Y": 0.0
+  },
+  "ViewportZoom": 0.6
+}

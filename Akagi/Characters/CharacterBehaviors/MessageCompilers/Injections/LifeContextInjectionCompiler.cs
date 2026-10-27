@@ -21,6 +21,7 @@ internal class LifeContextInjectionCompiler : InjectionCompiler
         get => _sections;
         set => SetProperty(ref _sections, value);
     }
+    [NodeDocu("Heading above the injected block. {{user}} and {{character}} are replaced with names.")]
     public string Header
     {
         get => _header;
@@ -43,13 +44,17 @@ internal class LifeContextInjectionCompiler : InjectionCompiler
             return [];
         }
 
+        string header = Header
+            .Replace("{{user}}", context.User.Name)
+            .Replace("{{character}}", context.Character.Name);
+
         return
         [
             new TextMessage
             {
                 From = MessageType,
                 Time = DateTime.UtcNow,
-                Text = string.IsNullOrWhiteSpace(Header) ? body : Header + Environment.NewLine + body,
+                Text = string.IsNullOrWhiteSpace(header) ? body : header + Environment.NewLine + body,
                 CharacterId = context.Character.Id
             }
         ];

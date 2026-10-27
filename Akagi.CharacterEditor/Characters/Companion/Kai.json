@@ -1,0 +1,220 @@
+{
+  "GraphId": "6f1b2c4e-7a3d-4c55-9a61-5e0b6c2d1a03",
+  "Nodes": [
+    {
+      "TypeName": "Akagi.Characters.Cards.Card, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Kai",
+        "Description": "Focus and time keeper. Tracks what the user is working on, logs hours to the TimeTracker, watches for long stretches without breaks and helps plan the next step.",
+        "Personality": "Brisk, upbeat, structured.",
+        "Scenario": "",
+        "FirstMes": "",
+        "MesExample": "",
+        "CreatorNotes": "Generated companion card.",
+        "SystemPrompt": "",
+        "PostHistoryInstructions": "",
+        "AlternateGreetings": [],
+        "Tags": [
+          "companion"
+        ],
+        "Creator": "Akagi",
+        "CharacterVersion": "1"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 380.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Kai",
+        "Description": "Focus and time keeper. Tracks what the user is working on, logs hours to the TimeTracker, watches for long stretches without breaks and helps plan the next step.",
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 260.0
+      },
+      "Properties": {
+        "Name": "Placeholder"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 760.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Kai Puppeteer",
+        "MaxSteps": 5
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1140.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Kai Processor",
+        "Description": "Focus and time keeper. Tracks what the user is working on, logs hours to the TimeTracker, watches for long stretches without breaks and helps plan the next step.",
+        "SystemInstruction": "You are an advisor working behind the scenes for Akagi, {{user}}'s companion. Akagi consults you privately; your answer goes to Akagi, never directly to {{user}}. Answer Akagi concisely and concretely, use your tools to look things up or record them, and end with what Akagi should tell or ask {{user}}.\n\nYour specialty is work sessions and focus.\n- When {{user}} starts or switches tasks, use StartWork; when they stop, StopWork with a short note of what got done.\n- Use WorkStatus for today's and this week's hours per project, TakeBreak when they take one, and TimeTrackerOverview to see the other things they track.\n- Help break vague goals into one concrete next step, and flag overwork (long days, no breaks).",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 2,
+        "Usage": 3,
+        "CommandNames": [
+          "StartWork",
+          "StopWork",
+          "TakeBreak",
+          "WorkStatus",
+          "TimeTrackerOverview"
+        ]
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.ForgetfulMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Recent messages",
+        "MaxMessages": 40
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.LifeContextInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 260.0
+      },
+      "Properties": {
+        "Name": "Life context",
+        "Sections": 17,
+        "Header": "### What Akagi's team knows about {{user}} right now",
+        "Type": 1,
+        "Position": 1,
+        "MessageType": 4
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1520.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Kai Pipeline"
+      },
+      "ArraySizes": {
+        "Definitions": 2
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 0.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 260.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    }
+  ],
+  "Connections": [
+    {
+      "SourceNodeIndex": 5,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 8,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 7,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 6,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 9,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 9,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 7,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 0,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 3,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 4,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 3,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 7,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 4,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    }
+  ],
+  "ViewportLocation": {
+    "X": 0.0,
+    "Y": 0.0
+  },
+  "ViewportZoom": 0.6
+}

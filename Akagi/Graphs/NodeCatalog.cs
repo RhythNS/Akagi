@@ -25,6 +25,10 @@ internal class NodeCatalog
         "Connections: [{ SourceNodeIndex, SourceConnectorName: \"\", TargetNodeIndex, TargetConnectorName: inputName, TargetArrayIndex: -1 or slot }] }. " +
         "A connection feeds the source node's output into an input of the target node.";
     public List<NodeTypeInfo> Nodes { get; init; } = [];
+    /// <summary>
+    /// LLM tools a SystemProcessor can enable by listing their Name in CommandNames.
+    /// </summary>
+    public IReadOnlyList<CommandCatalog.CommandInfo> Commands { get; init; } = [];
 
     public class NodeTypeInfo
     {
@@ -65,7 +69,7 @@ internal class NodeCatalog
         Type[] nodeTypes = GraphNodeUtils.GetAllNodeTypes();
         Type[] concreteTypes = [.. nodeTypes.Where(GraphNodeUtils.CanInstantiate)];
 
-        NodeCatalog catalog = new();
+        NodeCatalog catalog = new() { Commands = CommandCatalog.Commands };
         foreach (Type type in nodeTypes)
         {
             catalog.Nodes.Add(Describe(type, concreteTypes));
@@ -109,6 +113,13 @@ internal class NodeCatalog
                 }
             }
             builder.AppendLine();
+        }
+
+        builder.AppendLine("== LLM commands (SystemProcessor.CommandNames) ==");
+        foreach (CommandCatalog.CommandInfo command in Commands)
+        {
+            string arguments = string.Join(", ", command.Arguments.Select(a => $"{a.Name}:{a.Type}{(a.Required ? string.Empty : "?")}"));
+            builder.AppendLine($"{command.Name}({arguments})");
         }
         return builder.ToString();
     }

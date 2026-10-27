@@ -333,26 +333,9 @@ internal class Receiver : IReceiver, ICleanable
                 EmbeddingService = _embeddingService,
         };
     }
-    private async Task TriggerForCharacter(TriggerType type, Character character, User user)
+    private Task TriggerForCharacter(TriggerType type, Character character, User user)
     {
-        if (character.AllowAutomaticProcessing == false)
-        {
-            return;
-        }
-        foreach (string triggerId in character.TriggerPointIds)
-        {
-            TriggerPoint triggerPoint = await _databaseFactory.GetDatabase<ITriggerPointDatabase>().GetDocumentByIdAsync(triggerId)
-                ?? throw new Exception($"TriggerPoint with ID {triggerId} not found for character {character.Id}");
-            await using TriggerContext context = new()
-            {
-                Character = character,
-                User = user,
-            DatabaseFactory = _databaseFactory,
-            };
-            await triggerPoint.Init(context);
-            await triggerPoint.On(type);
-            await _databaseFactory.SaveIfDirty(triggerPoint);
-        }
+        return TriggerPointRunner.FireAsync(type, character, user, _databaseFactory);
     }
     private static void CleanupUnusedLocks()
     {

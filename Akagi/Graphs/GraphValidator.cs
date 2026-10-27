@@ -381,6 +381,25 @@ internal class GraphValidator
             }
         }
 
+        if (typeof(Characters.CharacterBehaviors.SystemProcessors.SystemProcessor).IsAssignableFrom(type)
+            && node.Properties.TryGetValue("CommandNames", out object? commandNames))
+        {
+            string[] names = [];
+            try
+            {
+                names = (string[]?)GraphNodeUtils.ConvertValue(commandNames, typeof(string[])) ?? [];
+            }
+            catch
+            {
+                // Reported as property.invalid-value above
+            }
+            foreach (string name in names.Where(n => !CommandCatalog.Exists(n)))
+            {
+                report.Add(GraphIssueSeverity.Error, "command.unknown",
+                    $"CommandNames contains '{name}', which is not a known LLM command. Run --dump-nodes to list commands.", label, index);
+            }
+        }
+
         foreach (KeyValuePair<string, int> kvp in node.ArraySizes)
         {
             PropertyInfo? property = type.GetProperty(kvp.Key);

@@ -1,5 +1,6 @@
 using Akagi.Bridge.Attributes;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.TriggerPoints;
 using Akagi.Communication;
 using Akagi.Flow;
 using Akagi.Receivers;
@@ -55,5 +56,15 @@ internal class PersonaStrategy : GroupStrategy
 
         logger.LogInformation("Persona {PersonaId} answering for group {GroupId}", persona.Id, context.Group.Id);
         await GroupMemberRunner.RunAsync(persona, personaContext);
+
+        // The persona is the companion the user talks to, so its reflection triggers (mood, memory) run as in a direct chat
+        try
+        {
+            await TriggerPointRunner.FireAsync(TriggerPoint.TriggerType.MessageProcessed, persona, context.User, context.DatabaseFactory);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Trigger points failed for persona {PersonaId}", persona.Id);
+        }
     }
 }
