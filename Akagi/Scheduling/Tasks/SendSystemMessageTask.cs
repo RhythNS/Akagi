@@ -1,7 +1,7 @@
 ﻿using Akagi.Characters;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
 using Akagi.Flow;
-using Akagi.Receivers;
 using Akagi.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -42,7 +42,8 @@ internal class SendSystemMessageTask : OneShotTask
             CharacterId = null
         };
 
-        IReceiver receiver = Globals.Instance.ServiceProvider.GetRequiredService<IReceiver>();
-        await receiver.OnSystemEvent(character, user, message);
+        // Routes through the character's persona group when it has one, so reminders land in the shared conversation
+        IProactiveDelivery delivery = Globals.Instance.ServiceProvider.GetRequiredService<IProactiveDelivery>();
+        await delivery.DeliverAsync(character, user, message);
     }
 }

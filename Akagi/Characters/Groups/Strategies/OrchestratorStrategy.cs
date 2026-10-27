@@ -1,7 +1,4 @@
 using Akagi.Bridge.Attributes;
-using Akagi.Characters.CharacterBehaviors.Interceptors;
-using Akagi.Characters.CharacterBehaviors.Puppeteers;
-using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
 using Akagi.Communication;
 using Akagi.Flow;
@@ -39,10 +36,6 @@ internal class OrchestratorStrategy : GroupStrategy
 
         List<Character> workers = [.. context.Members.Where(m => m.Id != ManagerCharacterId)];
 
-        IPuppeteerDatabase puppeteerDatabase = context.DatabaseFactory.GetDatabase<IPuppeteerDatabase>();
-        ISystemProcessorDatabase systemProcessorDatabase = context.DatabaseFactory.GetDatabase<ISystemProcessorDatabase>();
-        IInterceptorDatabase interceptorDatabase = context.DatabaseFactory.GetDatabase<IInterceptorDatabase>();
-
         Conversation groupConversation = context.Group.Conversations.GetCurrentConversation();
         AggregateConversation aggregateConversation = new(groupConversation, context.Members.Select(w => w.Conversations.GetCurrentConversation()).ToArray());
 
@@ -67,7 +60,7 @@ internal class OrchestratorStrategy : GroupStrategy
                 Group = context.Group
             };
 
-            await RunCharacter(manager, managerContext, puppeteerDatabase, systemProcessorDatabase, interceptorDatabase, logger);
+            await GroupMemberRunner.RunAsync(manager, managerContext);
 
             Message? managerOutput = aggregateConversation.Messages.LastOrDefault(m => m.CharacterId == manager.Id);
 
@@ -106,7 +99,7 @@ internal class OrchestratorStrategy : GroupStrategy
                 Group = context.Group
             };
 
-            await RunCharacter(delegateTo, workerContext, puppeteerDatabase, systemProcessorDatabase, interceptorDatabase, logger);
+            await GroupMemberRunner.RunAsync(delegateTo, workerContext);
 
             Message? workerOutput = aggregateConversation.Messages.LastOrDefault(m => m.CharacterId == delegateTo.Id);
 
@@ -123,40 +116,6 @@ internal class OrchestratorStrategy : GroupStrategy
         {
             await context.Communicator.SendMessage(context.User, $"Group '{context.Group.Name}' has finished processing.");
         }
-    }
-
-    private static async Task RunCharacter(
-        Character character,
-        Context context,
-        IPuppeteerDatabase puppeteerDatabase,
-        ISystemProcessorDatabase systemProcessorDatabase,
-        IInterceptorDatabase interceptorDatabase,
-        ILogger logger)
-    {
-        if (character.InterceptorIds.Length > 0)
-        {
-            ILogger interceptorLogger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Interceptor>>();
-            List<Interceptor> interceptors = [];
-
-            foreach (string id in character.InterceptorIds)
-            {
-                Interceptor interceptor = await interceptorDatabase.GetDocumentByIdAsync(id)
-                    ?? throw new Exception($"Interceptor with ID {id} not found for character {character.Id}");
-
-                await interceptor.Init(interceptorLogger, context, systemProcessorDatabase);
-                interceptors.Add(interceptor);
-            }
-
-            context.Communicator = new InterceptingCommunicator(context.Communicator, [.. interceptors]);
-        }
-
-        Puppeteer puppeteer = await puppeteerDatabase.GetDocumentByIdAsync(character.PuppeteerId)
-            ?? throw new Exception($"Puppeteer with ID {character.PuppeteerId} not found for character {character.Id}");
-
-        ILogger puppeteerLogger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Puppeteer>>();
-
-        await puppeteer.Init(puppeteerLogger, context, systemProcessorDatabase);
-        await puppeteer.ProcessAsync();
     }
 
     private static Character? FindDelegateTarget(string managerText, List<Character> workers)

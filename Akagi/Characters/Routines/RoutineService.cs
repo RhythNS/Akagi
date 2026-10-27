@@ -1,6 +1,6 @@
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
 using Akagi.Life;
-using Akagi.Receivers;
 using Akagi.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -125,13 +125,13 @@ internal class RoutineService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        IReceiver receiver = _serviceProvider.GetRequiredService<IReceiver>();
+        IProactiveDelivery delivery = _serviceProvider.GetRequiredService<IProactiveDelivery>();
         RoutineRunner runner = new(
             _serviceProvider.GetRequiredService<ICharacterDatabase>(),
             _serviceProvider.GetRequiredService<IUserDatabase>(),
             _serviceProvider.GetRequiredService<IRoutineDatabase>(),
             _serviceProvider.GetRequiredService<ILifeProfileDatabase>(),
-            receiver.OnSystemEvent,
+            delivery.DeliverAsync,
             _logger);
 
         while (!stoppingToken.IsCancellationRequested)

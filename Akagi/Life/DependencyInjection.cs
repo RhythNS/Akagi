@@ -1,3 +1,4 @@
+using Akagi.Characters.Groups;
 using Akagi.Characters.Routines;
 using Akagi.Utils;
 using Akagi.Utils.Extensions;
@@ -11,6 +12,7 @@ static class DependencyInjection
     {
         services.AddSingleton<ILifeProfileDatabase, LifeProfileDatabase>();
         services.AddSingleton<IRoutineDatabase, RoutineDatabase>();
+        services.AddSingleton<IProactiveDelivery, ProactiveDelivery>();
         services.AddHostedService<RoutineService>();
 
         Type[] routineTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Routine>();

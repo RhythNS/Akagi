@@ -23,6 +23,7 @@ internal interface IReceiver
 {
     public Task OnMessageRecieved(ICommunicator from, User user, Character character, Message message);
     public Task OnGroupMessageRecieved(ICommunicator from, User user, CharacterGroup group, Message message);
+    public Task OnGroupSystemEvent(User user, CharacterGroup group, Message message);
     public Task OnPromptContinue(ICommunicator? from, Character character, User user);
     public Task Reflect(Character character, User user, string name);
     public Task OnSystemEvent(Character character, User user, Message message);
@@ -173,6 +174,26 @@ internal class Receiver : IReceiver, ICleanable
             await from.SendMessage(user, "Group is busy processing another message. Please try again later.");
             return;
         }
+        await ProcessGroupMessageAsync(from, user, group, message);
+    }
+    public async Task OnGroupSystemEvent(User user, CharacterGroup group, Message message)
+    {
+        ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
+        if (communicator == null)
+        {
+            _logger.LogWarning("No communicator found for user {UserId}", user.Id);
+            return;
+        }
+        // Background events wait for a running group turn instead of telling the user the group is busy
+        if (!await LockGroupAsync(group, user, TimeSpan.FromMinutes(2)))
+        {
+            _logger.LogWarning("Timed out waiting for group {GroupId} to deliver a system event", group.Id);
+            return;
+        }
+        await ProcessGroupMessageAsync(communicator, user, group, message);
+    }
+    private async Task ProcessGroupMessageAsync(ICommunicator from, User user, CharacterGroup group, Message message)
+    {
         CancellationTokenSource cts = GetOrCreateGroupCancellation(group, user);
         List<ContextBase> contexts = [];
         try
@@ -406,6 +427,12 @@ internal class Receiver : IReceiver, ICleanable
         (string, string) key = (user.Id!, group.Id!);
         SemaphoreSlim semaphore = _groupLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
         return semaphore.Wait(0);
+    }
+    private static Task<bool> LockGroupAsync(CharacterGroup group, User user, TimeSpan timeout)
+    {
+        (string, string) key = (user.Id!, group.Id!);
+        SemaphoreSlim semaphore = _groupLocks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+        return semaphore.WaitAsync(timeout);
     }
     private static void ReleaseGroupLock(CharacterGroup group, User user)
     {
