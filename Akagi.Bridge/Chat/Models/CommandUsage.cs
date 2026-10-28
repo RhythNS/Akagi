@@ -10,7 +10,7 @@ namespace Akagi.Bridge.Chat.Models;
 /// <item>&lt;name&gt; a required value, [name] an optional one, a "..." suffix takes the rest of the line</item>
 /// <item>a|b|c a choice, [a|b] an optional one; an option may be followed by its own parameters: [end|summary &lt;text&gt;]</item>
 /// <item>[key=default] a named value sent as key=value; [--flag] and (word) optional words</item>
-/// <item>bare words are fixed words; " | " separates alternative forms: "/fitbit link | /fitbit code &lt;code&gt;"</item>
+/// <item>bare words are fixed words; " | " separates alternative forms: "/health link | /health code &lt;code&gt;"</item>
 /// </list>
 /// </summary>
 public static partial class CommandUsage

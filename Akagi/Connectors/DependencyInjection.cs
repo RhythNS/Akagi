@@ -1,5 +1,5 @@
 ﻿using Akagi.Connectors.Desu;
-using Akagi.Connectors.Fitbit;
+using Akagi.Connectors.GoogleHealth;
 using Akagi.Connectors.Tatoeba;
 using Akagi.Connectors.TimeTracker;
 using Microsoft.Extensions.Configuration;
@@ -18,10 +18,10 @@ static class DependencyInjection
         services.Configure<TimeTrackerConnector.Options>(configuration.GetSection("TimeTracker"));
         services.AddScoped<ITimeTrackerConnector, TimeTrackerConnector>();
 
-        services.Configure<FitbitOptions>(configuration.GetSection("Fitbit"));
-        services.AddHttpClient<IFitbitClient, FitbitClient>();
-        services.AddSingleton<IFitbitAccountDatabase, FitbitAccountDatabase>();
-        services.AddTransient<IFitbitSync, FitbitSync>();
-        services.AddHostedService<FitbitSyncService>();
+        services.Configure<GoogleHealthOptions>(configuration.GetSection("GoogleHealth"));
+        services.AddHttpClient<IGoogleHealthClient, GoogleHealthClient>();
+        services.AddSingleton<IGoogleHealthAccountDatabase, GoogleHealthAccountDatabase>();
+        services.AddTransient<IGoogleHealthSync, GoogleHealthSync>();
+        services.AddHostedService<GoogleHealthSyncService>();
     }
 }

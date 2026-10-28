@@ -289,7 +289,7 @@ internal class ShortSleepRoutine : Routine
         get => _notBefore;
         set => SetProperty(ref _notBefore, value);
     }
-    [NodeDocu("Also react to a long but restless night (little deep sleep, low efficiency, long awake), as tracked by Fitbit.")]
+    [NodeDocu("Also react to a long but restless night (little deep sleep, low efficiency, long awake), as tracked by the user's watch through Google Health.")]
     public bool ReactToRestless
     {
         get => _reactToRestless;

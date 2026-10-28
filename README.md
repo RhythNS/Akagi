@@ -50,7 +50,7 @@ modules with the `Consult` tool:
 What makes Akagi feel present:
 
 - **Life context.** `LifeContextInjectionCompiler` injects local time, mood, open worries, sleep (with stages from
-  Fitbit), work, plus tone guidance: gentle and protective after a short or restless night, calm under stress,
+  Google Health), work, plus tone guidance: gentle and protective after a short or restless night, calm under stress,
   celebratory after a win.
 - **Her own state.** `CompanionStateInjectionCompiler` injects her outfit (`ChangeOutfit`), what you are doing together
   (`StartActivity` / `EndActivity`: movie, anime, co-working, gaming, study, walk, cooking, bedtime), the people she knows
@@ -58,7 +58,7 @@ What makes Akagi feel present:
   playful, teasing jealousy; the guidance forbids guilt-tripping or discouraging real friendships.
 - **Emotional memory.** A reflection every six messages records moods, worries and events, remembers people and
   schedules check-ins for appointments it notices. Long-term facts are consolidated when a conversation ends.
-- **Proactive outreach.** Routine nodes on `Character.RoutineIds` (morning greeting with a Fitbit check, rough night,
+- **Proactive outreach.** Routine nodes on `Character.RoutineIds` (morning greeting with a health sync, rough night,
   follow-ups, break reminders, good night, missing you) let Akagi write first, respecting quiet hours and active chats.
   During a movie, gaming or bedtime only explicitly scheduled check-ins come through.
 
@@ -95,10 +95,17 @@ SRT, VTT and plain text transcripts skip the audio steps.
 
 ### Health
 
-`/fitbit link` returns a Fitbit consent link (OAuth 2.0 with PKCE; register a Personal app and set `Fitbit:ClientId` and
-`Fitbit:RedirectUri`). Paste the address you land on with `/fitbit code <address>`; it does not need to load. Sleep with
-stages and naps, steps and resting heart rate then sync every two hours, every 20 minutes in your local morning, and
-on demand through `SyncHealth`. `/uploadHealth` still imports Health Connect style JSON exports.
+`/health link` returns a Google consent link for the Google Health API, which replaces the Fitbit Web API (turned
+off on November 2, 2026; Fitbit devices sync through Google Health). Setup: in a Google Cloud project enable the Google
+Health API, create a "Web application" OAuth client with `https://www.google.com` as redirect URI, add the
+`googlehealth.sleep.readonly`, `googlehealth.activity_and_fitness.readonly` and
+`googlehealth.health_metrics_and_measurements.readonly` scopes on the Data Access page, add your Google account as a
+test user, and set `GoogleHealth:ClientId` and `GoogleHealth:ClientSecret`. The Google account must have signed in to
+the Google Health app once (moving a Fitbit account over). Paste the address you land on with `/health code <address>`.
+Sleep with stages and naps, steps and resting heart rate then sync every two hours, every 20 minutes in your local
+morning, and on demand through `SyncHealth`. While the OAuth client is in Testing, Google expires its refresh tokens
+after seven days, so `/health link` has to be repeated weekly until the app is verified.
+`/uploadHealth` still imports Health Connect style JSON exports.
 
 Other user commands: `/life` shows what the companion knows, `/timezone Europe/Berlin` sets local time. Finished work
 sessions are mirrored to the Akagi.Web TimeTracker when the user has linked a Google account.
