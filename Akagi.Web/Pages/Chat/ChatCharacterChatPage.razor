@@ -43,19 +43,7 @@
 			</a>
 
 			<div class="d-flex align-items-center gap-2 min-w-0">
-				@if (_character != null && !string.IsNullOrEmpty(_character.CardId))
-				{
-					<Avatar Rounded="AvatarRounded.Circle"
-							Size="AvatarSize.Medium"
-							Data="@($"/socket/cards/{_character.CardId}/image.png?circuitId={SocketClientContainer.Client?.CircuitId}")" />
-				}
-				else
-				{
-					<Avatar Rounded="AvatarRounded.Circle"
-							Size="AvatarSize.Medium">
-						<Icon IconType="@Icons.Sparkles" Size="18" />
-					</Avatar>
-				}
+				<CharacterAvatar Character="_character" Size="AvatarSize.Medium" CircuitId="@SocketClientContainer.Client?.CircuitId" />
 
 				<div class="min-w-0">
 					<div class="d-flex align-items-center gap-2">
@@ -83,7 +71,7 @@
 						}
 					</div>
 					<div class="text-secondary small text-truncate">
-						@(IsDirectAssistant ? "Direct AI Assistant • Unbound Mode" : $"Companion ID: {_character?.Id ?? CharacterId}")
+						@(IsDirectAssistant ? "Direct AI Assistant • Unbound Mode" : _character?.IsGroup == true ? $"Group of {_character.MemberIds.Length} • ID: {_character.Id}" : $"Companion ID: {_character?.Id ?? CharacterId}")
 					</div>
 				</div>
 			</div>
@@ -166,19 +154,7 @@
 							@if (!fromUser)
 							{
 								<div class="message-avatar me-2 d-none d-sm-flex">
-									@if (_character != null && !string.IsNullOrEmpty(_character.CardId))
-									{
-										<Avatar Rounded="AvatarRounded.Circle"
-												Size="AvatarSize.Small"
-												Data="@($"/socket/cards/{_character.CardId}/image.png?circuitId={SocketClientContainer.Client?.CircuitId}")" />
-									}
-									else
-									{
-										<Avatar Rounded="AvatarRounded.Circle"
-												Size="AvatarSize.Small">
-											<Icon IconType="@Icons.Sparkles" Size="14" />
-										</Avatar>
-									}
+									<CharacterAvatar Character="_character" Size="AvatarSize.Small" CircuitId="@SocketClientContainer.Client?.CircuitId" />
 								</div>
 							}
 
@@ -1029,10 +1005,17 @@
 		}
 	}
 
+	/// <summary>
+	/// Messages without a character are notices for every chat; in a group chat the members answer with their own ids.
+	/// </summary>
+	private bool BelongsHere(string? characterId) =>
+		string.IsNullOrEmpty(characterId) ||
+		string.Equals(characterId, CharacterId, StringComparison.OrdinalIgnoreCase) ||
+		(_character?.Owns(characterId) ?? false);
+
 	private void OnClientMessageReceived(string? characterId, Message message)
 	{
-		if (!string.IsNullOrEmpty(characterId) &&
-			!string.Equals(characterId, CharacterId, StringComparison.OrdinalIgnoreCase))
+		if (!BelongsHere(characterId))
 		{
 			return;
 		}
@@ -1053,8 +1036,7 @@
 		bool isComplete,
 		string? fullText)
 	{
-		if (!string.IsNullOrEmpty(characterId) &&
-			!string.Equals(characterId, CharacterId, StringComparison.OrdinalIgnoreCase))
+		if (!BelongsHere(characterId))
 		{
 			return;
 		}

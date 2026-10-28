@@ -2,6 +2,7 @@
 using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Characters;
+using Akagi.Characters.Groups;
 using Akagi.Communication.Commands;
 using Akagi.Data;
 using Akagi.Users;
@@ -22,7 +23,7 @@ internal class SendTextMessageRequestHandler : SendMessageRequestHandler<SendTex
         return GetTransmission<SendTextMessageRequestTransmission>(transmission);
     }
 
-    protected override Task HandleDocumentCommand(Context context, Character? character, User user, SendTextMessageRequestTransmission message, DocumentCommand command, string[] args)
+    protected override Task HandleDocumentCommand(Context context, Character? character, CharacterGroup? group, User user, SendTextMessageRequestTransmission message, DocumentCommand command, string[] args)
     {
         SendResponse(context, message, "No document attached.");
         return Task.CompletedTask;
@@ -42,5 +43,10 @@ internal class SendTextMessageRequestHandler : SendMessageRequestHandler<SendTex
     protected override Task TryHandleMessage(Context context, Character character, User user, SendTextMessageRequestTransmission message)
     {
         return context.Service.RecieveText(user, character, message.Text);
+    }
+
+    protected override Task TryHandleGroupMessage(Context context, CharacterGroup group, User user, SendTextMessageRequestTransmission message)
+    {
+        return context.Service.RecieveGroupText(user, group, message.Text);
     }
 }

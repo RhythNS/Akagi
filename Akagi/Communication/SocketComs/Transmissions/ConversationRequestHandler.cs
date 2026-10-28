@@ -2,6 +2,8 @@
 using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Characters;
+using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
 using Akagi.Users;
 
 namespace Akagi.Communication.SocketComs.Transmissions;
@@ -28,15 +30,29 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
             throw new ArgumentException("CharacterId cannot be null in ConversationRequestHandler");
         }
 
-        Character? character = await _characterDatabase.GetCharacter(conversationRequestTransmission.CharacterId);
-        if (character == null || character.UserId != user.Id)
+        string id = conversationRequestTransmission.CharacterId;
+        ConversationContainer conversations;
+        Character? character = await _characterDatabase.GetCharacter(id);
+        if (character != null && character.UserId == user.Id)
         {
-            throw new ArgumentException("Character not found or does not belong to the user");
+            conversations = character.Conversations;
+        }
+        else
+        {
+            // Groups are listed next to characters and asked for by their id
+            CharacterGroup? group = character == null
+                ? await context.DatabaseFactory.GetDatabase<ICharacterGroupDatabase>().GetDocumentByIdAsync(id)
+                : null;
+            if (group == null || group.UserId != user.Id)
+            {
+                throw new ArgumentException("Character not found or does not belong to the user");
+            }
+            conversations = group.Conversations;
         }
 
         if (conversationRequestTransmission.ConversationId != null)
         {
-            Conversation? conversation = character.Conversations.List.FirstOrDefault(c => c.Id == conversationRequestTransmission.ConversationId);
+            Conversation? conversation = conversations.List.FirstOrDefault(c => c.Id == conversationRequestTransmission.ConversationId);
             if (conversation == null)
             {
                 throw new ArgumentException("Conversation not found for the character");
@@ -44,7 +60,7 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
 
             ConversationResponseTransmission response = new()
             {
-                CharacterId = character.Id!,
+                CharacterId = id,
                 ConversationId = conversation.Id,
                 Conversations = [conversation.ToBridgeModel()],
             };
@@ -54,9 +70,9 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
 
         ConversationResponseTransmission responseTransmission = new()
         {
-            CharacterId = character.Id!,
+            CharacterId = id,
             ConversationId = null,
-            Conversations = [.. character.Conversations.List.Select(c => c.ToBridgeModel())],
+            Conversations = [.. conversations.List.Select(c => c.ToBridgeModel())],
         };
         context.Session.SendTransmission(responseTransmission);
     }

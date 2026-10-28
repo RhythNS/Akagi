@@ -62,6 +62,16 @@ What makes Akagi feel present:
   follow-ups, break reminders, good night, missing you) let Akagi write first, respecting quiet hours and active chats.
   During a movie, gaming or bedtime only explicitly scheduled check-ins come through.
 
+### Uploading and pictures
+
+Export `Companion.json` as one file (File > Export Bundle in the editor, or `--bundle Companion.json`) and send it with
+`/uploadGraph create <name>`. The cards of all four characters are embedded and start without a picture. Send an image
+with the caption `/cardImage` in the group chat to give Akagi hers, or `/cardImage Hana` for a module. A character
+without a connected Card is refused at upload (and by `--validate`) instead of failing halfway.
+
+The group shows up in Akagi.Web's chat list next to the characters, with Akagi's picture. Messages sent there go to the
+group, as after `/switchToGroup` on Telegram, and group commands such as `/session` apply to it.
+
 ### Self-modification
 
 - `ScheduleCheckIn` creates one-time (`OneTimeRoutine`) or recurring check-ins she decides on herself, e.g. after you

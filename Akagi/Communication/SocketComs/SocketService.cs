@@ -2,6 +2,7 @@ using Akagi.Bridge.Chat.Transmissions;
 using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Characters;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
 using Akagi.Communication.Commands;
 using Akagi.Communication.SocketComs.Transmissions;
 using Akagi.Data;
@@ -263,6 +264,11 @@ internal class SocketService : Communicator, IStreamingCommunicator, IHostedServ
     public Task RecieveText(User user, Character character, string text)
     {
         return ReceiveCharacterMessage(user, character, text);
+    }
+
+    public Task RecieveGroupText(User user, CharacterGroup group, string text)
+    {
+        return ReceiveGroupMessage(user, group, text);
     }
 
     private SocketSession[] GetSessions(User user)

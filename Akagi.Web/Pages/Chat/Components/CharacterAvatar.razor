@@ -1,0 +1,37 @@
+@using Akagi.Web.Icons
+@using Akagi.Web.Models.Chat
+
+@if (Character != null && Character.HasImage && !string.IsNullOrEmpty(Character.CardId))
+{
+	<Avatar Rounded="AvatarRounded.Circle"
+			Size="Size"
+			Data="@($"/socket/cards/{Character.CardId}/image.png?circuitId={CircuitId}")" />
+}
+else
+{
+	<Avatar Rounded="AvatarRounded.Circle"
+			Size="Size">
+		<Icon IconType="@Icons.Sparkles" Size="@IconSize" />
+	</Avatar>
+}
+
+@code {
+	/// <summary>
+	/// The character or group to show; without a picture (or before it is loaded) a sparkle stands in.
+	/// </summary>
+	[Parameter]
+	public Character? Character { get; set; }
+
+	[Parameter]
+	public AvatarSize Size { get; set; } = AvatarSize.Medium;
+
+	[Parameter]
+	public string? CircuitId { get; set; }
+
+	private int IconSize => Size switch
+	{
+		AvatarSize.Small => 14,
+		AvatarSize.Large => 24,
+		_ => 18
+	};
+}

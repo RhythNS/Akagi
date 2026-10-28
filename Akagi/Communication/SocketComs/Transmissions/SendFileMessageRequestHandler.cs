@@ -2,6 +2,7 @@
 using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Characters;
+using Akagi.Characters.Groups;
 using Akagi.Communication.Commands;
 using Akagi.Data;
 using Akagi.Users;
@@ -22,7 +23,7 @@ internal class SendFileMessageRequestHandler : SendMessageRequestHandler<SendFil
         return GetTransmission<SendFileMessageRequestTransmission>(transmission);
     }
 
-    protected override async Task HandleDocumentCommand(Context context, Character? character, User user, SendFileMessageRequestTransmission message, DocumentCommand command, string[] args)
+    protected override async Task HandleDocumentCommand(Context context, Character? character, CharacterGroup? group, User user, SendFileMessageRequestTransmission message, DocumentCommand command, string[] args)
     {
         SocketDocument socketDocument = new()
         {
@@ -34,6 +35,7 @@ internal class SendFileMessageRequestHandler : SendMessageRequestHandler<SendFil
         await using Command.Context commandContext = new()
         {
             Character = character,
+            Group = group,
             User = user,
             DatabaseFactory = DatabaseFactory
         };
@@ -56,6 +58,12 @@ internal class SendFileMessageRequestHandler : SendMessageRequestHandler<SendFil
     {
         // TODO: Implement file receiving logic
         // return context.Service.RecieveFile(user, character, message.FileName, message.FileType, message.FileData);
+        SendResponse(context, message, "File receiving not implemented yet.");
+        return Task.CompletedTask;
+    }
+
+    protected override Task TryHandleGroupMessage(Context context, CharacterGroup group, User user, SendFileMessageRequestTransmission message)
+    {
         SendResponse(context, message, "File receiving not implemented yet.");
         return Task.CompletedTask;
     }

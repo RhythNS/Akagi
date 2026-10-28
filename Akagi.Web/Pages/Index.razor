@@ -5,6 +5,7 @@
 @using Akagi.Web.Models
 @using Akagi.Web.Models.Chat
 @using Akagi.Web.Models.TimeTrackers
+@using Akagi.Web.Pages.Chat.Components
 @using Akagi.Web.Services.Circuits
 @using Akagi.Web.Services.Sockets
 @using Akagi.Web.Services.Sockets.Requests
@@ -151,9 +152,7 @@
 								<div class="card card-sm border">
 									<div class="card-body d-flex align-items-center justify-content-between gap-2">
 										<div class="d-flex align-items-center gap-2 min-w-0">
-											<Avatar Rounded="AvatarRounded.Circle"
-													Size="AvatarSize.Medium"
-													Data="@($"/socket/cards/{recent.CardId}/image.png?circuitId={CircuitIdAccessor.CircuitId}")" />
+											<CharacterAvatar Character="recent" Size="AvatarSize.Medium" CircuitId="@CircuitIdAccessor.CircuitId" />
 											<div class="min-w-0">
 												<div class="fw-medium text-truncate">@recent.Name</div>
 												<div class="text-secondary small text-truncate">
@@ -195,9 +194,7 @@
 							<div class="col-12 col-sm-6 col-md-4">
 								<a href="@($"/Chat/{character.Id}/")" class="card card-link card-sm border text-decoration-none text-reset h-100">
 									<div class="card-body d-flex align-items-center gap-2">
-										<Avatar Rounded="AvatarRounded.Circle"
-												Size="AvatarSize.Medium"
-												Data="@($"/socket/cards/{character.CardId}/image.png?circuitId={CircuitIdAccessor.CircuitId}")" />
+										<CharacterAvatar Character="character" Size="AvatarSize.Medium" CircuitId="@CircuitIdAccessor.CircuitId" />
 										<div class="min-w-0">
 											<div class="fw-medium text-truncate">@character.Name</div>
 											<div class="text-secondary small">Chat now →</div>

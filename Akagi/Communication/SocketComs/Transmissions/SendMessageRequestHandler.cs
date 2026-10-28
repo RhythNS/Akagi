@@ -1,6 +1,7 @@
 ﻿using Akagi.Bridge.Chat.Transmissions;
 using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Characters;
+using Akagi.Characters.Groups;
 using Akagi.Communication.Commands;
 using Akagi.Data;
 using Akagi.Users;
@@ -56,13 +57,16 @@ internal abstract class SendMessageRequestHandler<M> : SocketTransmissionHandler
 
     protected abstract Task TryHandleMessage(Context context, Character character, User user, M message);
 
-    protected abstract Task HandleDocumentCommand(Context context, Character? character, User user, M message, DocumentCommand command, string[] args);
+    protected abstract Task TryHandleGroupMessage(Context context, CharacterGroup group, User user, M message);
 
-    protected virtual async Task HandleTextCommand(Context context, Character? character, User user, M message, TextCommand command, string[] args)
+    protected abstract Task HandleDocumentCommand(Context context, Character? character, CharacterGroup? group, User user, M message, DocumentCommand command, string[] args);
+
+    protected virtual async Task HandleTextCommand(Context context, Character? character, CharacterGroup? group, User user, M message, TextCommand command, string[] args)
     {
         await using Command.Context textContext = new()
         {
             Character = character,
+            Group = group,
             User = user,
             DatabaseFactory = DatabaseFactory
         };
@@ -96,14 +100,16 @@ internal abstract class SendMessageRequestHandler<M> : SocketTransmissionHandler
         string argString = Command.ArgumentText(text);
         string[] args = Command.ParseArguments(argString);
         Character? character = await GetCharacter(message);
+        // As on Telegram, a command sent in a group chat has the group and no character
+        CharacterGroup? group = character == null ? await GetGroup(message, user) : null;
 
         if (command is TextCommand textCommand)
         {
-            await HandleTextCommand(context, character, user, message, textCommand, args);
+            await HandleTextCommand(context, character, group, user, message, textCommand, args);
         }
         else if (command is DocumentCommand documentCommand)
         {
-            await HandleDocumentCommand(context, character, user, message, documentCommand, args);
+            await HandleDocumentCommand(context, character, group, user, message, documentCommand, args);
         }
         else
         {
@@ -116,6 +122,12 @@ internal abstract class SendMessageRequestHandler<M> : SocketTransmissionHandler
     {
         string text = message.Text;
         Character? character = await GetCharacter(message);
+        CharacterGroup? group = character == null ? await GetGroup(message, user) : null;
+        if (group != null)
+        {
+            await HandleGroupMessage(context, user, group, message);
+            return;
+        }
         if (character == null || character.UserId != user.Id)
         {
             Logger.LogWarning("Character not found or does not belong to user {UserId}", user.Id);
@@ -140,6 +152,37 @@ internal abstract class SendMessageRequestHandler<M> : SocketTransmissionHandler
         {
             Logger.LogError(ex, "Error processing message '{Text}' from user {UserId} for character {CharacterId}", text, user.Id, character.Id);
         }
+    }
+
+    private async Task HandleGroupMessage(Context context, User user, CharacterGroup group, M message)
+    {
+        SendResponse(context, message);
+
+        if (user.LastUsedCommunicator != context.Service.Name)
+        {
+            user.LastUsedCommunicator = context.Service.Name;
+            await UserDatabase.SaveDocumentAsync(user);
+        }
+
+        Logger.LogInformation("Received message '{Text}' from user {UserId} for group {GroupId}", message.Text, user.Id, group.Id);
+        try
+        {
+            await TryHandleGroupMessage(context, group, user, message);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error processing message '{Text}' from user {UserId} for group {GroupId}", message.Text, user.Id, group.Id);
+        }
+    }
+
+    private async Task<CharacterGroup?> GetGroup(M message, User user)
+    {
+        if (message.CharacterId == null || string.Equals(message.CharacterId, "0", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+        CharacterGroup? group = await DatabaseFactory.GetDatabase<ICharacterGroupDatabase>().GetDocumentByIdAsync(message.CharacterId);
+        return group?.UserId == user.Id ? group : null;
     }
 
     private async Task<Character?> GetCharacter(M message)
