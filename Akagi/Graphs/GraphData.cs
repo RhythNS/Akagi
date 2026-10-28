@@ -12,6 +12,15 @@ internal class GraphData
     public List<ConnectionData> Connections { get; set; } = [];
     public PointData? ViewportLocation { get; set; }
     public double? ViewportZoom { get; set; }
+    /// <summary>
+    /// Subgraphs shipped inside this file, so a graph and everything it references can travel as one document.
+    /// References resolve against these before looking on disk or in the database.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<EmbeddedGraph>? Embedded { get; set; }
+
+    [JsonIgnore]
+    public bool IsBundle => Embedded is { Count: > 0 };
 
     public static GraphData Parse(string json)
     {
@@ -36,6 +45,15 @@ internal class GraphData
     {
         return Parse(ToJson());
     }
+}
+
+/// <summary>
+/// A referenced graph inside a bundle. <see cref="Path"/> is relative to the bundle's root graph and uses '/'.
+/// </summary>
+internal class EmbeddedGraph
+{
+    public string Path { get; set; } = string.Empty;
+    public GraphData Graph { get; set; } = new();
 }
 
 internal class NodeData

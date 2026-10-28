@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Windows;
 using System.Windows.Input;
+using Akagi.Graphs;
 using Microsoft.Win32;
 
 namespace Akagi.CharacterEditor;
@@ -52,6 +53,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
     public ICommand OpenCommand { get; }
     public ICommand SaveCommand { get; }
     public ICommand SaveAsCommand { get; }
+    public ICommand ExportBundleCommand { get; }
     public ICommand CloseTabCommand { get; }
     public ICommand OpenRecentFileCommand { get; }
 
@@ -71,6 +73,7 @@ public class MainWindowViewModel : INotifyPropertyChanged
         OpenCommand = new DelegateCommand<object>(_ => OpenFile());
         SaveCommand = new DelegateCommand<object>(_ => SaveFile());
         SaveAsCommand = new DelegateCommand<object>(_ => SaveFileAs());
+        ExportBundleCommand = new DelegateCommand<object>(_ => ExportBundle());
         CloseTabCommand = new DelegateCommand<TabViewModel>(tab => CloseTab(tab));
         OpenRecentFileCommand = new DelegateCommand<string>(filePath => OpenRecentFile(filePath));
 
@@ -210,6 +213,70 @@ public class MainWindowViewModel : INotifyPropertyChanged
         catch (Exception ex)
         {
             MessageBox.Show($"Failed to save file: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Writes the current graph with every subgraph it references embedded, so the whole graph can be uploaded
+    /// with /uploadGraph as a single file. The root is taken from the editor, subgraphs are read from disk relative
+    /// to the root's file.
+    /// </summary>
+    private async void ExportBundle()
+    {
+        if (SelectedTab == null)
+            return;
+
+        if (string.IsNullOrEmpty(SelectedTab.FilePath))
+        {
+            MessageBox.Show("Save the graph first, subgraph paths are resolved relative to its file.", "Export Bundle",
+                MessageBoxButton.OK, MessageBoxImage.Information);
+            SaveFileAs();
+            if (string.IsNullOrEmpty(SelectedTab.FilePath))
+                return;
+        }
+
+        List<string> unsaved = [.. Tabs.Where(t => t != SelectedTab && t.IsDirty && t.FilePath != null).Select(t => t.DisplayName)];
+        if (unsaved.Count > 0)
+        {
+            MessageBoxResult answer = MessageBox.Show(
+                $"These tabs have unsaved changes that will not be in the bundle:\n{string.Join("\n", unsaved)}\n\nExport anyway?",
+                "Export Bundle", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (answer != MessageBoxResult.Yes)
+                return;
+        }
+
+        try
+        {
+            string rootPath = SelectedTab.FilePath;
+            string json = SerializeGraph(SelectedTab.EditorViewModel, SelectedTab.ViewportLocation, SelectedTab.ViewportZoom, SelectedTab.GraphId);
+            GraphBundler.BundleResult result = await GraphBundler.BundleAsync(Akagi.Graphs.GraphData.Parse(json),
+                new FileGraphResolver(), Path.GetDirectoryName(rootPath));
+            if (!result.Success)
+            {
+                MessageBox.Show($"Could not resolve every subgraph:\n{string.Join("\n", result.Errors)}", "Export Bundle",
+                    MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            string defaultPath = GraphCli.BundleFileName(rootPath);
+            SaveFileDialog dialog = new()
+            {
+                Filter = "Graph Bundles (*.bundle.json)|*.bundle.json|Node Graph Files (*.json)|*.json|All Files (*.*)|*.*",
+                Title = "Export Graph Bundle",
+                InitialDirectory = Path.GetDirectoryName(defaultPath),
+                FileName = Path.GetFileName(defaultPath)
+            };
+            if (dialog.ShowDialog() != true)
+                return;
+
+            File.WriteAllText(dialog.FileName, result.Bundle.ToJson(), Encoding.UTF8);
+            IEnumerable<string> embedded = (result.Bundle.Embedded ?? []).Select(e => "  " + e.Path);
+            MessageBox.Show($"Exported {result.Bundle.Embedded?.Count ?? 0} subgraph(s) with the graph:\n{string.Join("\n", embedded)}\n\n" +
+                "Upload the file with /uploadGraph.", "Export Bundle", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to export bundle: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

@@ -85,9 +85,30 @@ internal partial class TelegramService : Communicator, IHostedService
         await textCommand.ExecuteAsync(context, [.. args]);
     }
 
-    private async Task HandleDocumentCommand(Telegram.Bot.Types.Message message, Users.User user)
+    private Task HandleDocumentCommand(Telegram.Bot.Types.Message message, Users.User user) => HandleDocumentCommand([message], user);
+
+    private async Task HandleAlbumCommand(IReadOnlyList<Telegram.Bot.Types.Message> messages, Users.User user)
     {
-        if (_client == null || message.Caption == null)
+        Telegram.Bot.Types.Message first = messages.First(m => m.Caption != null);
+        try
+        {
+            await HandleDocumentCommand(messages, user);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to process album command '{Command}' from user {UserId}", first.Caption, user.Id);
+            await _client!.SendMessage(first.Chat.Id, "Failed to process command");
+        }
+    }
+
+    /// <summary>
+    /// Runs a document command over one message, or over all files of an album; the caption of the first
+    /// captioned message is the command.
+    /// </summary>
+    private async Task HandleDocumentCommand(IReadOnlyList<Telegram.Bot.Types.Message> messages, Users.User user)
+    {
+        Telegram.Bot.Types.Message? message = messages.FirstOrDefault(m => m.Caption != null);
+        if (_client == null || message?.Caption == null)
         {
             return;
         }
@@ -110,13 +131,16 @@ internal partial class TelegramService : Communicator, IHostedService
         string[] args = Command.ParseArguments(argString);
 
         List<TelegramDocument> validFiles = [];
-        if (message.Document != null)
+        foreach (Telegram.Bot.Types.Message part in messages)
         {
-            validFiles.Add(new TelegramDocument(message.Document));
-        }
-        else if (message.Photo != null && message.Photo.Length > 0)
-        {
-            validFiles.AddRange(message.Photo.Select(x => new TelegramDocument(x)));
+            if (part.Document != null)
+            {
+                validFiles.Add(new TelegramDocument(part.Document));
+            }
+            else if (part.Photo != null && part.Photo.Length > 0)
+            {
+                validFiles.AddRange(part.Photo.Select(x => new TelegramDocument(x)));
+            }
         }
         validFiles.ForEach(x => x.Init(this));
 

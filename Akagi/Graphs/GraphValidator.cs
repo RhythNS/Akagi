@@ -43,6 +43,10 @@ internal class GraphValidationReport
     public int ConnectionCount { get; set; }
     public int ReferenceCount { get; set; }
     public int? ComposedNodeCount { get; set; }
+    /// <summary>
+    /// Number of subgraphs embedded in the file; a bundle shares its GraphId with the graph it was exported from.
+    /// </summary>
+    public int EmbeddedCount { get; set; }
     public List<GraphIssue> Issues { get; } = [];
 
     public bool IsValid => !Issues.Any(i => i.Severity == GraphIssueSeverity.Error);
@@ -63,6 +67,10 @@ internal class GraphValidationReport
         if (ReferenceCount > 0)
         {
             builder.Append($", References: {ReferenceCount}, Composed nodes: {ComposedNodeCount?.ToString() ?? "-"}");
+        }
+        if (EmbeddedCount > 0)
+        {
+            builder.Append($", Embedded graphs: {EmbeddedCount}");
         }
         builder.AppendLine();
 
@@ -143,7 +151,8 @@ internal class GraphValidator
             Source = source,
             GraphId = graph.GraphId,
             NodeCount = graph.Nodes.Count,
-            ConnectionCount = graph.Connections.Count
+            ConnectionCount = graph.Connections.Count,
+            EmbeddedCount = graph.Embedded?.Count ?? 0
         };
 
         if (string.IsNullOrWhiteSpace(graph.GraphId))
@@ -189,7 +198,7 @@ internal class GraphValidator
     public static void CheckDuplicateGraphIds(IEnumerable<GraphValidationReport> reports)
     {
         foreach (IGrouping<string, GraphValidationReport> group in reports
-            .Where(r => !string.IsNullOrWhiteSpace(r.GraphId))
+            .Where(r => !string.IsNullOrWhiteSpace(r.GraphId) && r.EmbeddedCount == 0)
             .GroupBy(r => r.GraphId!, StringComparer.OrdinalIgnoreCase)
             .Where(g => g.Count() > 1))
         {

@@ -31,7 +31,8 @@ public class CompanionGraphTests
     {
         GraphValidator validator = new();
         List<GraphValidationReport> reports = [];
-        foreach (string file in Directory.GetFiles(CompanionDirectory(), "*.json"))
+        // Bundles exported next to the graphs (--bundle without -o) are copies, not graphs of their own
+        foreach (string file in Directory.GetFiles(CompanionDirectory(), "*.json").Where(f => !f.EndsWith(".bundle.json", StringComparison.OrdinalIgnoreCase)))
         {
             reports.Add(await validator.ValidateFileAsync(file));
         }
@@ -68,6 +69,24 @@ public class CompanionGraphTests
 
         SystemProcessor persona = created.OfType<SystemProcessor>().Single(p => p.Name == "Akagi");
         Assert.Contains("Consult", persona.CommandNames);
+    }
+
+    [Fact]
+    public async Task CompanionBundle_LoadsFromOneFileWithoutTheSubgraphFiles()
+    {
+        string path = Path.Combine(CompanionDirectory(), "Companion.json");
+        GraphBundler.BundleResult result = await GraphBundler.BundleAsync(GraphData.Load(path), new FileGraphResolver(), CompanionDirectory());
+        Assert.True(result.Success, string.Join(Environment.NewLine, result.Errors));
+        Assert.Equal(["Akagi.json", "Hana.json", "Kai.json", "Sensei.json"], result.Bundle.Embedded!.Select(e => e.Path).Order());
+
+        InMemoryDatabaseFactory database = new();
+        GraphLoader loader = new(database);
+        loader.LoadGraph(GraphData.Parse(result.Bundle.ToJson()));
+        List<Savable> created = await loader.Create("65f000000000000000000004", "companion");
+
+        CharacterGroup group = Assert.Single(created.OfType<CharacterGroup>());
+        Assert.Equal(["Akagi", "Sensei", "Hana", "Kai"],
+            group.MemberCharacterIds.Select(id => created.OfType<Character>().Single(c => c.Id == id).Name));
     }
 
     [Fact]

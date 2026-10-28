@@ -64,7 +64,7 @@ internal class FileGraphResolver : IGraphResolver
 
     private IEnumerable<string> CandidateDirectories(string? baseDirectory)
     {
-        if (!string.IsNullOrWhiteSpace(baseDirectory))
+        if (!string.IsNullOrWhiteSpace(baseDirectory) && !EmbeddedGraphResolver.IsVirtual(baseDirectory))
         {
             yield return baseDirectory;
         }

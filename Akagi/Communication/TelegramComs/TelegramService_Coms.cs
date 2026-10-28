@@ -188,7 +188,44 @@ internal partial class TelegramService : Communicator, IStreamingCommunicator, I
         }
     }
 
-    private async Task OnMessage(Telegram.Bot.Types.Message message, CancellationToken cancellationToken)
+    /// <summary>
+    /// How long to wait for more files of an album before handling it.
+    /// </summary>
+    public static readonly TimeSpan AlbumQuietPeriod = TimeSpan.FromSeconds(2);
+
+    private AlbumCollector<(Telegram.Bot.Types.Message Message, Users.User User)>? _albumCollector;
+
+    private AlbumCollector<(Telegram.Bot.Types.Message Message, Users.User User)> Albums =>
+        _albumCollector ??= new(AlbumQuietPeriod, OnAlbumComplete);
+
+    /// <summary>
+    /// An album whose caption is a command runs that command once with all its files; any other album is handled
+    /// message by message as before.
+    /// </summary>
+    private async Task OnAlbumComplete(IReadOnlyList<(Telegram.Bot.Types.Message Message, Users.User User)> parts)
+    {
+        List<Telegram.Bot.Types.Message> messages = [.. parts.Select(p => p.Message).OrderBy(m => m.MessageId)];
+        Users.User user = parts[0].User;
+        try
+        {
+            if (messages.Any(m => m.Caption?.StartsWith("/", StringComparison.InvariantCultureIgnoreCase) == true))
+            {
+                _logger.LogInformation("Received album command with {Count} files from user {UserId}", messages.Count, user.Id);
+                await HandleAlbumCommand(messages, user);
+                return;
+            }
+            foreach (Telegram.Bot.Types.Message message in messages)
+            {
+                await OnMessage(message, CancellationToken.None, fromAlbum: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to handle album from user {UserId}", user.Id);
+        }
+    }
+
+    private async Task OnMessage(Telegram.Bot.Types.Message message, CancellationToken cancellationToken, bool fromAlbum = false)
     {
         if (message is null || message.From?.Id is null || message.From?.Id == _me?.Id)
         {
@@ -254,6 +291,12 @@ internal partial class TelegramService : Communicator, IStreamingCommunicator, I
         if (user.LastUsedCommunicator != Name)
         {
             user.LastUsedCommunicator = Name;
+        }
+
+        if (!fromAlbum && message.MediaGroupId != null && (message.Document != null || message.Photo != null))
+        {
+            _ = Albums.Add($"{message.Chat.Id}:{message.MediaGroupId}", (message, user));
+            return;
         }
 
         if ((message.Text?.StartsWith("/", StringComparison.InvariantCultureIgnoreCase) ?? false) ||

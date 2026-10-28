@@ -110,12 +110,13 @@ internal class GraphLoader
             return _graphData;
         }
 
-        if (Resolver == null)
+        if (Resolver == null && !_graphData.IsBundle)
         {
             throw new InvalidOperationException("Graph contains graph references but no resolver is configured.");
         }
 
-        GraphComposer composer = new(Resolver);
+        // A bundle resolves its references from the graphs it carries
+        GraphComposer composer = new(Resolver ?? new CompositeGraphResolver());
         return await composer.ComposeOrThrowAsync(_graphData, BaseDirectory);
     }
 

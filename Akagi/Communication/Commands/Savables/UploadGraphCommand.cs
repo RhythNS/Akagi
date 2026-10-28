@@ -8,7 +8,11 @@ internal class UploadGraphCommand : DocumentCommand
 {
     public override string Name => "/uploadGraph";
 
-    public override string Description => "Uploads graph JSON files and creates all objects in the database. Graph references are resolved against graphs uploaded before or in the same message. Usage: /uploadGraph <json files> [operation] [name]";
+    public override string Description =>
+        "Uploads graph JSON files and creates their objects. Send a bundle exported by the CharacterEditor (or --bundle), " +
+        "or a graph together with its subgraphs in any order: only graphs no other uploaded graph references are created, " +
+        "the rest are stored so references resolve. --all creates every uploaded graph. " +
+        "Usage: /uploadGraph <json files> create|update [name] [--all]";
 
     private readonly IDatabaseFactory _databaseFactory;
 
@@ -30,14 +34,16 @@ internal class UploadGraphCommand : DocumentCommand
             await Communicator.SendMessage(context.User, "Please upload a valid JSON graph file.");
             return CommandResult.Fail("No documents provided.");
         }
+        bool instantiateAll = args.Any(a => string.Equals(a, "--all", StringComparison.OrdinalIgnoreCase));
+        args = [.. args.Where(a => !string.Equals(a, "--all", StringComparison.OrdinalIgnoreCase))];
         if (args.Length == 0)
         {
-            await Communicator.SendMessage(context.User, "Please specify an operation: New or Update.");
+            await Communicator.SendMessage(context.User, "Please specify an operation: create or update.");
             return CommandResult.Fail("No operation specified.");
         }
         if (Enum.TryParse(args[0], true, out OperationType operation) == false)
         {
-            await Communicator.SendMessage(context.User, "Invalid operation specified. Please use New or Update.");
+            await Communicator.SendMessage(context.User, "Invalid operation specified. Please use create or update.");
             return CommandResult.Fail("Invalid operation.");
         }
         string? graphName = null;
@@ -55,9 +61,8 @@ internal class UploadGraphCommand : DocumentCommand
         List<string> errorMessages = [];
 
         IGraphDefinitionDatabase definitionDatabase = _databaseFactory.GetDatabase<IGraphDefinitionDatabase>();
-        List<(Document Document, GraphData Graph)> graphs = [];
+        List<GraphUploadPlan.UploadedGraph> uploads = [];
 
-        // Store every definition first so graphs in the same upload can reference each other.
         foreach (Document document in documents)
         {
             using MemoryStream? stream = await document.GetStream();
@@ -79,9 +84,7 @@ internal class UploadGraphCommand : DocumentCommand
                 stream.Position = 0;
                 using StreamReader reader = new(stream, Encoding.UTF8);
                 string json = await reader.ReadToEndAsync();
-                GraphData graph = GraphData.Parse(json);
-                await definitionDatabase.Store(graph.GraphId, document.Name, json, context.User.Id!);
-                graphs.Add((document, graph));
+                uploads.Add(new GraphUploadPlan.UploadedGraph(document.Name, GraphData.Parse(json)));
             }
             catch (Exception ex)
             {
@@ -89,8 +92,17 @@ internal class UploadGraphCommand : DocumentCommand
             }
         }
 
-        foreach ((Document document, GraphData graph) in graphs)
+        // Store every definition first, so the order of the files does not matter for references
+        GraphUploadPlan plan = GraphUploadPlan.Create(uploads, instantiateAll);
+        foreach (GraphUploadPlan.Definition definition in plan.Definitions)
         {
+            await definitionDatabase.Store(definition.GraphId, definition.FileName, definition.Json, context.User.Id!);
+        }
+
+        foreach (GraphUploadPlan.UploadedGraph upload in plan.Roots)
+        {
+            string documentName = upload.FileName;
+            GraphData graph = upload.Graph;
             try
             {
                 GraphLoader loader = new(_databaseFactory)
@@ -107,20 +119,34 @@ internal class UploadGraphCommand : DocumentCommand
                 };
                 if (createdObjects.Count > 0)
                 {
-                    successNames.Add($"{document.Name} ({createdObjects.Count} objects)");
+                    successNames.Add($"{documentName} ({createdObjects.Count} objects)");
                 }
                 else
                 {
-                    errorMessages.Add($"{document.Name}: No objects created");
+                    errorMessages.Add($"{documentName}: No objects created");
                 }
             }
             catch (Exception ex)
             {
-                errorMessages.Add($"{document.Name}: {ex.Message}");
+                errorMessages.Add($"{documentName}: {ex.Message}");
             }
         }
 
         StringBuilder response = new();
+        int embedded = uploads.Sum(u => u.Graph.Embedded?.Count ?? 0);
+        if (plan.Subgraphs.Count > 0 || embedded > 0)
+        {
+            response.AppendLine($"Stored {plan.Subgraphs.Count + embedded} subgraph(s) for references:");
+            foreach ((GraphUploadPlan.UploadedGraph subgraph, string usedBy) in plan.Subgraphs)
+            {
+                response.AppendLine($"  - {subgraph.FileName} (used by {usedBy})");
+            }
+            foreach (GraphUploadPlan.UploadedGraph bundle in uploads.Where(u => u.Graph.IsBundle))
+            {
+                response.AppendLine($"  - {string.Join(", ", bundle.Graph.Embedded!.Select(e => e.Path))} (embedded in {bundle.FileName})");
+            }
+            response.AppendLine();
+        }
 
         if (successNames.Count > 0)
         {

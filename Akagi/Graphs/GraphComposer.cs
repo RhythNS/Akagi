@@ -48,7 +48,11 @@ internal class GraphComposer
         Stack<string> chain = new();
         chain.Push(identity ?? "graph:" + graph.GraphId);
 
-        FlattenResult flattened = await Flatten(graph, baseDirectory, chain, errors, string.Empty);
+        // A bundle carries its own subgraphs; they win over files and uploads with the same path or id
+        IGraphResolver resolver = graph.IsBundle
+            ? new CompositeGraphResolver(new EmbeddedGraphResolver(graph.Embedded!), _resolver)
+            : _resolver;
+        FlattenResult flattened = await Flatten(resolver, graph, baseDirectory, chain, errors, string.Empty);
 
         GraphCompositionResult result = new()
         {
@@ -75,7 +79,7 @@ internal class GraphComposer
 
     private record FlattenResult(GraphData Graph, int[] IndexMap, List<string> Origins);
 
-    private async Task<FlattenResult> Flatten(GraphData graph, string? baseDirectory, Stack<string> chain, List<string> errors, string path)
+    private async Task<FlattenResult> Flatten(IGraphResolver resolver, GraphData graph, string? baseDirectory, Stack<string> chain, List<string> errors, string path)
     {
         GraphData output = new()
         {
@@ -125,7 +129,7 @@ internal class GraphComposer
             ResolvedGraph? resolved;
             try
             {
-                resolved = await _resolver.ResolveAsync(reference, baseDirectory);
+                resolved = await resolver.ResolveAsync(reference, baseDirectory);
             }
             catch (Exception ex)
             {
@@ -157,7 +161,7 @@ internal class GraphComposer
                 : Path.GetFileName(resolved.Identity);
 
             chain.Push(resolved.Identity);
-            FlattenResult childResult = await Flatten(child, resolved.BaseDirectory, chain, errors, $"{label} > {childName}");
+            FlattenResult childResult = await Flatten(resolver, child, resolved.BaseDirectory, chain, errors, $"{label} > {childName}");
             chain.Pop();
 
             int exportIndex = ResolveExport(child, childResult, reference, errors, label);

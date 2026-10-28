@@ -40,6 +40,9 @@ internal class GraphCli
               Prints the catalog entry of a single node type.
           --compose <graph.json> [-o output.json] [--search <dir>]
               Inlines all graph references and writes the flattened graph.
+          --bundle <graph.json> [-o output.json] [--search <dir>]
+              Writes the graph with every referenced subgraph embedded, as one file to upload with
+              /uploadGraph. Without -o it writes <name>.bundle.json next to the graph.
           --help
               Shows this text.
         """;
@@ -60,6 +63,7 @@ internal class GraphCli
                 "--dump-nodes" => DumpNodes(args[1..]),
                 "--describe-node" => DescribeNode(args[1..]),
                 "--compose" => await Compose(args[1..]),
+                "--bundle" => await Bundle(args[1..]),
                 "--help" or "-h" or "/?" => Help(),
                 _ => UnknownCommand(args[0])
             };
@@ -200,12 +204,47 @@ internal class GraphCli
         return ExitOk;
     }
 
-    private async Task<int> Compose(string[] args)
+    private async Task<int> Bundle(string[] args)
     {
-        string? input = null;
-        string? output = null;
-        List<string> searchDirectories = [];
+        if (!TryParseInputOutput(args, "--bundle", out string? input, out string? output, out List<string> searchDirectories, out int exitCode))
+        {
+            return exitCode;
+        }
 
+        string fullPath = Path.GetFullPath(input!);
+        GraphBundler.BundleResult result = await GraphBundler.BundleAsync(GraphData.Load(fullPath),
+            new FileGraphResolver([.. searchDirectories]), Path.GetDirectoryName(fullPath));
+        foreach (string error in result.Errors)
+        {
+            _error.WriteLine($"error: {error}");
+        }
+        if (!result.Success)
+        {
+            return ExitFailed;
+        }
+
+        output ??= BundleFileName(fullPath);
+        File.WriteAllText(output, result.Bundle.ToJson());
+        _out.WriteLine($"Wrote bundle with {result.Bundle.Embedded?.Count ?? 0} embedded graph(s) to {Path.GetFullPath(output)}");
+        foreach (EmbeddedGraph embedded in result.Bundle.Embedded ?? [])
+        {
+            _out.WriteLine($"  {embedded.Path} ({embedded.Graph.GraphId})");
+        }
+        return ExitOk;
+    }
+
+    /// <summary>
+    /// "Companion.json" becomes "Companion.bundle.json" in the same directory.
+    /// </summary>
+    public static string BundleFileName(string graphPath) =>
+        Path.Combine(Path.GetDirectoryName(graphPath) ?? string.Empty, Path.GetFileNameWithoutExtension(graphPath) + ".bundle.json");
+
+    private bool TryParseInputOutput(string[] args, string command, out string? input, out string? output, out List<string> searchDirectories, out int exitCode)
+    {
+        input = null;
+        output = null;
+        searchDirectories = [];
+        exitCode = ExitOk;
         for (int i = 0; i < args.Length; i++)
         {
             switch (args[i].ToLowerInvariant())
@@ -215,7 +254,8 @@ internal class GraphCli
                     if (++i >= args.Length)
                     {
                         _error.WriteLine("-o needs a file name.");
-                        return ExitUsage;
+                        exitCode = ExitUsage;
+                        return false;
                     }
                     output = args[i];
                     break;
@@ -223,7 +263,8 @@ internal class GraphCli
                     if (++i >= args.Length)
                     {
                         _error.WriteLine("--search needs a directory.");
-                        return ExitUsage;
+                        exitCode = ExitUsage;
+                        return false;
                     }
                     searchDirectories.Add(args[i]);
                     break;
@@ -232,14 +273,23 @@ internal class GraphCli
                     break;
             }
         }
-
         if (input == null)
         {
-            _error.WriteLine("--compose needs a graph file.");
-            return ExitUsage;
+            _error.WriteLine($"{command} needs a graph file.");
+            exitCode = ExitUsage;
+            return false;
+        }
+        return true;
+    }
+
+    private async Task<int> Compose(string[] args)
+    {
+        if (!TryParseInputOutput(args, "--compose", out string? input, out string? output, out List<string> searchDirectories, out int exitCode))
+        {
+            return exitCode;
         }
 
-        string fullPath = Path.GetFullPath(input);
+        string fullPath = Path.GetFullPath(input!);
         GraphData graph = GraphData.Load(fullPath);
         GraphComposer composer = new(new FileGraphResolver([.. searchDirectories]));
         GraphCompositionResult result = await composer.ComposeAsync(graph, Path.GetDirectoryName(fullPath), fullPath);

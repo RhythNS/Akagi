@@ -220,6 +220,11 @@
                           Command="{Binding SaveAsCommand}"
                           InputGestureText="Ctrl+Shift+S"
                           Style="{StaticResource ThemedMenuItem}" />
+                <Separator/>
+                <MenuItem Header="Export _Bundle..."
+                          Command="{Binding ExportBundleCommand}"
+                          ToolTip="Writes the graph with all referenced subgraphs embedded, to upload with /uploadGraph in one file"
+                          Style="{StaticResource ThemedMenuItem}" />
             </MenuItem>
             <MenuItem Header="_Edit"
                       Style="{StaticResource ThemedMenuItem}">
