@@ -19,7 +19,7 @@ public class CompanionGraphTests
 {
     private static string CompanionDirectory()
     {
-        DirectoryInfo? directory = new(AppContext.BaseDirectory);
+        DirectoryInfo? directory = new(Environment.GetEnvironmentVariable("AKAGI_REPO") ?? AppContext.BaseDirectory);
         while (directory != null && !File.Exists(Path.Combine(directory.FullName, "Akagi.sln")))
         {
             directory = directory.Parent;
@@ -90,13 +90,15 @@ public class CompanionGraphTests
         Assert.Equal(["Akagi", "Sensei", "Hana", "Kai"],
             group.MemberCharacterIds.Select(id => created.OfType<Character>().Single(c => c.Id == id).Name));
 
-        // Every member has its own embedded card, and cards without a picture can be stored in MongoDB
+        // Every member has its own embedded card. Akagi's may point to her uploaded picture; the modules have none
+        // yet, which MongoDB stores as null
         List<Card> cards = [.. created.OfType<Card>()];
         foreach (Character member in created.OfType<Character>())
         {
             Assert.Contains(cards, c => c.Id == member.CardId);
         }
-        Assert.All(cards, card => Assert.True(card.ToBsonDocument()["ImageId"].IsBsonNull));
+        Assert.Contains(cards.Single(c => c.Name == "Akagi").ToBsonDocument()["ImageId"].BsonType, new[] { BsonType.ObjectId, BsonType.Null });
+        Assert.All(cards.Where(c => c.Name != "Akagi"), card => Assert.True(card.ToBsonDocument()["ImageId"].IsBsonNull));
     }
 
     [Fact]
