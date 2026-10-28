@@ -8,6 +8,8 @@ internal class SaveMacroCommand : TextCommand
         "Use $varName for dynamic variables. Use static:key=value to define static variables. " +
         "Example: /saveMacro myMacro static:name=hello /changeName $name;/ping";
 
+    public override string? Usage => "/saveMacro <name> <steps...>";
+
     private readonly IMacroDatabase _macroDatabase;
 
     public SaveMacroCommand(IMacroDatabase macroDatabase)

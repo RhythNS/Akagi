@@ -30,6 +30,9 @@ public static class Icons
     public static IIconType Paperclip => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M15 7l-6.5 6.5a1.5 1.5 0 0 0 3 3l6.5 -6.5a3 3 0 0 0 -6 -6l-6.5 6.5a4.5 4.5 0 0 0 9 9l6.5 -6.5' />");
 
+    public static IIconType Terminal => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M8 9l3 3l-3 3' /><path d='M13 15l3 0' /><path d='M3 6a2 2 0 0 1 2 -2h14a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-14a2 2 0 0 1 -2 -2z' />");
+
     public static IIconType DotsVertical => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' /><path d='M12 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' /><path d='M12 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' />");
 

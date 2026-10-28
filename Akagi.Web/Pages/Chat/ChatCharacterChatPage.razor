@@ -123,6 +123,7 @@
 					<p class="empty-title">Start a conversation with @DisplayName</p>
 					<p class="empty-subtitle text-secondary">
 						Send a message below to begin streaming responses in real time.
+						Type <kbd>/</kbd> or use the <Icon IconType="@Icons.Terminal" Size="14" /> button to run a command.
 					</p>
 				</div>
 			}
@@ -203,6 +204,17 @@
 
 	<!-- Floating Pill Composer -->
 	<div class="composer-wrapper p-2 p-md-3 border-top bg-surface">
+		<CommandPalette @ref="_commandPalette"
+						Commands="_commands"
+						Filter="@_newMessage"
+						FromComposer="ComposerShowsCommands"
+						Visible="@(_paletteOpen || ComposerShowsCommands)"
+						Recent="_recentCommands"
+						AttachedFileName="@_selectedFile?.Name"
+						OnRun="RunCommandAsync"
+						OnEditAsText="EditCommandAsTextAsync"
+						OnClose="ClosePalette" />
+
 		@if (_selectedFile is not null)
 		{
 			<div class="mb-2 d-flex align-items-center">
@@ -225,10 +237,17 @@
 				<Icon IconType="@Icons.Paperclip" Size="18" />
 				<InputFile OnChange="OnFileSelected" class="d-none" />
 			</label>
+			<button type="button"
+					class="btn btn-icon btn-ghost-secondary rounded-circle mb-0 flex-shrink-0 @(_paletteOpen || (_commandPalette?.IsFormOpen ?? false) ? "active" : "")"
+					title="Run a command"
+					@onclick="ToggleCommandPaletteAsync">
+				<Icon IconType="@Icons.Terminal" Size="18" />
+			</button>
 
 			<textarea class="form-control border-0 bg-transparent shadow-none composer-input px-1 py-1"
-					  placeholder="Message @DisplayName... (Enter to send, Shift+Enter for newline)"
+					  placeholder="Message @DisplayName... (/ for commands, Shift+Enter for newline)"
 					  rows="1"
+					  @ref="_composerEl"
 					  value="@_newMessage"
 					  @oninput="OnComposerInput"
 					  @onkeydown="OnMessageKeyDown"></textarea>
@@ -270,7 +289,7 @@
 				}
 			</span>
 			<span class="text-secondary d-none d-md-inline" style="font-size: 0.72rem;">
-				<kbd>Enter</kbd> to send • <kbd>Shift + Enter</kbd> for newline
+				<kbd>Enter</kbd> to send • <kbd>Shift + Enter</kbd> for newline • <kbd>/</kbd> for commands
 			</span>
 		</div>
 	</div>
@@ -450,7 +469,18 @@
 	private SocketClient? _subscribedClient;
 
 	private IBrowserFile? _selectedFile = null;
+
 	private const long MaxUploadBytes = 50 * 1024 * 1024; // 50 MB
+
+	// Command palette
+	private CommandPalette? _commandPalette;
+	private Akagi.Bridge.Chat.Models.Command[]? _commands;
+	private bool _loadingCommands;
+	private bool _paletteOpen;
+	private string? _paletteDismissedFor;
+	private List<string> _recentCommands = [];
+	private const int MaxRecentCommands = 5;
+	private ElementReference _composerEl;
 
 	// Auto-scroll support
 	private ElementReference _scrollEl;
@@ -465,6 +495,12 @@
 		IsDirectAssistant ? "Direct Assistant" : (_character?.Name ?? $"Character {CharacterId}");
 
 	private bool IsStreamingActive => _activeStreams.Count > 0;
+
+	/// <summary>
+	/// "/upg" in the composer lists matching commands until a space starts the arguments.
+	/// </summary>
+	private bool ComposerShowsCommands =>
+		_newMessage.StartsWith('/') && !_newMessage.Any(char.IsWhiteSpace) && _newMessage != _paletteDismissedFor;
 
 	public void Dispose()
 	{
@@ -540,6 +576,7 @@
 			if (client != null && SocketClientContainer.IsConnected)
 			{
 				SubscribeToClient(client);
+				_commands = null;
 
 				if (!IsDirectAssistant && _character == null)
 				{
@@ -576,6 +613,8 @@
 				_jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Chat/ChatCharacterChatPage.razor.js");
 				_pendingScroll = true;
 				_forceScroll = true;
+				_recentCommands = [.. await _jsModule.InvokeAsync<string[]>("loadRecentCommands")];
+				StateHasChanged();
 			}
 			catch
 			{
@@ -823,10 +862,55 @@
 
 	private async Task OnMessageKeyDown(KeyboardEventArgs e)
 	{
+		if (ComposerShowsCommands && _commandPalette != null && await HandleCommandKeyAsync(e))
+		{
+			return;
+		}
+
 		if (e.Key == "Enter" && !e.ShiftKey)
 		{
 			_skipNextInputUpdate = true;
 			await SendMessageAsync();
+		}
+	}
+
+	/// <summary>
+	/// Keys while "/..." lists commands: arrows choose, Enter opens the form (or sends a command without values),
+	/// Escape hides the list. Returns false when the key should do what it normally does.
+	/// </summary>
+	private async Task<bool> HandleCommandKeyAsync(KeyboardEventArgs e)
+	{
+		switch (e.Key)
+		{
+			case "ArrowDown":
+				_commandPalette!.MoveHighlight(1);
+				return true;
+			case "ArrowUp":
+				_commandPalette!.MoveHighlight(-1);
+				return true;
+			case "Escape":
+				ClosePalette();
+				return true;
+			case "Enter" when !e.ShiftKey:
+				Akagi.Bridge.Chat.Models.Command? exact = _commands?.FirstOrDefault(c => string.Equals(c.Name, _newMessage, StringComparison.OrdinalIgnoreCase));
+				if (exact != null && exact.Forms.Length == 1 && exact.Forms[0].Parameters.Length == 0)
+				{
+					// Nothing to fill in: send it like a typed command
+					await RememberCommandAsync(exact.Name);
+					return false;
+				}
+				bool opened = exact != null
+					? await _commandPalette!.OpenByNameAsync(exact.Name)
+					: await _commandPalette!.PickHighlightedAsync();
+				if (!opened)
+				{
+					return false;
+				}
+				_skipNextInputUpdate = true;
+				_newMessage = string.Empty;
+				return true;
+			default:
+				return false;
 		}
 	}
 
@@ -839,6 +923,110 @@
 		}
 
 		_newMessage = e.Value?.ToString() ?? string.Empty;
+		if (_newMessage.StartsWith('/'))
+		{
+			_ = EnsureCommandsAsync();
+		}
+	}
+
+	private async Task EnsureCommandsAsync()
+	{
+		if (_commands != null || _loadingCommands)
+		{
+			return;
+		}
+
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client == null)
+		{
+			return;
+		}
+
+		_loadingCommands = true;
+		try
+		{
+			_commands = await new CommandListRequest().Get(client, TimeSpan.FromSeconds(10));
+		}
+		catch (Exception ex)
+		{
+			Logger.LogWarning(ex, "Could not load the command list");
+			await ToastService.AddToastAsync(new ToastModel
+			{
+				Title = "Commands",
+				Message = "Could not load the command list. You can still type commands by hand."
+			});
+		}
+		finally
+		{
+			_loadingCommands = false;
+			await InvokeAsync(StateHasChanged);
+		}
+	}
+
+	private async Task ToggleCommandPaletteAsync()
+	{
+		if (_paletteOpen || (_commandPalette?.IsFormOpen ?? false))
+		{
+			ClosePalette();
+			return;
+		}
+
+		_paletteOpen = true;
+		_commandPalette?.OpenSearch();
+		await EnsureCommandsAsync();
+	}
+
+	private void ClosePalette()
+	{
+		_paletteOpen = false;
+		_paletteDismissedFor = _newMessage;
+		_commandPalette?.Reset();
+	}
+
+	private async Task RunCommandAsync(string commandLine)
+	{
+		_paletteOpen = false;
+		await RememberCommandAsync(commandLine);
+		_newMessage = commandLine;
+		await SendMessageAsync();
+	}
+
+	private async Task EditCommandAsTextAsync(string commandLine)
+	{
+		_paletteOpen = false;
+		_newMessage = commandLine;
+		_paletteDismissedFor = commandLine;
+		StateHasChanged();
+		try
+		{
+			await _composerEl.FocusAsync();
+		}
+		catch
+		{
+			// The composer is not rendered
+		}
+	}
+
+	private async Task RememberCommandAsync(string commandLine)
+	{
+		string name = commandLine.Split(' ', 2)[0];
+		_recentCommands.RemoveAll(n => string.Equals(n, name, StringComparison.OrdinalIgnoreCase));
+		_recentCommands.Insert(0, name);
+		if (_recentCommands.Count > MaxRecentCommands)
+		{
+			_recentCommands.RemoveRange(MaxRecentCommands, _recentCommands.Count - MaxRecentCommands);
+		}
+		if (_jsModule != null)
+		{
+			try
+			{
+				await _jsModule.InvokeVoidAsync("saveRecentCommands", _recentCommands);
+			}
+			catch
+			{
+				// Recent commands are a convenience
+			}
+		}
 	}
 
 	private void OnClientMessageReceived(string? characterId, Message message)

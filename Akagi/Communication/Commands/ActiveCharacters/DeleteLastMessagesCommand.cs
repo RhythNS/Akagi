@@ -9,6 +9,8 @@ internal class DeleteLastMessagesCommand : TextCommand
 
     public override string Description => "Deletes the last messages from the current conversation. Usage: /deleteLastMessages <count> <safetyConfirm>";
 
+    public override string? Usage => "/deleteLastMessages <count> [type confirm]";
+
     public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         int count = 0;

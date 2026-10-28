@@ -9,6 +9,8 @@ internal class HelpListCommand : ListCommand
 
     public override string Description => "Lists all available commands. Usage: /help <searchTerm>";
 
+    public override string? Usage => "/help [searchTerm]";
+
     public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         string? searchTerm = args.Length < 1 ? null : args[0].ToLowerInvariant();

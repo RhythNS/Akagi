@@ -6,6 +6,8 @@ internal class RunMacroCommand : TextCommand
 
     public override string Description => "Runs a saved macro. Usage: /runMacro <name> [dynamic variable values in order]";
 
+    public override string? Usage => "/runMacro <name> [values...]";
+
     private readonly IMacroDatabase _macroDatabase;
 
     public RunMacroCommand(IMacroDatabase macroDatabase)

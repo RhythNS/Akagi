@@ -47,7 +47,7 @@ internal partial class TelegramService : Communicator, IHostedService
 
         string command = message.Text;
 
-        TextCommand? textCommand = _textCommands.FirstOrDefault(c => command.StartsWith(c.Name, StringComparison.InvariantCultureIgnoreCase));
+        TextCommand? textCommand = Command.Find(_textCommands, command);
         if (textCommand == null)
         {
             await _client.SendMessage(message.Chat.Id, "Unknown command");
@@ -59,7 +59,7 @@ internal partial class TelegramService : Communicator, IHostedService
             return;
         }
 
-        string argString = command.Substring(textCommand.Name.Length).Trim();
+        string argString = Command.ArgumentText(command);
         string[] args = Command.ParseArguments(argString);
 
         Character? character = await _characterDatabase.GetCharacter(user.TelegramUser!.CurrentCharacterId!);
@@ -115,7 +115,7 @@ internal partial class TelegramService : Communicator, IHostedService
 
         string command = message.Caption;
 
-        DocumentCommand? documentCommand = _documentCommands.FirstOrDefault(c => command.StartsWith(c.Name, StringComparison.InvariantCultureIgnoreCase));
+        DocumentCommand? documentCommand = Command.Find(_documentCommands, command);
         if (documentCommand == null)
         {
             await _client.SendMessage(message.Chat.Id, "Unknown command");
@@ -127,7 +127,7 @@ internal partial class TelegramService : Communicator, IHostedService
             return;
         }
 
-        string argString = command.Substring(documentCommand.Name.Length).Trim();
+        string argString = Command.ArgumentText(command);
         string[] args = Command.ParseArguments(argString);
 
         List<TelegramDocument> validFiles = [];

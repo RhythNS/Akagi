@@ -1,0 +1,613 @@
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Web.Icons
+@using Microsoft.AspNetCore.Components.Web
+@using Microsoft.JSInterop
+
+@inject IJSRuntime JS
+
+@implements IAsyncDisposable
+
+@*
+	Runs commands without typing "/command arg arg": pick a command from a searchable list, fill in its form,
+	and the palette writes the command line. Shown above the chat composer.
+*@
+
+@if (_selected == null)
+{
+	if (!Visible)
+	{
+		return;
+	}
+
+	<div class="command-panel card shadow-sm mb-2">
+		<div class="card-header py-2 px-3 d-flex align-items-center gap-2">
+			<Icon IconType="@Icons.Terminal" Size="16" />
+			@if (FromComposer)
+			{
+				<span class="text-secondary small flex-fill">Commands matching <code>@Filter</code> · <kbd>↑</kbd><kbd>↓</kbd> to choose, <kbd>Enter</kbd> to pick</span>
+			}
+			else
+			{
+				<input class="form-control form-control-sm flex-fill"
+					   placeholder="Search commands..."
+					   value="@_search"
+					   @ref="_searchInput"
+					   @oninput="OnSearchInput"
+					   @onkeydown="OnSearchKeyDown" />
+			}
+			<button type="button" class="btn-close ms-1" aria-label="Close" @onclick="CloseAsync"></button>
+		</div>
+		<div class="command-list list-group list-group-flush">
+			@if (Commands == null)
+			{
+				<div class="list-group-item text-secondary small d-flex align-items-center gap-2">
+					<span class="spinner-border spinner-border-sm"></span> Loading commands...
+				</div>
+			}
+			else if (_matches.Count == 0)
+			{
+				<div class="list-group-item text-secondary small">No command matches. Press <kbd>Enter</kbd> to send the text as typed.</div>
+			}
+			else
+			{
+				string? lastGroup = null;
+				for (int i = 0; i < _matches.Count; i++)
+				{
+					(Command command, string group) = _matches[i];
+					int index = i;
+					if (group != lastGroup)
+					{
+						lastGroup = group;
+						<div class="list-group-header sticky-top small text-uppercase text-secondary px-3 py-1">@group</div>
+					}
+					<button type="button"
+							class="list-group-item list-group-item-action py-2 px-3 @(index == _highlight ? "active" : "")"
+							@onclick="() => SelectAsync(command)"
+							@onmouseenter="() => _highlight = index">
+						<div class="d-flex align-items-center gap-2">
+							<code class="fw-bold">@command.Name</code>
+							@if (command.AcceptsFiles)
+							{
+								<span title="Works on an attached file"><Icon IconType="@Icons.Paperclip" Size="14" /></span>
+							}
+							@if (command.AdminOnly)
+							{
+								<span class="badge bg-warning-lt">admin</span>
+							}
+							<span class="text-secondary small text-truncate">@command.Summary</span>
+						</div>
+					</button>
+				}
+			}
+		</div>
+	</div>
+}
+else
+{
+	CommandForm form = _selected.Forms[_formIndex];
+	CommandUsage.BuildResult built = Build();
+	bool needsFile = form.Parameters.Any(p => p.Kind == CommandParameterKind.File && !p.Optional);
+	bool canRun = built.Complete && (!needsFile || AttachedFileName != null);
+
+	<div class="command-panel card shadow-sm mb-2" @onkeydown="OnFormKeyDown" @ref="_formPanel">
+		<div class="card-header py-2 px-3 d-flex align-items-center gap-2">
+			<Icon IconType="@Icons.Terminal" Size="16" />
+			<code class="fw-bold">@_selected.Name</code>
+			<span class="badge bg-secondary-lt">@_selected.Category</span>
+			<span class="flex-fill"></span>
+			<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="BackToList" title="Choose another command">All commands</button>
+			<button type="button" class="btn-close ms-1" aria-label="Close" @onclick="CloseAsync"></button>
+		</div>
+		<div class="card-body py-2 px-3">
+			@if (!string.IsNullOrWhiteSpace(_selected.Summary))
+			{
+				<div class="text-secondary small mb-2">@_selected.Summary</div>
+			}
+
+			@if (_selected.Forms.Length > 1)
+			{
+				<div class="btn-group btn-group-sm flex-wrap mb-2" role="group">
+					@for (int i = 0; i < _selected.Forms.Length; i++)
+					{
+						int index = i;
+						<button type="button"
+								class="btn @(index == _formIndex ? "btn-primary" : "btn-outline-secondary")"
+								@onclick="() => SelectForm(index)">
+							@FormLabel(_selected.Forms[index])
+						</button>
+					}
+				</div>
+			}
+
+			<div class="command-fields">
+				@foreach (CommandParameter parameter in VisibleParameters(form.Parameters))
+				{
+					switch (parameter.Kind)
+					{
+						case CommandParameterKind.Literal:
+							<label class="form-check form-switch mb-0 align-self-end">
+								<input class="form-check-input" type="checkbox"
+									   checked="@(!string.IsNullOrEmpty(Get(parameter)))"
+									   @onchange="e => Set(parameter, e.Value is true ? parameter.Name : null)" />
+								<span class="form-check-label"><code>@parameter.Name</code></span>
+							</label>
+							break;
+						case CommandParameterKind.Choice:
+							<div>
+								<div class="form-label small mb-1">@ChoiceLabel(parameter)</div>
+								<div class="btn-group btn-group-sm flex-wrap" role="group">
+									@foreach (CommandOption option in parameter.Options)
+									{
+										bool picked = string.Equals(Get(parameter), option.Value, StringComparison.OrdinalIgnoreCase);
+										<button type="button"
+												class="btn @(picked ? "btn-primary" : "btn-outline-secondary")"
+												@onclick="() => Pick(parameter, option, picked)">
+											@option.Value
+										</button>
+									}
+								</div>
+							</div>
+							break;
+						case CommandParameterKind.Rest:
+							<div class="command-field-wide">
+								<label class="form-label small mb-1">@Label(parameter) <span class="text-secondary">(sent as typed)</span></label>
+								<textarea class="form-control form-control-sm font-monospace" rows="2"
+										  placeholder="@(parameter.Default ?? parameter.Name)"
+										  value="@Get(parameter)"
+										  @oninput="e => Set(parameter, e.Value?.ToString())"></textarea>
+							</div>
+							break;
+						default:
+							<div>
+								<label class="form-label small mb-1">@Label(parameter)</label>
+								<input class="form-control form-control-sm"
+									   placeholder="@(parameter.Default ?? parameter.Name)"
+									   value="@Get(parameter)"
+									   @oninput="e => Set(parameter, e.Value?.ToString())"
+									   @onkeydown="OnFieldKeyDown" />
+							</div>
+							break;
+					}
+				}
+			</div>
+
+			@if (form.Parameters.Any(p => p.Kind == CommandParameterKind.File))
+			{
+				<div class="small mt-2 @(AttachedFileName == null && needsFile ? "text-warning" : "text-secondary")">
+					<Icon IconType="@Icons.Paperclip" Size="14" />
+					@if (AttachedFileName == null)
+					{
+						<span>Attach the file with the paperclip below.</span>
+					}
+					else
+					{
+						<span>Runs on <strong>@AttachedFileName</strong>.</span>
+					}
+				</div>
+			}
+
+			<div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
+				<code class="command-preview flex-fill text-break">@built.Text</code>
+				@if (!built.Complete)
+				{
+					<span class="text-secondary small">Needs @string.Join(", ", built.Missing)</span>
+				}
+				<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="EditAsTextAsync" title="Put the command into the message box to change it by hand">Edit as text</button>
+				<button type="button" class="btn btn-sm btn-primary" disabled="@(!canRun)" @onclick="RunAsync" data-command-run>
+					<Icon IconType="@Icons.Send" Size="14" /> Run
+				</button>
+			</div>
+		</div>
+	</div>
+}
+
+<style>
+	.command-panel {
+		max-width: 960px;
+		margin-left: auto;
+		margin-right: auto;
+	}
+
+	.command-list {
+		max-height: 320px;
+		overflow-y: auto;
+	}
+
+	.command-list .list-group-header {
+		background: var(--tblr-bg-surface);
+		z-index: 1;
+	}
+
+	.command-list .list-group-item.active code,
+	.command-list .list-group-item.active .text-secondary {
+		color: inherit !important;
+	}
+
+	.command-fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+		gap: 0.5rem 0.75rem;
+	}
+
+	.command-field-wide {
+		grid-column: 1 / -1;
+	}
+
+	.command-preview {
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		background: rgba(128, 128, 128, 0.12);
+		min-width: 0;
+	}
+</style>
+
+@code {
+	/// <summary>
+	/// The commands to offer; null while they load.
+	/// </summary>
+	[Parameter] public IReadOnlyList<Command>? Commands { get; set; }
+
+	/// <summary>
+	/// Text typed in the composer ("/upg"); the list filters by it instead of showing its own search box.
+	/// </summary>
+	[Parameter] public string Filter { get; set; } = string.Empty;
+
+	[Parameter] public bool FromComposer { get; set; }
+
+	/// <summary>
+	/// Whether the list is shown; a picked command stays open regardless.
+	/// </summary>
+	[Parameter] public bool Visible { get; set; }
+
+	[Parameter] public IReadOnlyList<string> Recent { get; set; } = [];
+
+	[Parameter] public string? AttachedFileName { get; set; }
+
+	/// <summary>
+	/// Runs a finished command line.
+	/// </summary>
+	[Parameter] public EventCallback<string> OnRun { get; set; }
+
+	/// <summary>
+	/// Hands a command line to the composer for manual editing.
+	/// </summary>
+	[Parameter] public EventCallback<string> OnEditAsText { get; set; }
+
+	[Parameter] public EventCallback OnClose { get; set; }
+
+	public bool IsFormOpen => _selected != null;
+
+	public bool HasMatches => _matches.Count > 0;
+
+	private Command? _selected;
+	private int _formIndex;
+	private readonly Dictionary<CommandParameter, string?> _values = [];
+	private List<(Command Command, string Group)> _matches = [];
+	private int _highlight;
+	private string _search = string.Empty;
+	private bool _focusSearch;
+	private bool _focusForm;
+	private ElementReference _searchInput;
+	private ElementReference _formPanel;
+	private IJSObjectReference? _jsModule;
+
+	private string _lastFilter = string.Empty;
+
+	protected override void OnParametersSet()
+	{
+		// A new filter starts at the best match
+		if (Filter != _lastFilter)
+		{
+			_lastFilter = Filter;
+			_highlight = 0;
+		}
+		UpdateMatches();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		try
+		{
+			if (_focusSearch && _selected == null && Visible && !FromComposer)
+			{
+				_focusSearch = false;
+				await _searchInput.FocusAsync();
+			}
+			if (_focusForm && _selected != null)
+			{
+				_focusForm = false;
+				_jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Chat/Components/CommandPalette.razor.js");
+				await _jsModule.InvokeVoidAsync("focusFirstField", _formPanel);
+			}
+		}
+		catch
+		{
+			// The element was not rendered yet
+		}
+	}
+
+	/// <summary>
+	/// Shows the list with its own search box focused.
+	/// </summary>
+	public void OpenSearch()
+	{
+		_selected = null;
+		_search = string.Empty;
+		_highlight = 0;
+		_focusSearch = true;
+		UpdateMatches();
+		StateHasChanged();
+	}
+
+	public void MoveHighlight(int delta)
+	{
+		if (_matches.Count == 0)
+		{
+			return;
+		}
+		_highlight = (_highlight + delta + _matches.Count) % _matches.Count;
+		StateHasChanged();
+	}
+
+	/// <summary>
+	/// Opens the form of the highlighted command. False when nothing matches.
+	/// </summary>
+	public async Task<bool> PickHighlightedAsync()
+	{
+		if (_matches.Count == 0)
+		{
+			return false;
+		}
+		await SelectAsync(_matches[Math.Clamp(_highlight, 0, _matches.Count - 1)].Command);
+		return true;
+	}
+
+	/// <summary>
+	/// Opens the form of a command by name, for "/name" typed in the composer.
+	/// </summary>
+	public async Task<bool> OpenByNameAsync(string name)
+	{
+		Command? command = Commands?.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+		if (command == null)
+		{
+			return false;
+		}
+		await SelectAsync(command);
+		return true;
+	}
+
+	public void Reset()
+	{
+		_selected = null;
+		_values.Clear();
+		StateHasChanged();
+	}
+
+	private Task SelectAsync(Command command)
+	{
+		_selected = command;
+		_formIndex = 0;
+		_values.Clear();
+		_focusForm = true;
+		StateHasChanged();
+		return Task.CompletedTask;
+	}
+
+	private void SelectForm(int index)
+	{
+		_formIndex = index;
+		_values.Clear();
+	}
+
+	private void BackToList()
+	{
+		_selected = null;
+		_values.Clear();
+		_focusSearch = true;
+	}
+
+	private async Task CloseAsync()
+	{
+		_selected = null;
+		_values.Clear();
+		await OnClose.InvokeAsync();
+	}
+
+	private void UpdateMatches()
+	{
+		if (Commands == null)
+		{
+			_matches = [];
+			return;
+		}
+
+		string term = (FromComposer ? Filter : _search).Trim().TrimStart('/');
+		if (term.Length == 0)
+		{
+			List<(Command, string)> list = [];
+			foreach (string name in Recent)
+			{
+				Command? recent = Commands.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+				if (recent != null)
+				{
+					list.Add((recent, "Recent"));
+				}
+			}
+			list.AddRange(Commands
+				.OrderBy(c => c.Category, StringComparer.OrdinalIgnoreCase)
+				.ThenBy(c => c.Name, StringComparer.OrdinalIgnoreCase)
+				.Select(c => (c, c.Category)));
+			_matches = list;
+		}
+		else
+		{
+			// Names starting with the term first, then names containing it, then descriptions mentioning it
+			_matches = [.. Commands
+				.Select(c => (Command: c, Rank: Rank(c, term)))
+				.Where(m => m.Rank < 3)
+				.OrderBy(m => m.Rank)
+				.ThenBy(m => m.Command.Name.Length)
+				.Select(m => (m.Command, m.Rank < 2 ? "Commands" : "Mentioned in description"))];
+		}
+		_highlight = Math.Clamp(_highlight, 0, Math.Max(0, _matches.Count - 1));
+	}
+
+	private static int Rank(Command command, string term)
+	{
+		string name = command.Name.TrimStart('/');
+		if (name.StartsWith(term, StringComparison.OrdinalIgnoreCase))
+		{
+			return 0;
+		}
+		if (name.Contains(term, StringComparison.OrdinalIgnoreCase))
+		{
+			return 1;
+		}
+		return command.Description.Contains(term, StringComparison.OrdinalIgnoreCase)
+			|| command.Category.Contains(term, StringComparison.OrdinalIgnoreCase) ? 2 : 3;
+	}
+
+	private void OnSearchInput(ChangeEventArgs e)
+	{
+		_search = e.Value?.ToString() ?? string.Empty;
+		_highlight = 0;
+		UpdateMatches();
+	}
+
+	private async Task OnSearchKeyDown(KeyboardEventArgs e)
+	{
+		switch (e.Key)
+		{
+			case "ArrowDown":
+				MoveHighlight(1);
+				break;
+			case "ArrowUp":
+				MoveHighlight(-1);
+				break;
+			case "Enter":
+				await PickHighlightedAsync();
+				break;
+			case "Escape":
+				await CloseAsync();
+				break;
+		}
+	}
+
+	private async Task OnFieldKeyDown(KeyboardEventArgs e)
+	{
+		// Ctrl+Enter is handled by the panel
+		if (e.Key == "Enter" && !e.CtrlKey && !e.MetaKey && !e.ShiftKey)
+		{
+			await RunAsync();
+		}
+	}
+
+	private async Task OnFormKeyDown(KeyboardEventArgs e)
+	{
+		if (e.Key == "Escape")
+		{
+			await CloseAsync();
+		}
+		else if (e.Key == "Enter" && (e.CtrlKey || e.MetaKey))
+		{
+			await RunAsync();
+		}
+	}
+
+	/// <summary>
+	/// The parameters to show: fixed words are part of the form label, files come from the attachment, and a
+	/// picked option adds its own parameters right after the choice.
+	/// </summary>
+	private IEnumerable<CommandParameter> VisibleParameters(IEnumerable<CommandParameter> parameters)
+	{
+		foreach (CommandParameter parameter in parameters)
+		{
+			if (parameter.Kind == CommandParameterKind.File || (parameter.Kind == CommandParameterKind.Literal && !parameter.Optional))
+			{
+				continue;
+			}
+			yield return parameter;
+			if (parameter.Kind == CommandParameterKind.Choice)
+			{
+				CommandOption? picked = parameter.Options.FirstOrDefault(o => string.Equals(o.Value, Get(parameter), StringComparison.OrdinalIgnoreCase));
+				if (picked != null)
+				{
+					foreach (CommandParameter nested in VisibleParameters(picked.Parameters))
+					{
+						yield return nested;
+					}
+				}
+			}
+		}
+	}
+
+	private string? Get(CommandParameter parameter) => _values.TryGetValue(parameter, out string? value) ? value : null;
+
+	private void Set(CommandParameter parameter, string? value) => _values[parameter] = value;
+
+	private void Pick(CommandParameter parameter, CommandOption option, bool alreadyPicked)
+	{
+		// An optional choice can be cleared by clicking the picked option again
+		Set(parameter, alreadyPicked && parameter.Optional ? null : option.Value);
+	}
+
+	private CommandUsage.BuildResult Build() => CommandUsage.Build(_selected!.Name, _selected.Forms[_formIndex], Get);
+
+	private static string Label(CommandParameter parameter)
+	{
+		string name = parameter.Key != null ? parameter.Key + "=" : parameter.Name;
+		return parameter.Optional ? name + " (optional)" : name;
+	}
+
+	private static string ChoiceLabel(CommandParameter parameter) => parameter.Optional ? "Option (optional)" : "Option";
+
+	private string FormLabel(CommandForm form)
+	{
+		string label = form.Usage.StartsWith(_selected!.Name, StringComparison.OrdinalIgnoreCase) ? form.Usage[_selected.Name.Length..].Trim() : form.Usage;
+		return label.Length == 0 ? "default" : label;
+	}
+
+	private async Task RunAsync()
+	{
+		if (_selected == null)
+		{
+			return;
+		}
+		CommandUsage.BuildResult built = Build();
+		bool needsFile = _selected.Forms[_formIndex].Parameters.Any(p => p.Kind == CommandParameterKind.File && !p.Optional);
+		if (!built.Complete || (needsFile && AttachedFileName == null))
+		{
+			return;
+		}
+		_selected = null;
+		_values.Clear();
+		await OnRun.InvokeAsync(built.Text);
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		if (_jsModule != null)
+		{
+			try
+			{
+				await _jsModule.DisposeAsync();
+			}
+			catch (JSDisconnectedException)
+			{
+				// The circuit is gone
+			}
+		}
+	}
+
+	private async Task EditAsTextAsync()
+	{
+		if (_selected == null)
+		{
+			return;
+		}
+		string text = Build().Text;
+		_selected = null;
+		_values.Clear();
+		await OnEditAsText.InvokeAsync(text);
+	}
+}

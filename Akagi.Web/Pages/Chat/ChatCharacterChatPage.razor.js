@@ -26,3 +26,22 @@ export function downloadTextFile(filename, content) {
         // no-op
     }
 }
+
+const recentCommandsKey = 'akagi.recentCommands';
+
+export function loadRecentCommands() {
+    try {
+        const stored = JSON.parse(localStorage.getItem(recentCommandsKey) ?? '[]');
+        return Array.isArray(stored) ? stored.filter(x => typeof x === 'string') : [];
+    } catch {
+        return [];
+    }
+}
+
+export function saveRecentCommands(names) {
+    try {
+        localStorage.setItem(recentCommandsKey, JSON.stringify(names));
+    } catch {
+        // no-op
+    }
+}

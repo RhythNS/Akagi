@@ -7,6 +7,8 @@ internal class DeleteMemoryCommand : TextCommand
 
     public override string Description => "Deletes the entire memory of the active character. Usage: /deleteMemory <safteyConfirm>";
 
+    public override string? Usage => "/deleteMemory <type confirm>";
+
     public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         if (context.Character == null)
