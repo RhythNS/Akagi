@@ -3,6 +3,7 @@ using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Characters;
 using Akagi.Characters.Cards;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Groups;
 using Akagi.Communication;
 using Akagi.Communication.SocketComs;
@@ -13,6 +14,8 @@ using Akagi.Flow;
 using Akagi.Life;
 using Akagi.LLMs;
 using Akagi.Receivers;
+using Akagi.Receivers.Commands;
+using Akagi.Receivers.Commands.Messages;
 using Akagi.Scheduling;
 using Akagi.TTSs;
 using Akagi.Users;
@@ -26,13 +29,15 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 
 namespace Akagi.Tests.Live;
 
 /// <summary>
 /// Runs only when AKAGI_LIVE_MONGO holds a connection string to a MongoDB that may be written to, e.g.
 /// <c>docker run -d --rm -p 127.0.0.1:27099:27017 mongo:8.3</c> and <c>AKAGI_LIVE_MONGO=mongodb://127.0.0.1:27099</c>.
-/// Each run uses its own database and drops it afterwards.
+/// Each run uses its own database and drops it afterwards. To try a copy of a real database instead, restore it into
+/// that server and set AKAGI_LIVE_DATABASE to its name and AKAGI_LIVE_USER_ID to the user to upload as; the copy is kept.
 /// </summary>
 public sealed class LiveMongoFactAttribute : FactAttribute
 {
@@ -59,7 +64,8 @@ public class LiveCompanionTests
     [LiveMongoFact]
     public async Task CompanionBundle_UploadsOverTheSocketAndShowsAsAGroupWithAkagisPicture()
     {
-        string database = "AkagiLive_" + Guid.NewGuid().ToString("N")[..8];
+        string? copiedDatabase = Environment.GetEnvironmentVariable("AKAGI_LIVE_DATABASE");
+        string database = copiedDatabase ?? "AkagiLive_" + Guid.NewGuid().ToString("N")[..8];
         string connectionString = Environment.GetEnvironmentVariable("AKAGI_LIVE_MONGO")!.TrimEnd('/') + "/" + database;
         int port = FreePort();
         MongoClient mongo = new(connectionString);
@@ -71,9 +77,15 @@ public class LiveCompanionTests
         try
         {
             IDatabaseFactory databases = services.GetRequiredService<IDatabaseFactory>();
-            User user = new() { Name = "Live", Username = "live", Valid = true, Admin = true };
-            await databases.GetDatabase<IUserDatabase>().SaveDocumentAsync(user);
-            await new GridFSBucket(mongo.GetDatabase(database)).UploadFromBytesAsync(ObjectId.Parse(AkagiImageId), "akagi.png", TinyPng);
+            User user = await LiveUser(databases.GetDatabase<IUserDatabase>());
+            GridFSBucket files = new(mongo.GetDatabase(database));
+            if (!await (await files.FindAsync(Builders<GridFSFileInfo>.Filter.Eq("_id", ObjectId.Parse(AkagiImageId)))).AnyAsync())
+            {
+                await files.UploadFromBytesAsync(ObjectId.Parse(AkagiImageId), "akagi.png", TinyPng);
+            }
+            byte[] akagiPicture = await files.DownloadAsBytesAsync(ObjectId.Parse(AkagiImageId));
+            // A copied database may already hold a Companion group of this user
+            HashSet<string> earlierGroups = [.. (await databases.GetDatabase<ICharacterGroupDatabase>().GetGroupsForUser(user)).Select(g => g.Id!)];
 
             using LiveClient client = await LiveClient.ConnectAsync(port);
             await LoginAs(socketService, user);
@@ -95,9 +107,9 @@ public class LiveCompanionTests
             // The group is listed next to its members, pictured with Akagi's card
             client.Send(new CharacterRequestTransmission { Ids = [] });
             CharacterResponseTransmission listed = await client.WaitFor<CharacterResponseTransmission>();
-            Bridge.Chat.Models.Character group = Assert.Single(listed.Characters, c => c.IsGroup);
-            Bridge.Chat.Models.Character akagi = Assert.Single(listed.Characters, c => c.Name == "Akagi");
-            Bridge.Chat.Models.Character sensei = Assert.Single(listed.Characters, c => c.Name == "Sensei");
+            Bridge.Chat.Models.Character group = Assert.Single(listed.Characters, c => c.IsGroup && c.Name == "Companion" && !earlierGroups.Contains(c.Id));
+            Bridge.Chat.Models.Character akagi = Assert.Single(listed.Characters, c => c.Name == "Akagi" && group.MemberIds.Contains(c.Id));
+            Bridge.Chat.Models.Character sensei = Assert.Single(listed.Characters, c => c.Name == "Sensei" && group.MemberIds.Contains(c.Id));
             Assert.Equal("Companion", group.Name);
             Assert.Equal(4, group.MemberIds.Length);
             Assert.Contains(akagi.Id, group.MemberIds);
@@ -109,7 +121,7 @@ public class LiveCompanionTests
             client.Send(new FileRequestTransmission { FileUrl = $"cards/{group.CardId}/image.png" });
             FileResponseTransmission picture = await client.WaitFor<FileResponseTransmission>();
             Assert.Null(picture.Error);
-            Assert.Equal(TinyPng, picture.Data);
+            Assert.Equal(akagiPicture, picture.Data);
             client.Send(new FileRequestTransmission { FileUrl = $"cards/{sensei.CardId}/image.png" });
             Assert.Equal("Card has no image.", (await client.WaitFor<FileResponseTransmission>()).Error);
 
@@ -118,9 +130,18 @@ public class LiveCompanionTests
             TextMessageResponseTransmission info = await client.WaitFor<TextMessageResponseTransmission>(t => t.Message.Text.Contains("Group:"));
             Assert.Contains("Group: Companion", info.Message.Text);
 
+            // A plain chat message reaches the group; Akagi answers under her own id, which the group chat shows
+            client.Send(new SendTextMessageRequestTransmission { CharacterId = group.Id, Text = "Hi Akagi, how was your day?" });
+            TextMessageResponseTransmission reply = await client.WaitFor<TextMessageResponseTransmission>(t => t.Message.Text == ScriptedLLM.Reply);
+            Assert.Equal(akagi.Id, reply.CharacterId);
+            Assert.Contains(reply.CharacterId, group.MemberIds);
+
             client.Send(new ConversationRequestTransmission { CharacterId = group.Id });
             ConversationResponseTransmission history = await client.WaitFor<ConversationResponseTransmission>();
             Assert.Equal(group.Id, history.CharacterId);
+            Bridge.Chat.Models.Conversation current = Assert.Single(history.Conversations);
+            Assert.Contains(current.Messages, m => m.Text == "Hi Akagi, how was your day?");
+            Assert.Contains(current.Messages, m => m.Text == ScriptedLLM.Reply);
 
             // A member's picture can be set from the group chat
             client.Send(new SendFileMessageRequestTransmission
@@ -133,15 +154,30 @@ public class LiveCompanionTests
             });
             TextMessageResponseTransmission set = await client.WaitFor<TextMessageResponseTransmission>(t => t.Message.Text.Contains("picture"));
             Assert.Contains("Set the picture of Hana's card", set.Message.Text);
-            Character hana = Assert.Single(await databases.GetDatabase<ICharacterDatabase>().GetCharactersForUser(user), c => c.Name == "Hana");
+            Character hana = Assert.Single(await databases.GetDatabase<ICharacterDatabase>().GetCharactersForUser(user), c => c.Name == "Hana" && group.MemberIds.Contains(c.Id!));
             Assert.False(string.IsNullOrEmpty(hana.Card.ImageId));
-            Assert.Single(await databases.GetDatabase<ICharacterGroupDatabase>().GetGroupsForUser(user));
+            Assert.Single(await databases.GetDatabase<ICharacterGroupDatabase>().GetGroupsForUser(user), g => g.Id == group.Id);
         }
         finally
         {
             await socketService.StopAsync(CancellationToken.None);
-            await mongo.DropDatabaseAsync(database);
+            if (copiedDatabase == null)
+            {
+                await mongo.DropDatabaseAsync(database);
+            }
         }
+    }
+
+    private static async Task<User> LiveUser(IUserDatabase users)
+    {
+        string? id = Environment.GetEnvironmentVariable("AKAGI_LIVE_USER_ID");
+        if (id != null)
+        {
+            return await users.GetDocumentByIdAsync(id) ?? throw new InvalidOperationException($"User {id} is not in the database.");
+        }
+        User user = new() { Name = "Live", Username = "live", Valid = true, Admin = true };
+        await users.SaveDocumentAsync(user);
+        return user;
     }
 
     private static ServiceProvider BuildServices(string connectionString, int port)
@@ -171,9 +207,12 @@ public class LiveCompanionTests
         services.AddScheduling();
         services.AddLife(configuration);
 
+        // Every model call gets the same scripted answer, so no paid API is used
+        services.AddSingleton<ILLMFactory, ScriptedLLMFactory>();
+
         // The registrations scan every loaded assembly, which includes this one with its in-memory fakes
         Assembly tests = typeof(LiveCompanionTests).Assembly;
-        foreach (ServiceDescriptor descriptor in services.Where(d => d.ImplementationType?.Assembly == tests).ToList())
+        foreach (ServiceDescriptor descriptor in services.Where(d => d.ImplementationType?.Assembly == tests && d.ServiceType != typeof(ILLMFactory)).ToList())
         {
             services.Remove(descriptor);
         }
@@ -221,6 +260,41 @@ public class LiveCompanionTests
         }
         Assert.NotNull(directory);
         return Path.Combine(directory.FullName, "Akagi.CharacterEditor", "Characters", "Companion");
+    }
+
+    private sealed class ScriptedLLMFactory : ILLMFactory
+    {
+        public Task<ILLM> Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType) => Task.FromResult<ILLM>(new ScriptedLLM());
+    }
+
+    /// <summary>
+    /// Answers every step with one text message, the way a model's plain reply is turned into a command.
+    /// </summary>
+    private sealed class ScriptedLLM : ILLM
+    {
+        public const string Reply = "Scripted reply from Akagi.";
+
+        public void SetModel(string model)
+        {
+        }
+
+        public Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context) =>
+            Task.FromResult(Steps(systemProcessor, context));
+
+        public async IAsyncEnumerable<LLMStreamEvent> GetNextStepsStreamAsync(SystemProcessor systemProcessor, Context context,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            yield return new StreamCompleteEvent(Steps(systemProcessor, context), Reply);
+        }
+
+        private static Command[] Steps(SystemProcessor systemProcessor, Context context)
+        {
+            TextMessageCommand text = new();
+            text.SetMessage(Reply);
+            text.SetFrom(systemProcessor.Output, context.Character.Id!);
+            return [text];
+        }
     }
 
     /// <summary>
