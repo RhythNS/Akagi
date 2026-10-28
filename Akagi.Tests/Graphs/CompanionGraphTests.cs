@@ -1,4 +1,5 @@
 using Akagi.Characters;
+using Akagi.Characters.Cards;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Groups;
 using Akagi.Characters.Groups.Strategies;
@@ -6,6 +7,7 @@ using Akagi.Characters.Routines;
 using Akagi.Data;
 using Akagi.Graphs;
 using Akagi.Tests.Support;
+using MongoDB.Bson;
 using static Akagi.Tests.Support.TestGraphs;
 
 namespace Akagi.Tests.Graphs;
@@ -87,6 +89,14 @@ public class CompanionGraphTests
         CharacterGroup group = Assert.Single(created.OfType<CharacterGroup>());
         Assert.Equal(["Akagi", "Sensei", "Hana", "Kai"],
             group.MemberCharacterIds.Select(id => created.OfType<Character>().Single(c => c.Id == id).Name));
+
+        // Every member has its own embedded card, and cards without a picture can be stored in MongoDB
+        List<Card> cards = [.. created.OfType<Card>()];
+        foreach (Character member in created.OfType<Character>())
+        {
+            Assert.Contains(cards, c => c.Id == member.CardId);
+        }
+        Assert.All(cards, card => Assert.True(card.ToBsonDocument()["ImageId"].IsBsonNull));
     }
 
     [Fact]

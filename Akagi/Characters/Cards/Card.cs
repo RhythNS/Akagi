@@ -1,6 +1,5 @@
 ﻿using Akagi.Bridge.Attributes;
 using Akagi.Data;
-using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters.Cards;
@@ -90,7 +89,8 @@ internal class Card : Savable
         get => _characterVersion;
         set => SetProperty(ref _characterVersion, value);
     }
-    [BsonRepresentation(BsonType.ObjectId)]
+    [NodeDocu("Id of the card's picture. Leave empty for a card without one; /cardImage sets it later.")]
+    [BsonSerializer(typeof(OptionalObjectIdSerializer))]
     public string ImageId
     {
         get => _imageId;

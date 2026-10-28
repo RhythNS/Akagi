@@ -67,7 +67,13 @@ internal class FileRequestHandler : SocketTransmissionHandler
                                 return;
                             }
 
-                            using Stream stream = await _fileDatabase.DownloadFileAsync(ObjectId.Parse(card.ImageId));
+                            if (!ObjectId.TryParse(card.ImageId, out ObjectId imageId))
+                            {
+                                ReturnError(context, fileRequestTransmission, "Card has no image.");
+                                return;
+                            }
+
+                            using Stream stream = await _fileDatabase.DownloadFileAsync(imageId);
                             byte[] data = new byte[stream.Length];
                             await stream.ReadExactlyAsync(data);
                             /*

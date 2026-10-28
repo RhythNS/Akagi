@@ -47,6 +47,21 @@ public class GraphLoaderTests
     }
 
     [Fact]
+    public async Task Create_CharacterWithoutCard_FailsBeforeSavingAnything()
+    {
+        GraphData graph = CharacterGraph("Akagi");
+        graph.Connections.RemoveAll(c => c.TargetConnectorName == nameof(Character.CardId));
+        InMemoryDatabaseFactory database = new();
+        GraphLoader loader = new(database);
+        loader.LoadGraph(graph);
+
+        InvalidOperationException error = await Assert.ThrowsAsync<InvalidOperationException>(() => loader.Create(UserId, "x"));
+
+        Assert.Contains("Akagi has no Card", error.Message);
+        Assert.Empty(database.Documents);
+    }
+
+    [Fact]
     public async Task Create_WithReferencesButNoResolver_Throws()
     {
         GraphLoader loader = new(new InMemoryDatabaseFactory());

@@ -1,4 +1,4 @@
-using Akagi.Bridge.Attributes;
+﻿using Akagi.Bridge.Attributes;
 using Akagi.Data;
 using Akagi.Users;
 using MongoDB.Bson;
@@ -48,6 +48,8 @@ internal class GraphLoader
     {
         GraphData graph = await GetComposedGraph();
 
+        ThrowIfCharactersWithoutCard(graph);
+
         bool exists = await _graphInstanceDb.Exists(graph.GraphId, name, userId);
         if (exists)
         {
@@ -64,6 +66,7 @@ internal class GraphLoader
     public async Task<List<Savable>> Update(string userId, string? name = null)
     {
         GraphData graph = await GetComposedGraph();
+        ThrowIfCharactersWithoutCard(graph);
 
         GraphInstance[] existingGraphs;
         if (name == null)
@@ -93,6 +96,41 @@ internal class GraphLoader
             await SaveGraphInstance(graph, nodeInstances, userId, existingGraph.Name, existingGraph);
         }
         return allSavables;
+    }
+
+    /// <summary>
+    /// Indexes of Character nodes without a Card connected to CardId. Such a character would get an id that points
+    /// to no card, and it fails as soon as it is used, so graphs with one are refused before anything is saved.
+    /// </summary>
+    public static List<int> CharactersWithoutCard(GraphData graph)
+    {
+        List<int> indexes = [];
+        for (int i = 0; i < graph.Nodes.Count; i++)
+        {
+            if (GraphNodeUtils.ResolveType(graph.Nodes[i].TypeName) != typeof(Characters.Character))
+            {
+                continue;
+            }
+            if (!graph.Connections.Any(c => c.TargetNodeIndex == i && c.TargetConnectorName == nameof(Characters.Character.CardId)))
+            {
+                indexes.Add(i);
+            }
+        }
+        return indexes;
+    }
+
+    public static string NodeName(NodeData node, int index) =>
+        node.Properties.TryGetValue("Name", out object? name) && !string.IsNullOrWhiteSpace(name?.ToString()) ? name.ToString()! : $"#{index}";
+
+    private static void ThrowIfCharactersWithoutCard(GraphData graph)
+    {
+        List<int> missing = CharactersWithoutCard(graph);
+        if (missing.Count > 0)
+        {
+            string names = string.Join(", ", missing.Select(i => NodeName(graph.Nodes[i], i)));
+            throw new InvalidOperationException($"Character {names} has no Card connected to CardId. Add a Card node in the editor and connect it; " +
+                                                "its picture can be set afterwards with /cardImage.");
+        }
     }
 
     /// <summary>

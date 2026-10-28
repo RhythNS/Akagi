@@ -188,11 +188,35 @@ public class GraphValidatorTests
 
         GraphValidationReport report = await new GraphValidator().ValidateFileAsync(path);
 
-        Assert.True(report.IsValid, report.ToText());
+        // A character without a card cannot be uploaded, so the composed group is invalid and the issue points into Health.json
+        Assert.False(report.IsValid);
         Assert.Equal(2, report.ReferenceCount);
         Assert.Equal(15, report.ComposedNodeCount);
+        GraphIssue error = Assert.Single(report.Issues, i => i.Severity == GraphIssueSeverity.Error);
+        Assert.Equal("character.no-card", error.Code);
+        Assert.Contains("Health.json", error.Node);
         GraphIssue issue = Assert.Single(report.Issues, i => i.Code == "reference.unconnected");
         Assert.Contains("Health.json", issue.Node);
         Assert.Contains("CardId", issue.Message);
+    }
+
+    [Fact]
+    public async Task CharacterWithoutCard_IsErrorNamingTheCharacter()
+    {
+        GraphData graph = CharacterGraph("Akagi");
+        graph.Connections.RemoveAll(c => c.TargetConnectorName == "CardId");
+
+        GraphValidationReport report = await Validate(graph);
+
+        Assert.False(report.IsValid);
+        GraphIssue issue = Assert.Single(report.Issues, i => i.Code == "character.no-card");
+        Assert.Contains("Akagi", issue.Message);
+        Assert.Equal([1], GraphLoader.CharactersWithoutCard(graph));
+    }
+
+    [Fact]
+    public void CharacterWithCard_IsNotReported()
+    {
+        Assert.Empty(GraphLoader.CharactersWithoutCard(CharacterGraph("Akagi")));
     }
 }

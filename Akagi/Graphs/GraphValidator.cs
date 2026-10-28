@@ -1,4 +1,4 @@
-using Akagi.Bridge.Attributes;
+﻿using Akagi.Bridge.Attributes;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -336,6 +336,11 @@ internal class GraphValidator
         }
 
         CheckUnconnectedReferences(graph, types, slotUsage, Label, report);
+        foreach (int index in GraphLoader.CharactersWithoutCard(graph))
+        {
+            report.Add(GraphIssueSeverity.Error, "character.no-card",
+                $"Character {GraphLoader.NodeName(graph.Nodes[index], index)} has no Card connected to CardId; uploading the graph fails.", Label(index), index);
+        }
         CheckOrphans(graph, Label, report);
     }
 
