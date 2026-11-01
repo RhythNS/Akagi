@@ -1,6 +1,7 @@
 using Akagi.Characters;
 using Akagi.Characters.Conversations;
 using Akagi.Users;
+using MongoDB.Bson;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -76,13 +77,15 @@ internal static partial class CallJobs
     }
 
     /// <summary>
-    /// Creates a job and copies the recording into its storage folder.
+    /// Copies the recording into its storage folder and creates the job. The job is saved last: once saved, the analysis
+    /// service may pick it up at any moment, and it needs the finished file.
     /// </summary>
     public static async Task<CallJob> CreateAsync(ICallJobDatabase jobs, CallAnalysisOptions options, string userId, Stream content,
         string fileName, CallRequest request, DateTime? recordedAt, (string Analysis, string Delivery) characters, CancellationToken cancellationToken = default)
     {
         CallJob job = new()
         {
+            Id = ObjectId.GenerateNewId().ToString(),
             UserId = userId,
             Title = Path.GetFileNameWithoutExtension(fileName),
             Partner = request.Partner,
@@ -95,7 +98,6 @@ internal static partial class CallJobs
             DeliveryCharacterId = characters.Delivery,
             CreatedAt = DateTime.UtcNow
         };
-        await jobs.SaveDocumentAsync(job);
 
         string folder = Path.Combine(options.StorageDirectory, job.Id!);
         Directory.CreateDirectory(folder);
@@ -116,12 +118,22 @@ internal static partial class CallJobs
         CallAnalysisOptions options, Character? fallback)
     {
         List<Character> owned = await characters.GetCharactersForUser(user);
-        Character? analysis = owned.FirstOrDefault(c => string.Equals(c.Name, options.AnalysisCharacterName, StringComparison.OrdinalIgnoreCase));
-        Character? delivery = owned.FirstOrDefault(c => string.Equals(c.Name, options.DeliveryCharacterName, StringComparison.OrdinalIgnoreCase));
+        Character? analysis = Newest(owned, options.AnalysisCharacterName);
+        Character? delivery = Newest(owned, options.DeliveryCharacterName);
         analysis ??= fallback ?? delivery;
         delivery ??= fallback ?? analysis;
         return (analysis?.Id ?? string.Empty, delivery?.Id ?? string.Empty);
     }
+
+    /// <summary>
+    /// Uploading a graph again adds characters of the same name, and the latest one is the one in use. Object ids sort by
+    /// creation time.
+    /// </summary>
+    private static Character? Newest(IEnumerable<Character> characters, string name) =>
+        characters
+            .Where(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(c => c.Id, StringComparer.Ordinal)
+            .FirstOrDefault();
 
     /// <summary>
     /// The system message that asks the companion to share the result in her own voice.

@@ -344,6 +344,75 @@ public class CallJobTests
     }
 }
 
+public class CallJobCreationTests
+{
+    /// <summary>
+    /// Stands for the moment the analysis service polls while a recording is still being copied.
+    /// </summary>
+    private sealed class ObservedStream(byte[] content, Action onRead) : MemoryStream(content)
+    {
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            onRead();
+            return base.ReadAsync(buffer, cancellationToken);
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken)
+        {
+            onRead();
+            return base.ReadAsync(buffer, offset, count, cancellationToken);
+        }
+    }
+
+    private static readonly CallRequest Request = new("Lee", ExpectedRegister.Casual, LearnerChannel.Left, string.Empty);
+
+    [Fact]
+    public async Task Create_IsNotPendingUntilTheFileIsComplete()
+    {
+        using TempDirectory temp = new();
+        InMemoryCallJobDatabase jobs = new();
+        List<CallJob?> seenDuringCopy = [];
+        using ObservedStream content = new(new byte[100_000], () => seenDuringCopy.Add(jobs.GetNextPending().Result));
+
+        CallJob job = await CallJobs.CreateAsync(jobs, new CallAnalysisOptions { StorageDirectory = temp.Path }, ObjectId.GenerateNewId().ToString(), content,
+            "call.mp3", Request, null, ("a", "b"));
+
+        Assert.NotEmpty(seenDuringCopy);
+        Assert.All(seenDuringCopy, Assert.Null);
+        CallJob pending = (await jobs.GetNextPending())!;
+        Assert.Same(job, pending);
+        Assert.Equal(100_000, new FileInfo(pending.SourcePath).Length);
+        Assert.Equal(Path.Combine(temp.Path, job.Id!, "call.mp3"), pending.SourcePath);
+    }
+
+    [Fact]
+    public async Task Create_WhenTheCopyFails_LeavesNoJobBehind()
+    {
+        using TempDirectory temp = new();
+        InMemoryCallJobDatabase jobs = new();
+        using ObservedStream content = new([1, 2, 3], () => throw new IOException("disk full"));
+
+        await Assert.ThrowsAsync<IOException>(() => CallJobs.CreateAsync(jobs, new CallAnalysisOptions { StorageDirectory = temp.Path }, "user", content, "call.mp3", Request, null, ("a", "b")));
+
+        Assert.Empty(jobs.Items);
+    }
+
+    [Fact]
+    public async Task Characters_TheNewestOfANameWins()
+    {
+        InMemoryCharacterDatabase characters = new();
+        Akagi.Users.User user = new() { Id = "user" };
+        await characters.SaveDocumentAsync(new Akagi.Characters.Character { Id = "6adcc28c4f351a3450e30ab5", Name = "Akagi", UserId = "user" });
+        await characters.SaveDocumentAsync(new Akagi.Characters.Character { Id = "6ae1ebfa5a533276d716f835", Name = "Akagi", UserId = "user" });
+        await characters.SaveDocumentAsync(new Akagi.Characters.Character { Id = "6ae1ebfb5a533276d716f855", Name = "Sensei", UserId = "user" });
+
+        (string analysis, string delivery) = await CallJobs.ResolveCharactersAsync(characters, user, new CallAnalysisOptions(), null);
+
+        Assert.Equal("6ae1ebfb5a533276d716f855", analysis);
+        Assert.Equal("6ae1ebfa5a533276d716f835", delivery);
+    }
+}
+
 public class CallPipelineTests
 {
     private sealed class StubSplitter : IAudioSplitter
