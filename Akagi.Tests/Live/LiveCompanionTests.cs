@@ -1,3 +1,4 @@
+using Akagi.Bridge.Chat.Models;
 using Akagi.Bridge.Chat.Transmissions;
 using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Bridge.Chat.Transmissions.Responses;
@@ -11,10 +12,12 @@ using Akagi.Connectors;
 using Akagi.Data;
 using Akagi.Embeddings;
 using Akagi.Flow;
+using Akagi.Learning;
 using Akagi.Life;
 using Akagi.LLMs;
 using Akagi.Receivers;
 using Akagi.Receivers.Commands;
+using Akagi.Receivers.Commands.Life;
 using Akagi.Receivers.Commands.Messages;
 using Akagi.Scheduling;
 using Akagi.TTSs;
@@ -30,6 +33,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Character = Akagi.Characters.Character;
+using Command = Akagi.Receivers.Commands.Command;
 
 namespace Akagi.Tests.Live;
 
@@ -168,6 +173,115 @@ public class LiveCompanionTests
         }
     }
 
+    /// <summary>
+    /// A lesson as the Learn page drives it: the tutor appears on first use, lessons are stored in MongoDB and run over
+    /// the socket, and the tutor can be chatted with afterwards. The questions come from the scripted LLM through the
+    /// real tools.
+    /// </summary>
+    [LiveMongoFact]
+    public async Task Lesson_RunsOverTheSocketWithATutorCreatedOnFirstUse()
+    {
+        string database = "AkagiLive_" + Guid.NewGuid().ToString("N")[..8];
+        string connectionString = Environment.GetEnvironmentVariable("AKAGI_LIVE_MONGO")!.TrimEnd('/') + "/" + database;
+        int port = FreePort();
+        MongoClient mongo = new(connectionString);
+
+        await using ServiceProvider services = BuildServices(connectionString, port);
+        _ = services.GetRequiredService<Globals>();
+        SocketService socketService = services.GetRequiredService<SocketService>();
+        await socketService.StartAsync(CancellationToken.None);
+        try
+        {
+            IDatabaseFactory databases = services.GetRequiredService<IDatabaseFactory>();
+            User user = new() { Name = "Live", Username = "live", Valid = true };
+            await databases.GetDatabase<IUserDatabase>().SaveDocumentAsync(user);
+
+            using LiveClient client = await LiveClient.ConnectAsync(port);
+            await LoginAs(socketService, user);
+
+            async Task<LearningResponseTransmission> Ask(LearningRequestTransmission request)
+            {
+                request.RequestId = Guid.NewGuid().ToString("N");
+                client.Send(request);
+                LearningResponseTransmission response = await client.WaitFor<LearningResponseTransmission>(r => r.RequestId == request.RequestId);
+                Assert.Null(response.Error);
+                return response;
+            }
+
+            LearningOverview overview = (await Ask(new LearningRequestTransmission { Action = LearningAction.Overview })).Overview!;
+            Assert.Equal("Mio", overview.Tutor.Name);
+            Assert.Empty(overview.Struggles);
+            Assert.Equal(overview.Tutor.Id, (await Ask(new LearningRequestTransmission { Action = LearningAction.Overview })).Overview!.Tutor.Id);
+
+            client.Send(new CharacterRequestTransmission { Ids = [] });
+            Bridge.Chat.Models.Character listed = Assert.Single((await client.WaitFor<CharacterResponseTransmission>()).Characters);
+            Assert.True(listed.IsTutor);
+            Assert.Equal(overview.Tutor.Id, listed.Id);
+
+            // Four answers: graded on the server, answers hidden until then
+            LearningLesson lesson = (await Ask(new LearningRequestTransmission
+            {
+                Action = LearningAction.Start,
+                Mode = LessonMode.MultipleChoice,
+                Topic = "Rust lifetimes",
+                QuestionCount = 2
+            })).Lesson!;
+            Assert.Equal(LessonStatus.Active, lesson.Status);
+            Assert.Equal(ScriptedLLM.LessonIntro, lesson.Intro);
+            Assert.Equal(["First?", "Second?"], lesson.Questions.Select(q => q.Prompt));
+            Assert.All(lesson.Questions, q => Assert.Equal(4, q.Options.Length));
+            Assert.All(lesson.Questions, q => Assert.Null(q.CorrectOption));
+
+            int right = Array.IndexOf(lesson.Questions[0].Options, "right");
+            lesson = (await Ask(new LearningRequestTransmission { Action = LearningAction.Answer, LessonId = lesson.Id, QuestionIndex = 0, ChosenOption = right })).Lesson!;
+            Assert.Equal(LessonVerdict.Correct, lesson.Questions[0].Verdict);
+            int wrong = Array.FindIndex(lesson.Questions[1].Options, o => o != "right");
+            lesson = (await Ask(new LearningRequestTransmission { Action = LearningAction.Answer, LessonId = lesson.Id, QuestionIndex = 1, ChosenOption = wrong })).Lesson!;
+            Assert.Equal(LessonVerdict.Wrong, lesson.Questions[1].Verdict);
+
+            // The running lesson survives a page reload
+            Assert.Equal(lesson.Id, (await Ask(new LearningRequestTransmission { Action = LearningAction.Overview })).Overview!.Current!.Id);
+
+            lesson = (await Ask(new LearningRequestTransmission { Action = LearningAction.Finish, LessonId = lesson.Id })).Lesson!;
+            Assert.Equal(LessonStatus.Finished, lesson.Status);
+            Assert.Equal(1, lesson.Score);
+            Assert.Equal(ScriptedLLM.LessonClosing, lesson.Closing);
+
+            Lesson stored = await databases.GetDatabase<ILessonDatabase>().GetDocumentByIdAsync(lesson.Id) ?? throw new InvalidOperationException("Lesson was not stored.");
+            Assert.Equal(LessonStatus.Finished, stored.Status);
+            Assert.Equal(LessonVerdict.Wrong, stored.Questions[1].Verdict);
+            Assert.Equal(2, (await databases.GetDatabase<ILifeProfileDatabase>().GetOrCreate(user.Id!)).Study.Days.Single().Reviews);
+
+            // What was missed comes back as a weak spot, and a typed lesson can work on it
+            overview = (await Ask(new LearningRequestTransmission { Action = LearningAction.Overview })).Overview!;
+            LearningStruggle struggle = Assert.Single(overview.Struggles);
+            Assert.Equal(StruggleKind.Lesson, struggle.Kind);
+            Assert.Single(overview.Recent);
+
+            lesson = (await Ask(new LearningRequestTransmission
+            {
+                Action = LearningAction.Start,
+                Mode = LessonMode.Typed,
+                FocusIds = [struggle.Id],
+                QuestionCount = 1
+            })).Lesson!;
+            lesson = (await Ask(new LearningRequestTransmission { Action = LearningAction.Answer, LessonId = lesson.Id, AnswerText = "my own words" })).Lesson!;
+            Assert.Equal(LessonVerdict.Partial, lesson.Questions[0].Verdict);
+            Assert.Equal(ScriptedLLM.LessonFeedback, lesson.Questions[0].Feedback);
+
+            // The tutor is a normal chat partner, on a graph with the lesson injection
+            client.Send(new SendTextMessageRequestTransmission { CharacterId = overview.Tutor.Id, Text = "Why was that wrong?" });
+            StreamTextMessageResponseTransmission reply = await client.WaitFor<StreamTextMessageResponseTransmission>(t => t.IsComplete);
+            Assert.Equal(overview.Tutor.Id, reply.CharacterId);
+            Assert.Equal(ScriptedLLM.Reply, reply.FullText);
+        }
+        finally
+        {
+            await socketService.StopAsync(CancellationToken.None);
+            await mongo.DropDatabaseAsync(database);
+        }
+    }
+
     private static async Task<User> LiveUser(IUserDatabase users)
     {
         string? id = Environment.GetEnvironmentVariable("AKAGI_LIVE_USER_ID");
@@ -206,6 +320,7 @@ public class LiveCompanionTests
         services.AddCommunications(configuration);
         services.AddScheduling();
         services.AddLife(configuration);
+        services.AddLearning();
 
         // Every model call gets the same scripted answer, so no paid API is used
         services.AddSingleton<ILLMFactory, ScriptedLLMFactory>();
@@ -273,6 +388,9 @@ public class LiveCompanionTests
     private sealed class ScriptedLLM : ILLM
     {
         public const string Reply = "Scripted reply from Akagi.";
+        public const string LessonIntro = "Scripted intro.";
+        public const string LessonFeedback = "Scripted feedback.";
+        public const string LessonClosing = "Scripted closing.";
 
         public void SetModel(string model)
         {
@@ -288,8 +406,42 @@ public class LiveCompanionTests
             yield return new StreamCompleteEvent(Steps(systemProcessor, context), Reply);
         }
 
+        private static T Call<T>(T command, SystemProcessor systemProcessor, Context context, params (string Name, string Value)[] values) where T : Command
+        {
+            Argument[] arguments = command.GetDefaultArguments();
+            foreach ((string name, string value) in values)
+            {
+                arguments.Single(a => a.Name == name).Value = value;
+            }
+            command.Arguments = arguments;
+            command.SetFrom(systemProcessor.Output, context.Character.Id!);
+            return command;
+        }
+
+        private static AddLessonQuestionCommand Question(string prompt, SystemProcessor systemProcessor, Context context) =>
+            Call(new AddLessonQuestionCommand(), systemProcessor, context, ("Concept", prompt), ("Question", prompt), ("Answer", "right"),
+                ("Wrong1", "a"), ("Wrong2", "b"), ("Wrong3", "c"), ("Explanation", "Because."));
+
         private static Command[] Steps(SystemProcessor systemProcessor, Context context)
         {
+            if (systemProcessor.CommandNames.Contains("AddLessonQuestion"))
+            {
+                return
+                [
+                    Question("First?", systemProcessor, context),
+                    Question("Second?", systemProcessor, context),
+                    Call(new SetLessonIntroCommand(), systemProcessor, context, ("Intro", LessonIntro))
+                ];
+            }
+            if (systemProcessor.CommandNames.Contains("GradeLessonAnswer"))
+            {
+                return [Call(new GradeLessonAnswerCommand(), systemProcessor, context, ("Verdict", "Partial"), ("Feedback", LessonFeedback))];
+            }
+            if (systemProcessor.CommandNames.Contains("CloseLesson"))
+            {
+                return [Call(new CloseLessonCommand(), systemProcessor, context, ("Message", LessonClosing))];
+            }
+
             TextMessageCommand text = new();
             text.SetMessage(Reply);
             text.SetFrom(systemProcessor.Output, context.Character.Id!);

@@ -12,11 +12,14 @@ static class DependencyInjection
         services.AddSingleton<ITaskDatabase, TaskDatabase>();
         services.AddHostedService<SchedulerService>();
 
-        BsonClassMap.RegisterClassMap<BaseTask>(cm =>
+        if (!BsonClassMap.IsClassMapRegistered(typeof(BaseTask)))
         {
-            cm.AutoMap();
-            cm.SetIsRootClass(true);
-        });
+            BsonClassMap.RegisterClassMap<BaseTask>(cm =>
+            {
+                cm.AutoMap();
+                cm.SetIsRootClass(true);
+            });
+        }
 
         Type[] taskTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<BaseTask>();
         Array.ForEach(taskTypes, taskType => Register(services, taskType));

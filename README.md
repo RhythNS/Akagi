@@ -117,7 +117,34 @@ morning, and on demand through `SyncHealth`. While the OAuth client is in Testin
 after seven days, so `/health link` has to be repeated weekly until the app is verified.
 `/uploadHealth` still imports Health Connect style JSON exports.
 
-Other user commands: `/life` shows what the companion knows, `/timezone Europe/Berlin` sets local time. Finished work
+## Learning
+
+The Learn page in Akagi.Web (and `/learn` on Telegram) runs lessons with a tutor, on where you are struggling or on any
+topic you name. Each lesson comes in one of two modes: pick one of four answers, graded right away without an LLM, or
+type your answer and the tutor grades its meaning.
+
+- **Weak spots** come from the Japanese diagnosis, the study profile (recurring grammar mistakes, shaky vocabulary that
+  is due) and concepts missed in earlier lessons, on any topic. A concept stops being a weak spot once answered correctly.
+- **Results feed back.** Questions on a diagnosed issue count as correct or incorrect use, vocabulary questions as
+  reviews, and every finished lesson appears in the study log, which is how Akagi hears about it.
+- **Mio is the tutor**, created from `Characters/Learning/Mio.json` (embedded in the server) the first time you open
+  Learn or run `/learn`. She shows up in the character directory: chat with her about a lesson, she knows the latest one
+  and your weak spots, and give her a picture with `/cardImage` in her chat. Any character whose card has the tag
+  `learning` takes the role instead, so a user with their own tutor gets no Mio.
+- **The Learning LLM** is its own preference with no roleplay/general split. It defaults to
+  `google/gemini-3.8-flash`; change it with `/changeLLM 6 <id>`, using an id from `/listLLMDefinitions`. Without
+  that definition it falls back to the general default.
+
+`/learn start [choice|typed] [topic...]` starts a lesson, `/learn answer <answer...>` answers, `/learn stop` ends it and
+`/learn` shows the current question or your weak spots.
+
+Gemini 3 rejects a replayed tool call unless its `reasoning_details` are sent back, and conversations do not store them.
+So every lesson call is one fresh request, and Mio chats without tools. Giving a character on that model tools needs
+those details preserved first.
+
+## Other commands
+
+`/life` shows what the companion knows, `/timezone Europe/Berlin` sets local time. Finished work
 sessions are mirrored to the Akagi.Web TimeTracker when the user has linked a Google account.
 
 ## Tests
