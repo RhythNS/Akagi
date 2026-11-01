@@ -14,6 +14,7 @@ using Akagi.Embeddings;
 using Akagi.Flow;
 using Akagi.Learning;
 using Akagi.Life;
+using Akagi.Life.Japanese.Calls;
 using Akagi.LLMs;
 using Akagi.Receivers;
 using Akagi.Receivers.Commands;
@@ -174,6 +175,80 @@ public class LiveCompanionTests
     }
 
     /// <summary>
+    /// A recording as large as a real call, sent the way the chat page sends it, with a character left behind by a failed
+    /// upload in the database. Nothing is transcribed: the analysis service does not run here.
+    /// </summary>
+    [LiveMongoFact]
+    public async Task LargeRecording_ArrivesWholeOverTheSocket_DespiteACharacterWithoutACard()
+    {
+        string database = "AkagiLive_" + Guid.NewGuid().ToString("N")[..8];
+        string connectionString = Environment.GetEnvironmentVariable("AKAGI_LIVE_MONGO")!.TrimEnd('/') + "/" + database;
+        int port = FreePort();
+        MongoClient mongo = new(connectionString);
+
+        await using ServiceProvider services = BuildServices(connectionString, port);
+        _ = services.GetRequiredService<Globals>();
+        SocketService socketService = services.GetRequiredService<SocketService>();
+        await socketService.StartAsync(CancellationToken.None);
+        string? storedFolder = null;
+        try
+        {
+            IDatabaseFactory databases = services.GetRequiredService<IDatabaseFactory>();
+            User user = new() { Name = "Live", Username = "live", Valid = true };
+            await databases.GetDatabase<IUserDatabase>().SaveDocumentAsync(user);
+            ICharacterDatabase characters = databases.GetDatabase<ICharacterDatabase>();
+            Character orphan = new()
+            {
+                Name = "Akagi",
+                UserId = user.Id!,
+                CardId = ObjectId.GenerateNewId().ToString(),
+                PuppeteerId = ObjectId.GenerateNewId().ToString(),
+                RoutineIds = [ObjectId.GenerateNewId().ToString()]
+            };
+            await characters.SaveDocumentAsync(orphan);
+
+            Assert.Empty(await characters.GetCharactersWithRoutines());
+            Assert.Empty(await characters.GetCharactersForUser(user));
+            Assert.Null(await characters.GetCharacter(orphan.Id!));
+
+            using LiveClient client = await LiveClient.ConnectAsync(port);
+            await LoginAs(socketService, user);
+
+            byte[] recording = new byte[80 * 1024 * 1024];
+            new Random(42).NextBytes(recording);
+            client.Send(new SendFileMessageRequestTransmission
+            {
+                CharacterId = "0",
+                Text = "/analyzeCall Lee left",
+                FileName = "2026-10-21 call.mp3",
+                FileType = "audio/mpeg",
+                FileData = recording
+            });
+
+            Assert.Null((await client.WaitFor<SendFileMessageResponseTransmission>()).Error);
+            TextMessageResponseTransmission queued = await client.WaitFor<TextMessageResponseTransmission>(t => t.Message.Text.Contains("queued"));
+            Assert.Contains("queued as", queued.Message.Text);
+
+            CallJob job = Assert.Single(await databases.GetDatabase<ICallJobDatabase>().GetForUser(user.Id!));
+            storedFolder = Path.GetDirectoryName(job.SourcePath);
+            Assert.Equal(LearnerChannel.Left, job.LearnerChannel);
+            Assert.Equal("Lee", job.Partner);
+            Assert.Equal(new DateTime(2026, 10, 21, 0, 0, 0, DateTimeKind.Utc), job.RecordedAt);
+            byte[] stored = await File.ReadAllBytesAsync(job.SourcePath);
+            Assert.True(recording.AsSpan().SequenceEqual(stored));
+        }
+        finally
+        {
+            await socketService.StopAsync(CancellationToken.None);
+            await mongo.DropDatabaseAsync(database);
+            if (storedFolder != null)
+            {
+                Directory.Delete(storedFolder, recursive: true);
+            }
+        }
+    }
+
+    /// <summary>
     /// A lesson as the Learn page drives it: the tutor appears on first use, lessons are stored in MongoDB and run over
     /// the socket, and the tutor can be chatted with afterwards. The questions come from the scripted LLM through the
     /// real tools.
@@ -302,6 +377,7 @@ public class LiveCompanionTests
                 ["ConnectionStrings:MongoDB"] = connectionString,
                 ["Socket:Ip"] = "127.0.0.1",
                 ["Socket:Port"] = port.ToString(),
+                ["CallAnalysis:StorageDirectory"] = Path.Combine(Path.GetTempPath(), "akagi-live-calls", Path.GetFileNameWithoutExtension(connectionString)),
             })
             .Build();
 

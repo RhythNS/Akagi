@@ -1,8 +1,10 @@
 ﻿using Akagi.Characters.Cards;
 using Akagi.Data;
 using Akagi.Users;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
+using System.Collections.Concurrent;
 
 namespace Akagi.Characters;
 
@@ -20,10 +22,13 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
     public override string CollectionName => "characters";
 
     private readonly ICardDatabase _cardDatabase;
+    private readonly ILogger<CharacterDatabase> _logger;
+    private readonly ConcurrentDictionary<string, byte> _reportedOrphans = new();
 
-    public CharacterDatabase(IOptionsMonitor<DatabaseOptions> options, ICardDatabase cardDatabase) : base(options)
+    public CharacterDatabase(IOptionsMonitor<DatabaseOptions> options, ICardDatabase cardDatabase, ILogger<CharacterDatabase> logger) : base(options)
     {
         _cardDatabase = cardDatabase;
+        _logger = logger;
         options.OnChange(OnOptionsChange);
         OnOptionsChange(options.CurrentValue);
     }
@@ -40,46 +45,53 @@ internal class CharacterDatabase : Database<Character>, ICharacterDatabase
     public async Task<Character?> GetCharacter(string id)
     {
         Character? character = await GetDocumentByIdAsync(id);
-        if (character == null)
-        {
-            return null;
-        }
-
-        await InitCharacter(character);
-        return character;
+        return character != null && await TryInitCharacter(character) ? character : null;
     }
 
     public async Task<List<Character>> GetCharactersForUser(User user)
     {
         FilterDefinitionBuilder<Character> builder = Builders<Character>.Filter;
         FilterDefinition<Character> definition = builder.Eq(nameof(Character.UserId), user.Id);
-        List<Character> characters = await GetDocumentsByPredicateAsync(definition);
-
-        foreach (Character character in characters)
-        {
-            await InitCharacter(character);
-        }
-
-        return characters;
+        return await InitCharacters(await GetDocumentsByPredicateAsync(definition));
     }
 
     public async Task<List<Character>> GetCharactersWithRoutines()
     {
         FilterDefinition<Character> filter = Builders<Character>.Filter.SizeGt(nameof(Character.RoutineIds), 0);
-        List<Character> characters = await GetDocumentsByPredicateAsync(filter);
-
-        foreach (Character character in characters)
-        {
-            await InitCharacter(character);
-        }
-
-        return characters;
+        return await InitCharacters(await GetDocumentsByPredicateAsync(filter));
     }
 
-    private async Task InitCharacter(Character character)
+    private async Task<List<Character>> InitCharacters(List<Character> characters)
     {
-        Card? card = await _cardDatabase.GetDocumentByIdAsync(character.CardId) ?? throw new Exception($"Card with ID {character.CardId} not found.");
+        List<Character> usable = [];
+        foreach (Character character in characters)
+        {
+            if (await TryInitCharacter(character))
+            {
+                usable.Add(character);
+            }
+        }
+        return usable;
+    }
+
+    /// <summary>
+    /// A character without its card cannot run, and a failed upload can leave one behind. It must not take the others
+    /// down with it: lists of characters drive routines, the website and call analysis.
+    /// </summary>
+    private async Task<bool> TryInitCharacter(Character character)
+    {
+        Card? card = await _cardDatabase.GetDocumentByIdAsync(character.CardId);
+        if (card == null)
+        {
+            if (_reportedOrphans.TryAdd(character.Id!, 0))
+            {
+                _logger.LogWarning("Skipping character {CharacterId} ({Name}): card {CardId} does not exist", character.Id, character.Name, character.CardId);
+            }
+            return false;
+        }
+
         character.Init(card);
         await character.AfterLoad();
+        return true;
     }
 }

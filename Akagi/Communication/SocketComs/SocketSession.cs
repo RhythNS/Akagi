@@ -94,7 +94,7 @@ internal class SocketSession : TcpSession
 
             while (true)
             {
-                (bool IsComplete, byte[]? Data) package = _packagedBuilder.Receive(buffer, offset, size);
+                (bool IsComplete, byte[]? Data) package = _packagedBuilder.Receive(currentBuffer, currentOffset, currentSize);
                 if (!package.IsComplete)
                 {
                     return;

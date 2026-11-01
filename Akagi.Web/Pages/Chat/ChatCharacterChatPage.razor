@@ -446,7 +446,8 @@
 
 	private IBrowserFile? _selectedFile = null;
 
-	private const long MaxUploadBytes = 50 * 1024 * 1024; // 50 MB
+	private const long MaxUploadBytes = 300 * 1024 * 1024; // 300 MB: about four hours of a 166 kbit/s call recording
+	private static readonly TimeSpan UploadTimeout = TimeSpan.FromMinutes(5);
 
 	// Command palette
 	private CommandPalette? _commandPalette;
@@ -719,14 +720,14 @@
 		{
 			if (attachedFile is not null)
 			{
-				FileTemp? file = await GetFileContent(attachedFile);
+				(FileTemp? file, string? error) = await GetFileContent(attachedFile);
 				if (file == null)
 				{
 					conv.Messages.Remove(optimisticMessage);
 					await ToastService.AddToastAsync(new ToastModel
 					{
 						Title = "Upload failed",
-						Message = "Could not upload the selected file."
+						Message = error ?? "Could not upload the selected file."
 					});
 					return;
 				}
@@ -752,22 +753,30 @@
 		public required byte[] Data { get; init; }
 	}
 
-	private async Task<FileTemp?> GetFileContent(IBrowserFile file)
+	public static string DescribeTooLarge(string fileName, long bytes, long maxBytes) =>
+		$"{fileName} is {bytes / (1024 * 1024)} MB, and the limit here is {maxBytes / (1024 * 1024)} MB.";
+
+	private async Task<(FileTemp? File, string? Error)> GetFileContent(IBrowserFile file)
 	{
+		if (file.Size > MaxUploadBytes)
+		{
+			return (null, DescribeTooLarge(file.Name, file.Size, MaxUploadBytes));
+		}
+
 		try
 		{
 			using StreamContent fileContent = new(file.OpenReadStream(MaxUploadBytes));
 			byte[] bytes = await fileContent.ReadAsByteArrayAsync();
-			return new FileTemp
+			return (new FileTemp
 			{
 				Name = file.Name,
 				Type = file.ContentType,
 				Data = bytes
-			};
+			}, null);
 		}
-		catch
+		catch (Exception ex)
 		{
-			return null;
+			return (null, $"Could not read {file.Name}: {ex.Message}");
 		}
 	}
 
@@ -815,7 +824,7 @@
 				FileData = fileToSend.Data,
 			};
 
-			FileMessageResult result = await request.Get(client);
+			FileMessageResult result = await request.Get(client, UploadTimeout);
 			if (!string.IsNullOrEmpty(result.Error))
 			{
 				conv.Messages.Remove(optimisticMessage);

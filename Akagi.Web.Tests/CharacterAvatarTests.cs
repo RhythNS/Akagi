@@ -26,6 +26,14 @@ public class CharacterAvatarTests : BunitContext
     };
 
     [Fact]
+    public void Upload_TooLarge_SaysWhyWithBothSizes()
+    {
+        string text = Akagi.Web.Pages.Chat.ChatCharacterChatPage.DescribeTooLarge("call.mp3", 400L * 1024 * 1024, 300L * 1024 * 1024);
+
+        Assert.Equal("call.mp3 is 400 MB, and the limit here is 300 MB.", text);
+    }
+
+    [Fact]
     public void CardWithPicture_LoadsItThroughTheSocket()
     {
         IRenderedComponent<CharacterAvatar> avatar = Render<CharacterAvatar>(p => p
