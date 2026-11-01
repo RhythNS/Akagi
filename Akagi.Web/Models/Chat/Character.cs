@@ -9,6 +9,7 @@ public class Character
     public bool IsGroup { get; set; }
     public string[] MemberIds { get; set; } = [];
     public bool HasImage { get; set; }
+    public bool IsTutor { get; set; }
 
     /// <summary>
     /// Whether a message tagged with <paramref name="characterId"/> belongs to this chat. Group members answer with their own ids.
@@ -28,6 +29,7 @@ public class Character
             IsGroup = character.IsGroup,
             MemberIds = character.MemberIds ?? [],
             HasImage = character.HasImage,
+            IsTutor = character.IsTutor,
         };
     }
 }

@@ -1,0 +1,182 @@
+@using Akagi.Bridge.Chat.Models
+@using WebCharacter = Akagi.Web.Models.Chat.Character
+
+<div class="card">
+	<div class="card-body">
+		<div class="d-flex align-items-center justify-content-between gap-3 mb-2">
+			<div class="min-w-0">
+				<div class="text-secondary small">Question @(_viewIndex + 1) of @Lesson.Questions.Length</div>
+				<div class="fw-medium text-truncate">@Lesson.Topic</div>
+			</div>
+			<button type="button" class="btn btn-sm btn-ghost-secondary flex-shrink-0" data-lesson-end disabled="@Busy" @onclick="() => OnFinish.InvokeAsync()">
+				End lesson
+			</button>
+		</div>
+		<div class="progress progress-sm mb-4">
+			<div class="progress-bar"
+				 role="progressbar"
+				 style="width: @(ProgressPercent)%"
+				 aria-valuenow="@ProgressPercent"
+				 aria-valuemin="0"
+				 aria-valuemax="100"></div>
+		</div>
+
+		@if (_viewIndex == 0 && !string.IsNullOrWhiteSpace(Lesson.Intro) && !Question.IsAnswered)
+		{
+			<div class="mb-4">
+				<TutorBubble Tutor="Tutor" CircuitId="@CircuitId">@Lesson.Intro</TutorBubble>
+			</div>
+		}
+
+		<div class="lesson-prompt fw-medium mb-3">@Question.Prompt</div>
+
+		@if (Lesson.Mode == LessonMode.MultipleChoice)
+		{
+			<div class="d-flex flex-column gap-2 mb-3">
+				@for (int i = 0; i < Question.Options.Length; i++)
+				{
+					int option = i;
+					<button type="button"
+							class="btn lesson-option @OptionClass(option)"
+							data-option="@option"
+							disabled="@(Busy || Question.IsAnswered)"
+							@onclick="() => OnAnswer.InvokeAsync(new Answer(_viewIndex, option, null))">
+						<span class="fw-bold me-2">@((char)('A' + option))</span>
+						<span>@Question.Options[option]</span>
+					</button>
+				}
+			</div>
+		}
+		else if (Question.IsAnswered)
+		{
+			<div class="mb-3">
+				<div class="text-secondary small">Your answer</div>
+				<div class="lesson-prompt fs-4">@Question.AnswerText</div>
+			</div>
+		}
+		else
+		{
+			<form class="mb-3" @onsubmit="SubmitTextAsync">
+				<textarea class="form-control mb-2"
+						  rows="3"
+						  maxlength="2000"
+						  placeholder="Type your answer"
+						  disabled="@Busy"
+						  @bind="_text"
+						  @bind:event="oninput"></textarea>
+				<button type="submit" class="btn btn-primary" data-answer-submit disabled="@(Busy || string.IsNullOrWhiteSpace(_text))">
+					@(Busy ? $"{Tutor?.Name} is reading..." : "Answer")
+				</button>
+			</form>
+		}
+
+		@if (Question.IsAnswered)
+		{
+			<div class="mb-3" data-result="@Question.Verdict">
+				<span class="badge @VerdictClass(Question.Verdict) mb-2">@VerdictLabel(Question.Verdict)</span>
+				@if (Lesson.Mode == LessonMode.Typed && Question.Verdict != LessonVerdict.Correct)
+				{
+					<div class="mb-2"><span class="text-secondary">Model answer:</span> @Question.ExpectedAnswer</div>
+				}
+				<TutorBubble Tutor="Tutor" CircuitId="@CircuitId">@Question.Feedback</TutorBubble>
+			</div>
+
+			<div class="d-flex justify-content-end">
+				@if (Lesson.NextIndex < Lesson.Questions.Length)
+				{
+					<button type="button" class="btn btn-primary" data-lesson-next @onclick="ShowNext">Next question</button>
+				}
+				else
+				{
+					<button type="button" class="btn btn-primary" data-lesson-results disabled="@Busy" @onclick="() => OnFinish.InvokeAsync()">
+						@(Busy ? "Wrapping up..." : "See results")
+					</button>
+				}
+			</div>
+		}
+	</div>
+</div>
+
+@code {
+	public record Answer(int QuestionIndex, int? Option, string? Text);
+
+	[Parameter, EditorRequired]
+	public LearningLesson Lesson { get; set; } = null!;
+
+	[Parameter]
+	public WebCharacter? Tutor { get; set; }
+
+	[Parameter]
+	public string? CircuitId { get; set; }
+
+	/// <summary>
+	/// A request is under way.
+	/// </summary>
+	[Parameter]
+	public bool Busy { get; set; }
+
+	[Parameter]
+	public EventCallback<Answer> OnAnswer { get; set; }
+
+	[Parameter]
+	public EventCallback OnFinish { get; set; }
+
+	private string? _lessonId;
+	private int _viewIndex;
+	private string _text = string.Empty;
+
+	private LearningQuestion Question => Lesson.Questions[_viewIndex];
+
+	private int ProgressPercent => Lesson.Questions.Length == 0 ? 0 : 100 * Lesson.AnsweredCount / Lesson.Questions.Length;
+
+	protected override void OnParametersSet()
+	{
+		// A resumed lesson opens at the first open question; while answering, the view stays on the feedback
+		if (_lessonId != Lesson.Id)
+		{
+			_lessonId = Lesson.Id;
+			_viewIndex = Math.Min(Lesson.NextIndex, Lesson.Questions.Length - 1);
+			_text = string.Empty;
+		}
+	}
+
+	private Task SubmitTextAsync()
+	{
+		return string.IsNullOrWhiteSpace(_text) || Busy
+			? Task.CompletedTask
+			: OnAnswer.InvokeAsync(new Answer(_viewIndex, null, _text));
+	}
+
+	private void ShowNext()
+	{
+		_viewIndex = Lesson.NextIndex;
+		_text = string.Empty;
+	}
+
+	private string OptionClass(int option)
+	{
+		if (!Question.IsAnswered)
+		{
+			return "btn-outline-secondary";
+		}
+		if (option == Question.CorrectOption)
+		{
+			return "btn-success";
+		}
+		return option == Question.ChosenOption ? "btn-danger" : "btn-outline-secondary";
+	}
+
+	private static string VerdictLabel(LessonVerdict verdict) => verdict switch
+	{
+		LessonVerdict.Correct => "Correct",
+		LessonVerdict.Partial => "Partly right",
+		_ => "Not quite"
+	};
+
+	private static string VerdictClass(LessonVerdict verdict) => verdict switch
+	{
+		LessonVerdict.Correct => "bg-success-lt",
+		LessonVerdict.Partial => "bg-warning-lt",
+		_ => "bg-danger-lt"
+	};
+}

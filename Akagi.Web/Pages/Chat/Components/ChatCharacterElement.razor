@@ -50,19 +50,30 @@
 				<span class="badge bg-primary-lt">Companion</span>
 				<span class="badge bg-azure-lt">Streaming</span>
 			}
+			@if (Character.IsTutor)
+			{
+				<span class="badge bg-green-lt">Tutor</span>
+			}
 			@if (HasMessageHistory)
 			{
 				<span class="badge bg-purple-lt">History</span>
 			}
 		</div>
 
-		<div class="mt-auto pt-2">
+		<div class="mt-auto pt-2 d-flex flex-column gap-2">
 			<button type="button"
 					class="btn btn-primary w-100 d-inline-flex align-items-center justify-content-center gap-2"
 					@onclick="HandleCharacterClick">
 				<Icon IconType="@Icons.Messages" Size="16" />
 				<span>Open Chat</span>
 			</button>
+			@if (Character.IsTutor)
+			{
+				<a href="/Learn" class="btn btn-outline-primary w-100 d-inline-flex align-items-center justify-content-center gap-2">
+					<Icon IconType="@Icons.School" Size="16" />
+					<span>Start a Lesson</span>
+				</a>
+			}
 		</div>
 	</div>
 </div>

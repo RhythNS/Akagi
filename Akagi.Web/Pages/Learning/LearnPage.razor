@@ -1,0 +1,328 @@
+@page "/Learn"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Pages.Chat.Components
+@using Akagi.Web.Pages.Learning.Components
+@using Akagi.Web.Services.Circuits
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+@using WebCharacter = Akagi.Web.Models.Chat.Character
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject ICircuitIdAccessor CircuitIdAccessor
+
+<PageTitle>Learn - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col-auto">
+			<CharacterAvatar Character="_tutor" Size="AvatarSize.Large" CircuitId="@CircuitIdAccessor.CircuitId" />
+		</div>
+		<div class="col">
+			<div class="page-pretitle">Learn</div>
+			<h2 class="page-title">@(_tutor == null ? "Lessons" : $"Lessons with {_tutor.Name}")</h2>
+		</div>
+		@if (_tutor != null)
+		{
+			<div class="col-auto ms-auto">
+				<a href="@($"/Chat/{_tutor.Id}/")" class="btn btn-outline-primary d-inline-flex align-items-center gap-2">
+					<Icon IconType="@Icons.Messages" Size="16" />
+					<span>Chat with @_tutor.Name</span>
+				</a>
+			</div>
+		}
+	</div>
+</div>
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert">@_error</div>
+}
+
+@switch (_state)
+{
+	case State.Loading:
+		<div class="card">
+			<div class="card-body py-5 text-center">
+				<div class="spinner-border text-primary mb-3" role="status"></div>
+				<div class="text-secondary">Loading your lessons...</div>
+			</div>
+		</div>
+		break;
+
+	case State.Offline:
+		<div class="card border-danger">
+			<div class="card-body py-5 text-center">
+				<div class="text-danger mb-2">
+					<Icon IconType="@Icons.AlertCircle" Size="36" />
+				</div>
+				<h3 class="h4 mb-1">Socket Service Offline</h3>
+				<p class="text-secondary mb-3">Unable to reach the Akagi backend. Lessons need it to run.</p>
+				<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="LoadAsync">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Retry Connection</span>
+				</button>
+			</div>
+		</div>
+		break;
+
+	case State.Setup:
+		<div class="row row-cards">
+			<div class="col-12 col-lg-8">
+				<LessonSetup Struggles="_struggles" OnStart="StartAsync" />
+			</div>
+			<div class="col-12 col-lg-4">
+				<div class="card">
+					<div class="card-header">
+						<h3 class="card-title m-0">Recent lessons</h3>
+					</div>
+					@if (_recent.Length == 0)
+					{
+						<div class="card-body text-secondary small">Your finished lessons will show up here.</div>
+					}
+					else
+					{
+						<div class="list-group list-group-flush">
+							@foreach (LearningLesson lesson in _recent)
+							{
+								<button type="button" class="list-group-item list-group-item-action text-start" @onclick="() => ShowResults(lesson)">
+									<div class="d-flex justify-content-between gap-2">
+										<span class="fw-medium text-truncate">@lesson.Topic</span>
+										<span class="flex-shrink-0">@lesson.Score.ToString("0.#")/@lesson.AnsweredCount</span>
+									</div>
+									<div class="text-secondary small">@lesson.CreatedAt.ToLocalTime().ToString("g")</div>
+								</button>
+							}
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+		break;
+
+	case State.Preparing:
+		<div class="card">
+			<div class="card-body py-5 text-center">
+				<div class="spinner-border text-primary mb-3" role="status"></div>
+				<div class="text-secondary">@(_tutor?.Name ?? "Your tutor") is preparing your lesson...</div>
+			</div>
+		</div>
+		break;
+
+	case State.Lesson:
+		<LessonPlayer Lesson="_lesson!"
+					  Tutor="_tutor"
+					  CircuitId="@CircuitIdAccessor.CircuitId"
+					  Busy="_busy"
+					  OnAnswer="AnswerAsync"
+					  OnFinish="FinishAsync" />
+		break;
+
+	case State.Results:
+		<LessonResults Lesson="_lesson!"
+					   Tutor="_tutor"
+					   CircuitId="@CircuitIdAccessor.CircuitId"
+					   OnNewLesson="LoadAsync" />
+		break;
+}
+
+@code {
+	private enum State
+	{
+		Loading,
+		Offline,
+		Setup,
+		Preparing,
+		Lesson,
+		Results
+	}
+
+	private static readonly TimeSpan PreparingPoll = TimeSpan.FromSeconds(3);
+
+	private readonly CancellationTokenSource _disposed = new();
+	private State _state = State.Loading;
+	private WebCharacter? _tutor;
+	private LearningStruggle[] _struggles = [];
+	private LearningLesson[] _recent = [];
+	private LearningLesson? _lesson;
+	private string? _error;
+	private bool _busy;
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override Task OnInitializedAsync() => LoadAsync();
+
+	private async Task LoadAsync()
+	{
+		_error = null;
+		_state = State.Loading;
+		await RefreshAsync();
+	}
+
+	private async Task RefreshAsync()
+	{
+		LearningResponseTransmission? response = await SendAsync(new LearningRequestTransmission { Action = LearningAction.Overview }, LearningRequest.OverviewTimeout);
+		if (response?.Overview is not LearningOverview overview)
+		{
+			_state = State.Offline;
+			return;
+		}
+
+		_tutor = WebCharacter.FromBridge(overview.Tutor);
+		_struggles = overview.Struggles;
+		_recent = overview.Recent;
+		_lesson = overview.Current;
+		_state = _lesson?.Status switch
+		{
+			LessonStatus.Preparing => State.Preparing,
+			LessonStatus.Active => State.Lesson,
+			_ => State.Setup
+		};
+
+		if (_state == State.Preparing)
+		{
+			_ = WatchPreparingAsync();
+		}
+	}
+
+	/// <summary>
+	/// A lesson can be preparing while this page was not the one asking for it, for example after a reload.
+	/// </summary>
+	private async Task WatchPreparingAsync()
+	{
+		try
+		{
+			await Task.Delay(PreparingPoll, _disposed.Token);
+			await InvokeAsync(async () =>
+			{
+				await RefreshAsync();
+				StateHasChanged();
+			});
+		}
+		catch (OperationCanceledException)
+		{
+			// The page was left
+		}
+	}
+
+	private async Task StartAsync(LessonSetup.Choice choice)
+	{
+		_error = null;
+		_state = State.Preparing;
+		LearningResponseTransmission? response = await SendAsync(new LearningRequestTransmission
+		{
+			Action = LearningAction.Start,
+			Mode = choice.Mode,
+			Topic = choice.Topic,
+			FocusIds = choice.FocusIds,
+			QuestionCount = choice.QuestionCount
+		}, LearningRequest.StartTimeout);
+
+		if (response?.Lesson is LearningLesson lesson)
+		{
+			_lesson = lesson;
+			_state = State.Lesson;
+			return;
+		}
+
+		// The refresh shows where things stand, the error why
+		string? error = _error;
+		await RefreshAsync();
+		_error = error ?? _error;
+	}
+
+	private async Task AnswerAsync(LessonPlayer.Answer answer)
+	{
+		_error = null;
+		_busy = true;
+		LearningResponseTransmission? response = await SendAsync(new LearningRequestTransmission
+		{
+			Action = LearningAction.Answer,
+			LessonId = _lesson!.Id,
+			QuestionIndex = answer.QuestionIndex,
+			ChosenOption = answer.Option,
+			AnswerText = answer.Text ?? string.Empty
+		}, LearningRequest.AnswerTimeout);
+		_busy = false;
+		_lesson = response?.Lesson ?? _lesson;
+	}
+
+	private async Task FinishAsync()
+	{
+		_error = null;
+		_busy = true;
+		LearningResponseTransmission? response = await SendAsync(new LearningRequestTransmission
+		{
+			Action = LearningAction.Finish,
+			LessonId = _lesson!.Id
+		}, LearningRequest.AnswerTimeout);
+		_busy = false;
+
+		if (response?.Lesson is { Status: LessonStatus.Finished } finished)
+		{
+			ShowResults(finished);
+		}
+		else if (response?.Lesson != null)
+		{
+			await LoadAsync();
+		}
+	}
+
+	private void ShowResults(LearningLesson lesson)
+	{
+		_lesson = lesson;
+		_state = State.Results;
+	}
+
+	/// <summary>
+	/// Sends one step. Failures end up in <see cref="_error"/>; null means there is no response to work with.
+	/// </summary>
+	private async Task<LearningResponseTransmission?> SendAsync(LearningRequestTransmission transmission, TimeSpan timeout)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			_error = "The connection to the backend is gone. Try again in a moment.";
+			return null;
+		}
+
+		try
+		{
+			LearningRequest request = new(transmission);
+			LearningResponseTransmission response = await request.Get(client, timeout);
+			_error = response.Error;
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Try again in a moment.";
+			return null;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_state == State.Offline && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+		_disposed.Cancel();
+		_disposed.Dispose();
+	}
+}

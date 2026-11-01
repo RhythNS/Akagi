@@ -14,6 +14,9 @@ public static class Icons
     public static IIconType Clock => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0' /><path d='M12 7v5l3 3' />");
 
+    public static IIconType School => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M22 9l-10 -4l-10 4l10 4l10 -4v6' /><path d='M6 10.6v5.4a6 3 0 0 0 12 0v-5.4' />");
+
     public static IIconType Settings => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M10.325 4.317c.426 -1.756 2.924 -1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543 -.94 3.31 .826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756 .426 1.756 2.924 0 3.35a1.724 1.724 0 0 0 -1.066 2.573c.94 1.543 -.826 3.31 -2.37 2.37a1.724 1.724 0 0 0 -2.572 1.065c-.426 1.756 -2.924 1.756 -3.35 0a1.724 1.724 0 0 0 -2.573 -1.066c-1.543 .94 -3.31 -.826 -2.37 -2.37a1.724 1.724 0 0 0 -1.065 -2.572c-1.756 -.426 -1.756 -2.924 0 -3.35a1.724 1.724 0 0 0 1.066 -2.573c-.94 -1.543 .826 -3.31 2.37 -2.37c1 .608 2.296 .07 2.572 -1.065z' /><path d='M9 12a3 3 0 1 0 6 0a3 3 0 0 0 -6 0' />");
 

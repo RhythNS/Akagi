@@ -68,6 +68,16 @@
 				</div>
 			</li>
 
+			<!-- Learn -->
+			<li class="nav-item @(IsLearnActive ? "active" : "")">
+				<NavLink class="nav-link d-flex align-items-center" href="Learn" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+					<span class="nav-link-icon d-md-none d-lg-inline-block">
+						<Icon class="icon" IconType="@Icons.School" />
+					</span>
+					<span class="nav-link-title">Learn</span>
+				</NavLink>
+			</li>
+
 			<!-- Time Tracking -->
 			<li class="nav-item dropdown @(IsTimeTrackingActive ? "active" : "")">
 				<a class="nav-link dropdown-toggle @(_timeTrackingExpanded ? "show" : "")"
@@ -138,6 +148,9 @@
 
 	private bool IsChatActive =>
 		_currentPath.StartsWith("Chat", StringComparison.OrdinalIgnoreCase);
+
+	private bool IsLearnActive =>
+		_currentPath.StartsWith("Learn", StringComparison.OrdinalIgnoreCase);
 
 	private bool IsTimeTrackingActive =>
 		_currentPath.StartsWith("TimeTracking", StringComparison.OrdinalIgnoreCase);

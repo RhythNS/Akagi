@@ -1,0 +1,174 @@
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Web.Icons
+
+<div class="card">
+	<div class="card-header">
+		<h3 class="card-title m-0">New lesson</h3>
+	</div>
+	<div class="card-body">
+		<div class="mb-4">
+			<div class="form-label">What should it be about?</div>
+			<div class="btn-group w-100" role="group">
+				<button type="button"
+						class="btn @(_useStruggles ? "btn-primary" : "btn-outline-primary")"
+						data-source="struggles"
+						disabled="@(Struggles.Length == 0)"
+						@onclick="() => _useStruggles = true">
+					Where I'm struggling
+				</button>
+				<button type="button"
+						class="btn @(_useStruggles ? "btn-outline-primary" : "btn-primary")"
+						data-source="custom"
+						@onclick="() => _useStruggles = false">
+					A topic of my choice
+				</button>
+			</div>
+		</div>
+
+		@if (_useStruggles)
+		{
+			<div class="mb-4">
+				<div class="form-label">Weak spots to work on</div>
+				@foreach (LearningStruggle struggle in Struggles)
+				{
+					<label class="form-check">
+						<input class="form-check-input"
+							   type="checkbox"
+							   checked="@_selected.Contains(struggle.Id)"
+							   @onchange="e => Toggle(struggle.Id, (bool)e.Value!)" />
+						<span class="form-check-label">
+							<span class="badge @KindClass(struggle.Kind) me-1">@KindLabel(struggle.Kind)</span>
+							@struggle.Title
+						</span>
+						@if (!string.IsNullOrWhiteSpace(struggle.Detail))
+						{
+							<span class="form-check-description">@struggle.Detail</span>
+						}
+					</label>
+				}
+			</div>
+		}
+		else
+		{
+			<div class="mb-4">
+				<label class="form-label" for="lesson-topic">Topic</label>
+				<input id="lesson-topic"
+					   type="text"
+					   class="form-control"
+					   maxlength="300"
+					   placeholder="Keigo for job interviews, Rust lifetimes, the French Revolution..."
+					   @bind="_topic"
+					   @bind:event="oninput" />
+				@if (Struggles.Length == 0)
+				{
+					<div class="form-hint">Weak spots show up here once your conversations and lessons reveal them.</div>
+				}
+			</div>
+		}
+
+		<div class="row g-3 mb-4">
+			<div class="col-12 col-md-8">
+				<div class="form-label">How do you want to answer?</div>
+				<div class="btn-group w-100" role="group">
+					<button type="button"
+							class="btn @(_mode == LessonMode.MultipleChoice ? "btn-primary" : "btn-outline-primary")"
+							data-mode="choice"
+							@onclick="() => _mode = LessonMode.MultipleChoice">
+						Pick from four
+					</button>
+					<button type="button"
+							class="btn @(_mode == LessonMode.Typed ? "btn-primary" : "btn-outline-primary")"
+							data-mode="typed"
+							@onclick="() => _mode = LessonMode.Typed">
+						Type it myself
+					</button>
+				</div>
+			</div>
+			<div class="col-12 col-md-4">
+				<label class="form-label" for="lesson-count">Questions</label>
+				<select id="lesson-count" class="form-select" @bind="_count">
+					<option value="3">3</option>
+					<option value="5">5</option>
+					<option value="10">10</option>
+				</select>
+			</div>
+		</div>
+
+		<button type="button"
+				class="btn btn-primary w-100 d-inline-flex align-items-center justify-content-center gap-2"
+				data-lesson-start
+				disabled="@(!CanStart)"
+				@onclick="StartAsync">
+			<Icon IconType="@Icons.School" Size="18" />
+			<span>Start lesson</span>
+		</button>
+	</div>
+</div>
+
+@code {
+	public record Choice(LessonMode Mode, string Topic, string[] FocusIds, int QuestionCount);
+
+	private const int PreselectedStruggles = 3;
+
+	[Parameter]
+	public LearningStruggle[] Struggles { get; set; } = [];
+
+	[Parameter]
+	public EventCallback<Choice> OnStart { get; set; }
+
+	private bool _useStruggles;
+	private bool _initialized;
+	private string _topic = string.Empty;
+	private LessonMode _mode = LessonMode.MultipleChoice;
+	private int _count = 5;
+	private HashSet<string> _selected = [];
+
+	private bool CanStart => _useStruggles ? _selected.Count > 0 : !string.IsNullOrWhiteSpace(_topic);
+
+	protected override void OnParametersSet()
+	{
+		if (_initialized)
+		{
+			return;
+		}
+		_initialized = true;
+		_useStruggles = Struggles.Length > 0;
+		_selected = [.. Struggles.Take(PreselectedStruggles).Select(s => s.Id)];
+	}
+
+	private void Toggle(string id, bool selected)
+	{
+		if (selected)
+		{
+			_selected.Add(id);
+		}
+		else
+		{
+			_selected.Remove(id);
+		}
+	}
+
+	private Task StartAsync()
+	{
+		Choice choice = _useStruggles
+			? new Choice(_mode, string.Empty, [.. Struggles.Where(s => _selected.Contains(s.Id)).Select(s => s.Id)], _count)
+			: new Choice(_mode, _topic.Trim(), [], _count);
+		return OnStart.InvokeAsync(choice);
+	}
+
+	private static string KindLabel(StruggleKind kind) => kind switch
+	{
+		StruggleKind.Japanese => "Japanese",
+		StruggleKind.Grammar => "Grammar",
+		StruggleKind.Vocabulary => "Vocabulary",
+		_ => "Lesson"
+	};
+
+	private static string KindClass(StruggleKind kind) => kind switch
+	{
+		StruggleKind.Japanese => "bg-red-lt",
+		StruggleKind.Grammar => "bg-orange-lt",
+		StruggleKind.Vocabulary => "bg-azure-lt",
+		_ => "bg-purple-lt"
+	};
+}

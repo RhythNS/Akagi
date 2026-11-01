@@ -1,0 +1,21 @@
+@using WebCharacter = Akagi.Web.Models.Chat.Character
+@using Akagi.Web.Pages.Chat.Components
+
+<div class="d-flex align-items-start gap-2">
+	<CharacterAvatar Character="Tutor" Size="AvatarSize.Medium" CircuitId="@CircuitId" />
+	<div class="min-w-0 flex-fill">
+		<div class="small text-secondary mb-1">@Tutor?.Name</div>
+		<div class="tutor-bubble">@ChildContent</div>
+	</div>
+</div>
+
+@code {
+	[Parameter]
+	public WebCharacter? Tutor { get; set; }
+
+	[Parameter]
+	public string? CircuitId { get; set; }
+
+	[Parameter]
+	public RenderFragment? ChildContent { get; set; }
+}

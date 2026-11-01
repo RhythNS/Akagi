@@ -51,3 +51,30 @@
     filter: none !important;
 }
 
+
+.tutor-bubble {
+    background-color: var(--tblr-bg-surface-secondary, var(--tblr-bg-surface));
+    border: 1px solid var(--tblr-border-color);
+    border-radius: var(--tblr-border-radius-lg, 0.5rem);
+    border-top-left-radius: 0;
+    padding: 0.625rem 0.875rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.lesson-prompt {
+    font-size: 1.125rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.lesson-option {
+    text-align: left;
+    justify-content: flex-start;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.lesson-option:disabled {
+    opacity: 1;
+}

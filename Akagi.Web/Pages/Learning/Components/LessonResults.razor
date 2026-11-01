@@ -1,0 +1,77 @@
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Web.Icons
+@using WebCharacter = Akagi.Web.Models.Chat.Character
+
+<div class="card mb-4">
+	<div class="card-body">
+		<div class="text-secondary small">Lesson finished</div>
+		<div class="fw-medium mb-3">@Lesson.Topic</div>
+		<div class="display-6 fw-bold mb-3" data-lesson-score>@Lesson.Score.ToString("0.#") / @Lesson.AnsweredCount</div>
+
+		@if (!string.IsNullOrWhiteSpace(Lesson.Closing))
+		{
+			<div class="mb-3">
+				<TutorBubble Tutor="Tutor" CircuitId="@CircuitId">@Lesson.Closing</TutorBubble>
+			</div>
+		}
+
+		<div class="d-flex flex-wrap gap-2">
+			<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" data-lesson-new @onclick="() => OnNewLesson.InvokeAsync()">
+				<Icon IconType="@Icons.School" Size="16" />
+				<span>New lesson</span>
+			</button>
+			@if (Tutor != null)
+			{
+				<a href="@($"/Chat/{Tutor.Id}/")" class="btn btn-outline-primary d-inline-flex align-items-center gap-2">
+					<Icon IconType="@Icons.Messages" Size="16" />
+					<span>Ask @Tutor.Name about it</span>
+				</a>
+			}
+		</div>
+	</div>
+</div>
+
+<div class="card">
+	<div class="card-header">
+		<h3 class="card-title m-0">Review</h3>
+	</div>
+	<div class="list-group list-group-flush">
+		@foreach (LearningQuestion question in Lesson.Questions.Where(q => q.IsAnswered))
+		{
+			<div class="list-group-item" data-review="@question.Verdict">
+				<div class="d-flex align-items-start justify-content-between gap-2 mb-1">
+					<div class="fw-medium lesson-prompt fs-4">@question.Prompt</div>
+					<span class="badge flex-shrink-0 @(question.Verdict switch
+					{
+						LessonVerdict.Correct => "bg-success-lt",
+						LessonVerdict.Partial => "bg-warning-lt",
+						_ => "bg-danger-lt"
+					})">@question.Verdict</span>
+				</div>
+				@if (question.Verdict != LessonVerdict.Correct)
+				{
+					<div class="small"><span class="text-secondary">You said:</span> @GivenAnswer(question)</div>
+					<div class="small"><span class="text-secondary">Answer:</span> @question.ExpectedAnswer</div>
+				}
+				<div class="small text-secondary mt-1">@question.Feedback</div>
+			</div>
+		}
+	</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public LearningLesson Lesson { get; set; } = null!;
+
+	[Parameter]
+	public WebCharacter? Tutor { get; set; }
+
+	[Parameter]
+	public string? CircuitId { get; set; }
+
+	[Parameter]
+	public EventCallback OnNewLesson { get; set; }
+
+	private static string GivenAnswer(LearningQuestion question) =>
+		question.ChosenOption is int chosen && chosen < question.Options.Length ? question.Options[chosen] : question.AnswerText;
+}
