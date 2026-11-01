@@ -136,6 +136,7 @@ internal class Lesson : Savable
         _ => 0
     });
 
+    [BsonIgnore]
     public LessonQuestion? NextQuestion => Questions.FirstOrDefault(q => !q.IsAnswered);
 }
 
