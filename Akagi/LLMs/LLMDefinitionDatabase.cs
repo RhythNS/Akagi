@@ -9,10 +9,16 @@ internal interface ILLMDefinitionDatabase : IDatabase<LLMDefinition>
 {
     public Task<string?> GetDefaultIdAsync();
     public Task<LLMDefinition?> GetDefaultDefinitionAsync();
+    /// <summary>
+    /// The definition used when the user has no preference for <paramref name="usage"/>.
+    /// </summary>
+    public Task<LLMDefinition?> GetDefaultDefinitionAsync(ILLM.LLMUsage usage);
 }
 
 internal class LLMDefinitionDatabase : Database<LLMDefinition>, ILLMDefinitionDatabase, ISystemInitializer
 {
+    public const string LearningModel = "google/gemini-3.8-flash";
+
     private readonly ILogger<LLMDefinitionDatabase> _logger;
 
     public LLMDefinitionDatabase(IOptionsMonitor<DatabaseOptions> options, ILogger<LLMDefinitionDatabase> logger) : base(options)
@@ -24,7 +30,8 @@ internal class LLMDefinitionDatabase : Database<LLMDefinition>, ILLMDefinitionDa
     {
         LLMDefinition[] definitions =
         [
-            new LLMDefinition() { Type = ILLM.LLMType.OpenRouter, Model = "google/gemini-2.0-flash-001" }
+            new LLMDefinition() { Type = ILLM.LLMType.OpenRouter, Model = "google/gemini-2.0-flash-001" },
+            new LLMDefinition() { Type = ILLM.LLMType.OpenRouter, Model = LearningModel }
         ];
 
         List<LLMDefinition> existingDefinitions = await GetDocumentsAsync();
@@ -53,5 +60,16 @@ internal class LLMDefinitionDatabase : Database<LLMDefinition>, ILLMDefinitionDa
     {
         List<LLMDefinition> definitions = await GetDocumentsAsync();
         return definitions.Count > 0 ? definitions[0] : null;
+    }
+
+    public async Task<LLMDefinition?> GetDefaultDefinitionAsync(ILLM.LLMUsage usage) =>
+        PickDefault(await GetDocumentsAsync(), usage);
+
+    internal static LLMDefinition? PickDefault(IReadOnlyList<LLMDefinition> definitions, ILLM.LLMUsage usage)
+    {
+        LLMDefinition? learning = usage == ILLM.LLMUsage.Learning
+            ? definitions.FirstOrDefault(d => d.Type == ILLM.LLMType.OpenRouter && d.Model == LearningModel)
+            : null;
+        return learning ?? definitions.FirstOrDefault();
     }
 }

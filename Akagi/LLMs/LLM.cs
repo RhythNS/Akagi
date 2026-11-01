@@ -35,7 +35,8 @@ internal interface ILLM
         CommandsRoleplay,
         CommandsGeneral,
         ReflectionRoleplay,
-        ReflectionGeneral
+        ReflectionGeneral,
+        Learning
     }
 
     public enum RunMode

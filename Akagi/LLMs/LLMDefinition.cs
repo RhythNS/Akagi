@@ -20,10 +20,19 @@ internal class LLMDefinition : Savable
         set => SetProperty(ref _model, value);
     }
 
+    /// <summary>
+    /// Preferences for a new user. Learning stays out: without a preference it uses its own default model.
+    /// </summary>
     public static Dictionary<string, string> CreateDummyDictionary(string id)
     {
         Dictionary<string, string> dict = [];
-        Array.ForEach(Enum.GetValues<LLMUsage>(), x => dict[x.ToString()] = id);
+        Array.ForEach(Enum.GetValues<LLMUsage>(), x =>
+        {
+            if (x != LLMUsage.Learning)
+            {
+                dict[x.ToString()] = id;
+            }
+        });
         return dict;
     }
 }

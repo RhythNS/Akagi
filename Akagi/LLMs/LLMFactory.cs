@@ -33,7 +33,7 @@ internal class LLMFactory : ILLMFactory
             effectiveDefinition = await _definitionDatabase.GetDocumentByIdAsync(modelId);
         }
 
-        effectiveDefinition ??= await _definitionDatabase.GetDefaultDefinitionAsync();
+        effectiveDefinition ??= await _definitionDatabase.GetDefaultDefinitionAsync(usageType);
 
         if (effectiveDefinition == null)
         {
