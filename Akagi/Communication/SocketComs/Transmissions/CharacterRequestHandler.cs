@@ -4,6 +4,7 @@ using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Characters;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Groups;
+using Akagi.Learning;
 using Akagi.Users;
 
 namespace Akagi.Communication.SocketComs.Transmissions;
@@ -57,6 +58,7 @@ internal class CharacterRequestHandler : SocketTransmissionHandler
                 HasImage = !string.IsNullOrEmpty(character.Card.ImageId),
                 Id = character.Id!,
                 LastMessageTime = LastMessageTime(character.Conversations),
+                IsTutor = TutorProvider.IsTutor(character),
             });
         }
 

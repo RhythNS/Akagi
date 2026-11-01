@@ -4,6 +4,7 @@ using Akagi.Connectors;
 using Akagi.Data;
 using Akagi.Embeddings;
 using Akagi.Flow;
+using Akagi.Learning;
 using Akagi.Life;
 using Akagi.LLMs;
 using Akagi.Logging.Extensions;
@@ -35,6 +36,7 @@ internal class Program
         builder.Services.AddCommunications(builder.Configuration);
         builder.Services.AddScheduling();
         builder.Services.AddLife(builder.Configuration);
+        builder.Services.AddLearning();
 
         using IHost host = builder.Build();
 

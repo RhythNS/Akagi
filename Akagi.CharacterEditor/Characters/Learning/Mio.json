@@ -1,0 +1,294 @@
+{
+  "GraphId": "6f1b2c4e-7a3d-4c55-9a61-5e0b6c2d1a20",
+  "Nodes": [
+    {
+      "TypeName": "Akagi.Characters.Cards.Card, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Mio",
+        "Description": "Mio is {{user}}'s personal tutor: a sharp, warm woman in her late twenties who loves the moment something finally clicks. She explains things with everyday examples instead of jargon, never talks down, and gives honest feedback: she will not call a wrong answer nearly right. She teases gently, celebrates real progress rather than effort alone, and remembers what {{user}} keeps tripping over. She works on any subject {{user}} brings her, and Japanese is her favourite.",
+        "Personality": "Warm, sharp, patient, playfully teasing, honest.",
+        "Scenario": "",
+        "FirstMes": "Hi {{user}}, I'm Mio. Head over to Learn whenever you want a lesson, or just ask me about anything that didn't click.",
+        "MesExample": "",
+        "CreatorNotes": "The tutor behind Learn on the website and /learn. The learning tag makes a character the tutor.",
+        "SystemPrompt": "",
+        "PostHistoryInstructions": "",
+        "AlternateGreetings": [],
+        "Tags": [
+          "learning"
+        ],
+        "Creator": "Akagi",
+        "CharacterVersion": "1"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 380.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Mio",
+        "Description": "Personal tutor who teaches lessons on weak spots and custom topics.",
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 260.0
+      },
+      "Properties": {
+        "Name": "Placeholder"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 760.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Mio Puppeteer",
+        "MaxSteps": 3
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1140.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Mio Processor",
+        "Description": "Personal tutor who teaches lessons on weak spots and custom topics.",
+        "SystemInstruction": "You are {{character}}, {{user}}'s personal tutor.\n{{description}}\n\nLessons happen on the Learn page and through /learn; here you talk with {{user}} about them and about anything they want to understand. You can see their latest lesson and weak spots below.\n- Explain with a concrete example first, then the rule. Keep it short and ask a small follow-up to check it landed.\n- When {{user}} asks about a lesson question, start from what they answered and why it felt right.\n- If something keeps coming up, suggest a lesson on it.\n- For Japanese, aim for natural real-world speech around JLPT N2 and explain in {{user}}'s language.\n- If you are not sure about something, say so instead of guessing.",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 0,
+        "Usage": 6,
+        "CommandNames": []
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.ForgetfulMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Recent messages",
+        "MaxMessages": 40
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.LifeContextInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 260.0
+      },
+      "Properties": {
+        "Name": "Life context",
+        "Sections": 1,
+        "Header": "### What Mio knows about {{user}} right now",
+        "Type": 1,
+        "Position": 1,
+        "MessageType": 4
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.JapaneseDiagnosisInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 520.0
+      },
+      "Properties": {
+        "Name": "Japanese diagnosis",
+        "FocusCount": 6,
+        "IncludeExamples": true,
+        "IncludeGrammarGroups": false,
+        "Header": "### {{user}}'s Japanese diagnosis",
+        "Type": 1,
+        "Position": 1,
+        "MessageType": 4
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1520.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Mio Pipeline"
+      },
+      "ArraySizes": {
+        "Definitions": 4
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 0.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 260.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 520.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.LearningInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 780.0
+      },
+      "Properties": {
+        "Name": "Lessons",
+        "StruggleCount": 6,
+        "Header": "### {{user}}'s lessons",
+        "Type": 1,
+        "Position": 1,
+        "MessageType": 4
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 780.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    }
+  ],
+  "Connections": [
+    {
+      "SourceNodeIndex": 5,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 9,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 9,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 6,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 10,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 10,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 7,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 11,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 11,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 2
+    },
+    {
+      "SourceNodeIndex": 0,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 3,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 4,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 3,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 8,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 4,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 12,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 13,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 13,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 3
+    }
+  ],
+  "ViewportLocation": {
+    "X": 0.0,
+    "Y": 0.0
+  },
+  "ViewportZoom": 0.6
+}

@@ -157,6 +157,11 @@ internal class StudyProfile
 
 internal class StudySummary
 {
+    /// <summary>
+    /// Marks the <see cref="StudyDay.Activities"/> entries of finished lessons.
+    /// </summary>
+    public const string LessonActivityPrefix = "Lesson: ";
+
     public int Streak { get; init; }
     public bool StudiedToday { get; init; }
     public int VocabularyCount { get; init; }
@@ -166,8 +171,12 @@ internal class StudySummary
     public string TargetLevel { get; init; } = "N2";
     public int MinutesThisWeek { get; init; }
     public IReadOnlyList<GrammarMistake> TopMistakes { get; init; } = [];
+    /// <summary>
+    /// The latest lesson within the last week, with its date.
+    /// </summary>
+    public string? LastLesson { get; init; }
 
-    public bool HasData => VocabularyCount > 0 || TopMistakes.Count > 0 || Streak > 0 || MinutesThisWeek > 0;
+    public bool HasData => VocabularyCount > 0 || TopMistakes.Count > 0 || Streak > 0 || MinutesThisWeek > 0 || LastLesson != null;
 
     public double ProgressPercent => TargetVocabulary <= 0 ? 0 : Math.Min(100, 100.0 * KnownCount / TargetVocabulary);
 
@@ -200,8 +209,17 @@ internal class StudySummary
             TargetVocabulary = study.TargetVocabulary,
             TargetLevel = study.TargetLevel,
             MinutesThisWeek = study.Days.Where(d => string.CompareOrdinal(d.Date, weekStart) >= 0).Sum(d => d.Minutes),
-            TopMistakes = [.. study.Grammar.OrderByDescending(g => g.Count).ThenByDescending(g => g.LastSeen).Take(3)]
+            TopMistakes = [.. study.Grammar.OrderByDescending(g => g.Count).ThenByDescending(g => g.LastSeen).Take(3)],
+            LastLesson = FindLastLesson(study, weekStart)
         };
+    }
+
+    private static string? FindLastLesson(StudyProfile study, string since)
+    {
+        StudyDay? day = study.Days.LastOrDefault(d => string.CompareOrdinal(d.Date, since) >= 0
+            && d.Activities.Any(a => a.StartsWith(LessonActivityPrefix, StringComparison.Ordinal)));
+        string? lesson = day?.Activities.Last(a => a.StartsWith(LessonActivityPrefix, StringComparison.Ordinal));
+        return lesson == null ? null : $"{lesson[LessonActivityPrefix.Length..]} on {day!.Date}";
     }
 
     public string Describe()
@@ -216,6 +234,10 @@ internal class StudySummary
         if (TopMistakes.Count > 0)
         {
             lines.Add("Recurring grammar mistakes: " + string.Join("; ", TopMistakes.Select(m => $"{m.Pattern} x{m.Count}")));
+        }
+        if (LastLesson != null)
+        {
+            lines.Add($"Last lesson with their tutor: {LastLesson}");
         }
         return string.Join(Environment.NewLine, lines);
     }

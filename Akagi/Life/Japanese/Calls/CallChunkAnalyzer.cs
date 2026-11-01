@@ -13,7 +13,6 @@ using Akagi.Users;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Text;
-using CommunicationCommand = Akagi.Communication.Commands.Command;
 
 namespace Akagi.Life.Japanese.Calls;
 
@@ -169,20 +168,5 @@ internal class ToolCallChunkAnalyzer : ICallChunkAnalyzer
             ILLM llm = await LLMFactory.Create(User, _processor.SpecificLLM, _processor.Usage);
             await DefaultNextSteps(llm, _processor);
         }
-    }
-
-    /// <summary>
-    /// Analysis runs in the background; nothing it produces is sent to the user directly.
-    /// </summary>
-    private sealed class SilentCommunicator : ICommunicator
-    {
-        public string Name => "call-analysis";
-        public CommunicationCommand[] AvailableCommands => [];
-        public Task SendMessage(User user, Character character, string message) => Task.CompletedTask;
-        public Task SendMessage(User user, Character character, Message message) => Task.CompletedTask;
-        public Task SendMessage(User user, string message) => Task.CompletedTask;
-        public Task SendMessage(User user, Message message) => Task.CompletedTask;
-        public Task SendAudio(User user, Character character, Stream stream, string fileName) => Task.CompletedTask;
-        public Task SendAudio(User user, Stream stream, string fileName) => Task.CompletedTask;
     }
 }

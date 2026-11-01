@@ -23,4 +23,9 @@ public class Character
     public string[] MemberIds { get; set; } = [];
     [Key(6)]
     public bool HasImage { get; set; }
+    /// <summary>
+    /// The character teaches the user's lessons.
+    /// </summary>
+    [Key(7)]
+    public bool IsTutor { get; set; }
 }
