@@ -37,6 +37,7 @@ internal abstract class JapaneseCommand : LifeCommand
             "structure" or "repetition" or "repetitive" => IssueCategory.RecurringStructure,
             "vocab" or "word" or "wordchoice" => IssueCategory.Vocabulary,
             "reading" or "accent" or "pitch" => IssueCategory.Pronunciation,
+            "listening" or "misheard" or "mishearing" or "misunderstood" or "misunderstanding" => IssueCategory.Comprehension,
             _ => null
         };
     }
@@ -50,7 +51,8 @@ internal class RecordJapaneseIssueCommand : JapaneseCommand
 
     public override string Description =>
         "Record a recurring weakness in the user's real Japanese: unnatural phrasing, odd collocations, particle slips, " +
-        "textbook stiffness, wrong politeness for the listener, confused N2 grammar, fillers or repetitive sentence frames. " +
+        "textbook stiffness, wrong politeness for the listener, confused N2 grammar, fillers, repetitive sentence frames or " +
+        "misheard and misunderstood speech. " +
         "Repeated issues are merged and tracked over time.";
 
     public override Argument[] GetDefaultArguments() =>

@@ -16,10 +16,10 @@ internal class CallAnalysisOptions
     public string StorageDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "calls");
     public string FfmpegPath { get; set; } = "ffmpeg";
     /// <summary>
-    /// Length of the audio parts sent to transcription. 32 kbit/s mono stays far below the 25 MB upload limit; the
-    /// tighter bound is the 60 seconds the providers behind OpenRouter get per request.
+    /// Length of the audio parts sent to transcription. 32 kbit/s mono stays far below the 25 MB upload limit, and
+    /// MAI-Transcribe needs about 5 of the 60 seconds providers get per request for 10 minutes of audio.
     /// </summary>
-    public int PartMinutes { get; set; } = 5;
+    public int PartMinutes { get; set; } = 10;
     /// <summary>
     /// Transcript characters per analysis call.
     /// </summary>

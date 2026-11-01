@@ -115,7 +115,10 @@ public class TranscriptTests
         Assert.Equal("https://openrouter.ai/api/v1/audio/transcriptions", handler.Request!.RequestUri!.ToString());
         Assert.Equal("Bearer key", handler.Request.Headers.Authorization!.ToString());
         Assert.Contains("microsoft/mai-transcribe-2", handler.Body);
-        Assert.Contains("name=language", handler.Body);
+        Assert.Contains("name=\"language\"", handler.Body);
+        Assert.Contains("name=\"file\"; filename=\"part_0000.mp3\"", handler.Body);
+        Assert.DoesNotContain("filename*", handler.Body);
+        Assert.DoesNotContain("\"", handler.Request.Content!.Headers.ContentType!.ToString());
         Assert.Contains("verbose_json", handler.Body);
     }
 
@@ -127,6 +130,29 @@ public class TranscriptTests
         OpenRouterTranscriber transcriber = new(new HttpClient(), Options(new CallAnalysisOptions()), OpenRouter(apiKey, baseUrl));
 
         Assert.False(transcriber.IsConfigured);
+    }
+
+    [Fact]
+    public async Task Transcriber_AsksForWordTimestampsOnlyWhenMerging()
+    {
+        using TempDirectory temp = new();
+        string audio = Path.Combine(temp.Path, "part_0000.mp3");
+        await File.WriteAllBytesAsync(audio, [1]);
+        RecordingHandler handler = new("""{"text":"は","words":[{"word":"は","start":0.5,"end":0.6}]}""");
+        OpenRouterTranscriber transcriber = new(new HttpClient(handler), Options(new CallAnalysisOptions()), OpenRouter("key", "https://openrouter.ai/api/v1/"));
+
+        TranscriptWord word = Assert.Single(await transcriber.TranscribeWordsAsync(audio, CancellationToken.None));
+
+        Assert.Equal(new TranscriptWord("は", 0.5, 0.6), word);
+        Assert.Contains("name=\"timestamp_granularities[]\"", handler.Body);
+    }
+
+    [Fact]
+    public void Transcriber_UsesSegmentsAsWordsWhenAModelHasNoWordTimestamps()
+    {
+        TranscriptWord word = Assert.Single(OpenRouterTranscriber.ParseWords("""{"segments":[{"start":1,"end":2,"text":"はい"}]}"""));
+
+        Assert.Equal(new TranscriptWord("はい", 1, 2), word);
     }
 
     [Fact]
@@ -323,12 +349,23 @@ public class CallPipelineTests
     private sealed class StubSplitter : IAudioSplitter
     {
         public int Calls { get; private set; }
+        public List<LearnerChannel> Channels { get; } = [];
 
         public Task<IReadOnlyList<AudioPart>> SplitAsync(string audioPath, TimeSpan partLength, LearnerChannel channel, string workDirectory, CancellationToken cancellationToken)
         {
             Calls++;
-            return Task.FromResult<IReadOnlyList<AudioPart>>([new AudioPart("p0", 0), new AudioPart("p1", 600)]);
+            Channels.Add(channel);
+            string name = channel == LearnerChannel.Mixed ? string.Empty : Path.GetFileName(workDirectory) + "/";
+            return Task.FromResult<IReadOnlyList<AudioPart>>([new AudioPart(name + "p0", 0), new AudioPart(name + "p1", 600)]);
         }
+
+        public Task<IReadOnlyList<AudioPart>> SplitBalancedAsync(string audioPath, TimeSpan partLength, string workDirectory, CancellationToken cancellationToken)
+        {
+            Calls++;
+            return Task.FromResult<IReadOnlyList<AudioPart>>([new AudioPart("mix/p0", 0), new AudioPart("mix/p1", 600)]);
+        }
+
+        public Task<double[]?> MeasureLoudnessAsync(string audioPath, CancellationToken cancellationToken) => Task.FromResult<double[]?>(null);
     }
 
     private sealed class StubTranscriber : ITranscriber
@@ -341,6 +378,16 @@ public class CallPipelineTests
             Transcribed.Add(audioPath);
             string text = string.Concat(Enumerable.Repeat("なんか、今日は楽しかったです。でも、疲れました。", 6));
             return Task.FromResult<List<TranscriptSegment>>([new() { Start = 1, End = 300, Text = text }, new() { Start = 300, End = 590, Text = text }]);
+        }
+
+        public Task<List<TranscriptWord>> TranscribeWordsAsync(string audioPath, CancellationToken cancellationToken)
+        {
+            Transcribed.Add(audioPath);
+            string text = audioPath.StartsWith("partner", StringComparison.Ordinal)
+                ? "最近どう？"
+                : string.Concat(Enumerable.Repeat("なんか、今日は楽しかったです。でも、疲れました。", 6));
+            double start = audioPath.StartsWith("partner", StringComparison.Ordinal) ? 1 : 3;
+            return Task.FromResult<List<TranscriptWord>>([.. text.Select((c, i) => new TranscriptWord(c.ToString(), start + i * 0.1, start + i * 0.1 + 0.08))]);
         }
     }
 
@@ -404,10 +451,14 @@ public class CallPipelineTests
         await fixture.Pipeline.RunAsync(job, CancellationToken.None);
 
         Assert.Equal(CallJobStatus.Completed, job.Status);
-        Assert.Equal(["p0", "p1"], fixture.Transcriber.Transcribed);
-        Assert.Equal(4, job.Segments.Count);
-        Assert.Equal(601, job.Segments[2].Start);
-        Assert.Equal(1190, job.DurationSeconds);
+        Assert.Equal(["learner/p0", "partner/p0", "mix/p0", "learner/p1", "partner/p1", "mix/p1"], fixture.Transcriber.Transcribed);
+        Assert.Equal([LearnerChannel.Left, LearnerChannel.Right], fixture.Splitter.Channels);
+        Assert.True(job.HasBothVoices);
+        Assert.Equal("Me", job.LearnerSpeaker);
+        Assert.Equal(("Yuki", "最近どう？", 1), (job.Segments[0].Speaker, job.Segments[0].Text, job.Segments[0].Start));
+        Assert.Equal("Me", job.Segments[1].Speaker);
+        Assert.Equal(601, job.Segments.First(s => s.Start > 600).Start);
+        Assert.DoesNotContain("最近どう", job.LearnerText());
         Assert.True(job.Chunks.Count > 1);
         Assert.All(job.Chunks, c => Assert.True(c.Analyzed));
         Assert.Contains("Noticed in this call", job.Report);
@@ -434,6 +485,8 @@ public class CallPipelineTests
         Assert.Empty(diagnosis.Snapshots);
         Assert.DoesNotContain(diagnosis.Issues, i => i.Category == IssueCategory.CrutchWord);
         Assert.Contains("only rough", job.Report);
+        Assert.Equal(["p0", "p1"], fixture.Transcriber.Transcribed);
+        Assert.False(job.HasBothVoices);
     }
 
     [Fact]
@@ -453,8 +506,8 @@ public class CallPipelineTests
         await fixture.Pipeline.RunAsync(job, CancellationToken.None);
 
         Assert.Equal(CallJobStatus.Completed, job.Status);
-        Assert.Equal(2, fixture.Transcriber.Transcribed.Count);
-        Assert.Equal(1, fixture.Splitter.Calls);
+        Assert.Equal(6, fixture.Transcriber.Transcribed.Count);
+        Assert.Equal(3, fixture.Splitter.Calls);
         Assert.Equal([.. Enumerable.Range(0, job.Chunks.Count)], fixture.Analyzer.Analyzed);
         Assert.Equal(string.Empty, job.Error);
     }

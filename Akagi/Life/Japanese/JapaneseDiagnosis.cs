@@ -31,7 +31,9 @@ internal enum IssueCategory
     RecurringStructure,
     Vocabulary,
     Pronunciation,
-    Other
+    Other,
+    /// <summary>Misheard or misunderstood what the other person said.</summary>
+    Comprehension
 }
 
 internal enum IssueStatus

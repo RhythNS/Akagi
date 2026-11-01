@@ -17,6 +17,17 @@ internal interface IAudioSplitter
     /// </summary>
     public Task<IReadOnlyList<AudioPart>> SplitAsync(string audioPath, TimeSpan partLength, LearnerChannel channel,
         string workDirectory, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Cuts a stereo recording like <see cref="SplitAsync"/> into parts holding both voices at the same loudness, so the
+    /// quieter one is not drowned out.
+    /// </summary>
+    public Task<IReadOnlyList<AudioPart>> SplitBalancedAsync(string audioPath, TimeSpan partLength, string workDirectory, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The loudness of a part per <see cref="ConversationMerger.LoudnessWindowSeconds"/>, or null without ffmpeg.
+    /// </summary>
+    public Task<double[]?> MeasureLoudnessAsync(string audioPath, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -32,7 +43,27 @@ internal class AudioSplitter : IAudioSplitter
         _ffmpegPath = ffmpegPath;
     }
 
-    public async Task<IReadOnlyList<AudioPart>> SplitAsync(string audioPath, TimeSpan partLength, LearnerChannel channel,
+    public Task<IReadOnlyList<AudioPart>> SplitAsync(string audioPath, TimeSpan partLength, LearnerChannel channel,
+        string workDirectory, CancellationToken cancellationToken)
+    {
+        List<string> filter = channel == LearnerChannel.Mixed
+            ? []
+            : ["-af", channel == LearnerChannel.Left ? "pan=mono|c0=c0" : "pan=mono|c0=c1"];
+        return SplitAsync(audioPath, partLength, channel, filter, workDirectory, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<AudioPart>> SplitBalancedAsync(string audioPath, TimeSpan partLength, string workDirectory, CancellationToken cancellationToken) =>
+        SplitAsync(audioPath, partLength, LearnerChannel.Mixed, BalancedMix, workDirectory, cancellationToken);
+
+    private static readonly string[] BalancedMix =
+    [
+        "-filter_complex",
+        "[0:a]channelsplit=channel_layout=stereo[l][r];[l]loudnorm=I=-20:TP=-2:LRA=11[ln];[r]loudnorm=I=-20:TP=-2:LRA=11[rn];[ln][rn]amix=inputs=2:normalize=0[m]",
+        "-map",
+        "[m]"
+    ];
+
+    private async Task<IReadOnlyList<AudioPart>> SplitAsync(string audioPath, TimeSpan partLength, LearnerChannel wavChannel, IReadOnlyList<string> filter,
         string workDirectory, CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(workDirectory);
@@ -50,12 +81,12 @@ internal class AudioSplitter : IAudioSplitter
         IReadOnlyList<AudioPart> parts;
         if (await IsFfmpegAvailable(cancellationToken))
         {
-            await RunFfmpeg(audioPath, partLength, channel, workDirectory, cancellationToken);
+            await RunFfmpeg(audioPath, partLength, filter, workDirectory, cancellationToken);
             parts = Existing(workDirectory, partLength);
         }
         else if (WavSplitter.IsWav(audioPath))
         {
-            parts = WavSplitter.Split(audioPath, partLength, channel, workDirectory);
+            parts = WavSplitter.Split(audioPath, partLength, wavChannel, workDirectory);
         }
         else
         {
@@ -86,13 +117,9 @@ internal class AudioSplitter : IAudioSplitter
         }
     }
 
-    private async Task RunFfmpeg(string audioPath, TimeSpan partLength, LearnerChannel channel, string workDirectory, CancellationToken cancellationToken)
+    private async Task RunFfmpeg(string audioPath, TimeSpan partLength, IReadOnlyList<string> filter, string workDirectory, CancellationToken cancellationToken)
     {
-        List<string> arguments = ["-hide_banner", "-loglevel", "error", "-y", "-i", audioPath];
-        if (channel != LearnerChannel.Mixed)
-        {
-            arguments.AddRange(["-af", channel == LearnerChannel.Left ? "pan=mono|c0=c0" : "pan=mono|c0=c1"]);
-        }
+        List<string> arguments = ["-hide_banner", "-loglevel", "error", "-y", "-i", audioPath, .. filter];
         arguments.AddRange(["-ac", "1", "-ar", "16000", "-c:a", "libmp3lame", "-b:a", "32k",
             "-f", "segment", "-segment_time", ((int)partLength.TotalSeconds).ToString(CultureInfo.InvariantCulture),
             Path.Combine(workDirectory, "part_%04d.mp3")]);
@@ -104,7 +131,60 @@ internal class AudioSplitter : IAudioSplitter
         }
     }
 
+    public async Task<double[]?> MeasureLoudnessAsync(string audioPath, CancellationToken cancellationToken)
+    {
+        if (!await IsFfmpegAvailable(cancellationToken))
+        {
+            return null;
+        }
+
+        using Process process = Start(["-hide_banner", "-loglevel", "error", "-i", audioPath, "-ac", "1", "-ar", LoudnessSampleRate.ToString(CultureInfo.InvariantCulture),
+            "-f", "s16le", "-"]);
+        Task<string> errors = process.StandardError.ReadToEndAsync(cancellationToken);
+        using MemoryStream samples = new();
+        await process.StandardOutput.BaseStream.CopyToAsync(samples, cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"ffmpeg failed ({process.ExitCode}): {(await errors).Trim()}");
+        }
+        return Envelope(samples.GetBuffer().AsSpan(0, (int)samples.Length), (int)(LoudnessSampleRate * ConversationMerger.LoudnessWindowSeconds));
+    }
+
+    private const int LoudnessSampleRate = 8000;
+
+    /// <summary>
+    /// Root mean square of 16 bit little endian samples, per window.
+    /// </summary>
+    internal static double[] Envelope(ReadOnlySpan<byte> samples, int windowSamples)
+    {
+        int count = samples.Length / 2;
+        double[] envelope = new double[count / windowSamples];
+        for (int window = 0; window < envelope.Length; window++)
+        {
+            double sum = 0;
+            for (int i = 0; i < windowSamples; i++)
+            {
+                int offset = (window * windowSamples + i) * 2;
+                short sample = (short)(samples[offset] | (samples[offset + 1] << 8));
+                sum += (double)sample * sample;
+            }
+            envelope[window] = Math.Sqrt(sum / windowSamples);
+        }
+        return envelope;
+    }
+
     private async Task<(int ExitCode, string Errors)> Run(IEnumerable<string> arguments, CancellationToken cancellationToken)
+    {
+        using Process process = Start(arguments);
+        Task<string> errors = process.StandardError.ReadToEndAsync(cancellationToken);
+        Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
+        await process.WaitForExitAsync(cancellationToken);
+        await output;
+        return (process.ExitCode, await errors);
+    }
+
+    private Process Start(IEnumerable<string> arguments)
     {
         ProcessStartInfo info = new(_ffmpegPath)
         {
@@ -118,12 +198,7 @@ internal class AudioSplitter : IAudioSplitter
             info.ArgumentList.Add(argument);
         }
 
-        using Process process = Process.Start(info) ?? throw new InvalidOperationException("Could not start ffmpeg.");
-        Task<string> errors = process.StandardError.ReadToEndAsync(cancellationToken);
-        Task<string> output = process.StandardOutput.ReadToEndAsync(cancellationToken);
-        await process.WaitForExitAsync(cancellationToken);
-        await output;
-        return (process.ExitCode, await errors);
+        return Process.Start(info) ?? throw new InvalidOperationException("Could not start ffmpeg.");
     }
 }
 

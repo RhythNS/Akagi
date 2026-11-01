@@ -1,5 +1,4 @@
 using Akagi.Characters;
-using Akagi.Characters.CharacterBehaviors;
 using Akagi.Characters.CharacterBehaviors.MessageCompilers;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
@@ -31,6 +30,7 @@ internal interface ICallChunkAnalyzer
 internal class ToolCallChunkAnalyzer : ICallChunkAnalyzer
 {
     public const int MaxIssuesPerChunk = 6;
+    public const int MaxComprehensionIssuesPerChunk = 2;
 
     public static readonly string[] Tools =
     [
@@ -95,10 +95,20 @@ internal class ToolCallChunkAnalyzer : ICallChunkAnalyzer
             DatabaseFactory = _databaseFactory
         };
 
-        CallChunkBehavior behavior = new(processor) { MaxSteps = MaxIssuesPerChunk + 3 };
-        await behavior.Init(_logger, context, _databaseFactory.GetDatabase<ISystemProcessorDatabase>());
         cancellationToken.ThrowIfCancellationRequested();
-        await behavior.ProcessAsync();
+
+        // One request holding every finding: Gemini 3 models reject a replayed tool call unless its reasoning details are
+        // sent back, which conversations do not store, so this must not continue a tool exchange
+        ILLM llm = await _llmFactory.Create(user, processor.SpecificLLM, processor.Usage);
+        Command[] calls = await llm.GetNextSteps(processor, context);
+        if (calls.Length == 0)
+        {
+            _logger.LogWarning("Analysis of chunk {Chunk} of call {JobId} returned no tool calls", chunk.Index, job.Id);
+        }
+        foreach (Command call in calls)
+        {
+            await call.Execute(context);
+        }
 
         return scratch.Messages.OfType<CommandMessage>().Count(m => m.Command is RecordJapaneseIssueCommand);
     }
@@ -118,6 +128,7 @@ internal class ToolCallChunkAnalyzer : ICallChunkAnalyzer
         text.AppendLine("{{user}} is a non-native speaker working towards natural, real-world Japanese around JLPT N2. The other speakers are native.");
         text.AppendLine(job switch
         {
+            { HasBothVoices: true } => $"Lines labeled '{job.LearnerSpeaker}' are {{{{user}}}} and lines labeled '{job.PartnerLabel}' are {partner}. Each voice was recorded on its own channel, so these labels are reliable. Overlapping lines are ordered by when they start.",
             { LearnerChannel: not LearnerChannel.Mixed } => "Only {{user}}'s own audio channel was transcribed, so every line is theirs.",
             { LearnerSpeaker.Length: > 0 } => $"Lines labeled '{job.LearnerSpeaker}' are {{{{user}}}}; everything else is the other speakers.",
             _ => "Speakers are not labeled. Infer which lines are {{user}}'s (non-native phrasing, being addressed by name, context) and judge only those."
@@ -133,6 +144,16 @@ internal class ToolCallChunkAnalyzer : ICallChunkAnalyzer
         text.AppendLine();
         text.AppendLine($"Call RecordJapaneseIssue for at most {MaxIssuesPerChunk} real and instructive issues: Said verbatim, Better as a native would say it in this situation, a one sentence Explanation, Severity, and Source '{job.SourceLabel}'.");
         text.AppendLine("Ignore obvious transcription errors, single slips of the tongue and the other speakers' speech.");
+        if (job.HasBothVoices)
+        {
+            text.AppendLine();
+            text.AppendLine($"Because {partner}'s side is here too, first look for comprehension breakdowns: {{{{user}}}} answering something other than what was asked, {partner} having to repeat, rephrase or ask back (ん？), or {{{{user}}}} repeating a word wrongly. Record up to {MaxComprehensionIssuesPerChunk} of these on top of the limit above; they are what a review of one voice could never show.");
+            text.AppendLine("Call RecordJapaneseIssue with Category Comprehension for these: Pattern such as 'heard ちいかわ as ちかわ', Said with both the line and the reaction to it, Better with a natural reply, and an Explanation quoting the evidence, e.g. 'She asked X and you answered as if she had said Y'.");
+            text.AppendLine("A transcript cannot prove what {{user}} heard. Only report what the conversation itself shows, and write 'seems to have', never that they did.");
+            text.AppendLine();
+            text.AppendLine("Some lines end with (second hearing: A -> B): a second transcription of the same moment has B where the line has A. Either may be what was really said, and for {{user}}'s habits the line itself is usually closer to the actual words.");
+            text.AppendLine("If a finding involves A or B, its Explanation must begin with 'Possibly:'. A disputed word alone never shows that {{user}} misheard or misused something, but a reaction in the conversation does: a Comprehension issue with a real reaction stays, with 'Possibly:' if its words are disputed.");
+        }
         if (diagnosis?.Focus(8, nowUtc) is { Count: > 0 } focus)
         {
             text.AppendLine("Known focus areas. Call RecordCorrectUsage when {{user}} gets one of these right, and reuse the same Pattern when it goes wrong again:");
@@ -147,26 +168,7 @@ internal class ToolCallChunkAnalyzer : ICallChunkAnalyzer
         {
             text.AppendLine("- " + group);
         }
-        text.Append("When you are done with this part, call StopExecution.");
+        text.Append("Make all your calls in this one response, there is no second turn. If there is nothing to record, call StopExecution.");
         return text.ToString();
-    }
-
-    /// <summary>
-    /// Runs the tool loop of <see cref="CharacterBehavior"/> for a processor built on the fly.
-    /// </summary>
-    private sealed class CallChunkBehavior : CharacterBehavior
-    {
-        private readonly SystemProcessor _processor;
-
-        public CallChunkBehavior(SystemProcessor processor)
-        {
-            _processor = processor;
-        }
-
-        public override async Task ProcessAsync()
-        {
-            ILLM llm = await LLMFactory.Create(User, _processor.SpecificLLM, _processor.Usage);
-            await DefaultNextSteps(llm, _processor);
-        }
     }
 }

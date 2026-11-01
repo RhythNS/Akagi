@@ -97,11 +97,24 @@ endings, keigo, repeated openers and endings, and N2 patterns used.
 
 Recorded calls go through a resumable pipeline: send them with `/analyzeCall [partner] [casual|polite|formal]
 [left|right] [speaker=Me]`, or drop them into `CallAnalysis:InboxDirectory/<username>/` (Telegram only passes 20 MB),
-named like `2026-10-27 Yuki [left].m4a`. Audio is cut into five minute parts with ffmpeg (PCM WAV also works without it),
-transcribed through OpenRouter with the existing `OpenRouter` credentials (`CallAnalysis:TranscriptionModel`, default
-`microsoft/mai-transcribe-2`, about $0.10 per audio hour), and each transcript chunk is analyzed by Sensei with its diagnosis tools. Speech measurements only feed the trend when
-your voice is separated (stereo channel or speaker label). Akagi tells you the result; `/calls [id]` shows the reports.
-SRT, VTT and plain text transcripts skip the audio steps.
+named like `2026-10-27 Yuki [left].m4a`, where `left` or `right` is your channel and the other one your partner's.
+Set `CallAnalysis:FfmpegPath` if ffmpeg is not on the PATH; PCM WAV also works without it, though then a faint trace of
+the other voice cannot be filtered out. Audio is transcribed through OpenRouter with the existing `OpenRouter` credentials
+(`CallAnalysis:TranscriptionModel`, default `microsoft/mai-transcribe-2`).
+
+With a channel given, each ten minute part is transcribed three times, about $0.30 per hour of call: each voice alone,
+and both together at equal loudness.
+
+- The two voices are merged into a conversation labeled from their channels, so the review sees what you were answering
+  and can report comprehension breakdowns ("she asked X and you answered as if she had said Y") as well as how you speak.
+- The mixed version is a second hearing. Where it differs, the line carries a note such as `(second hearing: みない -> みる)`
+  and findings resting on that word start with "Possibly:". Alone on a channel the model lacks context for names, while
+  mixed it tends to smooth over real slips, so neither version simply wins.
+- Phrases at the noise floor of a channel are dropped: the other voice leaks in faintly and the transcriber picks it up.
+
+Without a channel a recording is transcribed once as it is, and speech measurements do not feed the trend unless a speaker
+label separates you. Sensei analyzes each transcript chunk with its diagnosis tools, Akagi tells you the result, and
+`/calls [id]` shows the reports. SRT, VTT and plain text transcripts skip the audio steps.
 
 ### Health
 

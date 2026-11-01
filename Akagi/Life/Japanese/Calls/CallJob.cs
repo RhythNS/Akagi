@@ -22,7 +22,9 @@ internal enum LearnerChannel
 {
     /// <summary>Both voices are mixed; measurements cover everyone and are only rough.</summary>
     Mixed,
+    /// <summary>The learner is on the left channel and the partner on the right.</summary>
     Left,
+    /// <summary>The learner is on the right channel and the partner on the left.</summary>
     Right
 }
 
@@ -32,6 +34,10 @@ internal class TranscriptSegment
     public double End { get; set; }
     public string Speaker { get; set; } = string.Empty;
     public string Text { get; set; } = string.Empty;
+    /// <summary>
+    /// Where a second transcription of this moment heard something else, as "this -> that; ...".
+    /// </summary>
+    public string Disputed { get; set; } = string.Empty;
 }
 
 internal class CallChunk
@@ -51,6 +57,8 @@ internal class CallChunk
 internal class CallJob : Savable
 {
     public const int MaxAttempts = 3;
+    public const string DefaultLearnerLabel = "Me";
+    public const string DefaultPartnerLabel = "Partner";
 
     private string _userId = string.Empty;
     private string _analysisCharacterId = string.Empty;
@@ -184,6 +192,13 @@ internal class CallJob : Savable
     public bool IsFinished => Status is CallJobStatus.Completed or CallJobStatus.Failed;
 
     public bool HasLearnerSeparation => LearnerChannel != LearnerChannel.Mixed || !string.IsNullOrWhiteSpace(LearnerSpeaker);
+
+    public string PartnerLabel => string.IsNullOrWhiteSpace(Partner) ? DefaultPartnerLabel : Partner;
+
+    /// <summary>
+    /// The transcript holds the learner's and the partner's channels, with every line labeled from its channel.
+    /// </summary>
+    public bool HasBothVoices => LearnerChannel != LearnerChannel.Mixed && Segments.Any(s => s.Speaker == PartnerLabel);
 
     public double DurationSeconds => Segments.Count == 0 ? 0 : Segments.Max(s => s.End);
 

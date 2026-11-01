@@ -86,21 +86,13 @@ internal class CallAnalysisPipeline
                 throw new InvalidOperationException("Transcription needs the OpenRouter credentials (OpenRouter:apikey and OpenRouter:baseUrl).");
             }
 
-            IReadOnlyList<AudioPart> parts = await _splitter.SplitAsync(job.SourcePath, TimeSpan.FromMinutes(Math.Max(1, _options.PartMinutes)),
-                job.LearnerChannel, WorkDirectory(job), cancellationToken);
-            for (int i = job.TranscribedParts; i < parts.Count; i++)
+            if (job.LearnerChannel == LearnerChannel.Mixed)
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                List<TranscriptSegment> segments = await _transcriber.TranscribeAsync(parts[i].Path, cancellationToken);
-                foreach (TranscriptSegment segment in segments)
-                {
-                    segment.Start += parts[i].OffsetSeconds;
-                    segment.End += parts[i].OffsetSeconds;
-                }
-                job.Segments = [.. job.Segments, .. segments];
-                job.TranscribedParts = i + 1;
-                await SaveAsync(job);
-                _logger.LogInformation("Call {JobId}: transcribed part {Part}/{Parts}", job.Id, i + 1, parts.Count);
+                await TranscribeMixedAsync(job, cancellationToken);
+            }
+            else
+            {
+                await TranscribeChannelsAsync(job, cancellationToken);
             }
         }
 
@@ -115,6 +107,64 @@ internal class CallAnalysisPipeline
         job.Chunks = TranscriptChunker.Chunk(job.Segments, Math.Max(500, _options.ChunkCharacters));
         job.Status = CallJobStatus.Analyzing;
         await SaveAsync(job);
+    }
+
+    private TimeSpan PartLength => TimeSpan.FromMinutes(Math.Max(1, _options.PartMinutes));
+
+    private async Task TranscribeMixedAsync(CallJob job, CancellationToken cancellationToken)
+    {
+        IReadOnlyList<AudioPart> parts = await _splitter.SplitAsync(job.SourcePath, PartLength, job.LearnerChannel, WorkDirectory(job), cancellationToken);
+        for (int i = job.TranscribedParts; i < parts.Count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            List<TranscriptSegment> segments = await _transcriber.TranscribeAsync(parts[i].Path, cancellationToken);
+            await AddPartAsync(job, segments, parts[i].OffsetSeconds, i, parts.Count);
+        }
+    }
+
+    /// <summary>
+    /// Three passes per part: each voice alone, and both together as a second hearing. Hearing the partner is what lets
+    /// the review see what the learner was answering, and whether they understood it.
+    /// </summary>
+    private async Task TranscribeChannelsAsync(CallJob job, CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(job.LearnerSpeaker))
+        {
+            job.LearnerSpeaker = CallJob.DefaultLearnerLabel;
+        }
+        LearnerChannel partnerChannel = job.LearnerChannel == LearnerChannel.Left ? LearnerChannel.Right : LearnerChannel.Left;
+        string work = WorkDirectory(job);
+        IReadOnlyList<AudioPart> learnerParts = await _splitter.SplitAsync(job.SourcePath, PartLength, job.LearnerChannel, Path.Combine(work, "learner"), cancellationToken);
+        IReadOnlyList<AudioPart> partnerParts = await _splitter.SplitAsync(job.SourcePath, PartLength, partnerChannel, Path.Combine(work, "partner"), cancellationToken);
+        IReadOnlyList<AudioPart> mixParts = await _splitter.SplitBalancedAsync(job.SourcePath, PartLength, Path.Combine(work, "mix"), cancellationToken);
+
+        int count = Math.Min(learnerParts.Count, Math.Min(partnerParts.Count, mixParts.Count));
+        for (int i = job.TranscribedParts; i < count; i++)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            ChannelTranscript learner = await TranscribeChannelAsync(learnerParts[i], cancellationToken);
+            ChannelTranscript partner = await TranscribeChannelAsync(partnerParts[i], cancellationToken);
+            List<TranscriptWord> mix = await _transcriber.TranscribeWordsAsync(mixParts[i].Path, cancellationToken);
+
+            List<TranscriptSegment> segments = ConversationMerger.Merge(learner, partner, mix, job.LearnerSpeaker, job.PartnerLabel);
+            await AddPartAsync(job, segments, learnerParts[i].OffsetSeconds, i, count);
+        }
+    }
+
+    private async Task<ChannelTranscript> TranscribeChannelAsync(AudioPart part, CancellationToken cancellationToken) =>
+        new(await _transcriber.TranscribeWordsAsync(part.Path, cancellationToken), await _splitter.MeasureLoudnessAsync(part.Path, cancellationToken));
+
+    private async Task AddPartAsync(CallJob job, List<TranscriptSegment> segments, double offsetSeconds, int index, int count)
+    {
+        foreach (TranscriptSegment segment in segments)
+        {
+            segment.Start += offsetSeconds;
+            segment.End += offsetSeconds;
+        }
+        job.Segments = [.. job.Segments, .. segments];
+        job.TranscribedParts = index + 1;
+        await SaveAsync(job);
+        _logger.LogInformation("Call {JobId}: transcribed part {Part}/{Parts}", job.Id, index + 1, count);
     }
 
     private async Task AnalyzeAsync(CallJob job, CancellationToken cancellationToken)

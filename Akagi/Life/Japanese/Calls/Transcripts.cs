@@ -155,6 +155,7 @@ internal static class TranscriptChunker
     public static string Format(TranscriptSegment segment)
     {
         string time = TimeSpan.FromSeconds(segment.Start).ToString(@"hh\:mm\:ss", CultureInfo.InvariantCulture);
-        return string.IsNullOrEmpty(segment.Speaker) ? $"[{time}] {segment.Text}" : $"[{time}] {segment.Speaker}: {segment.Text}";
+        string line = string.IsNullOrEmpty(segment.Speaker) ? $"[{time}] {segment.Text}" : $"[{time}] {segment.Speaker}: {segment.Text}";
+        return string.IsNullOrEmpty(segment.Disputed) ? line : $"{line} (second hearing: {segment.Disputed})";
     }
 }
