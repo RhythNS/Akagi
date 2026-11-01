@@ -251,11 +251,14 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         return payload;
     }
 
-    private Command BuildCommandFromFunction(SystemProcessor systemProcessor, string functionName, string? argumentsJson)
+    internal Command BuildCommandFromFunction(SystemProcessor systemProcessor, string functionName, string? argumentsJson)
     {
-        Command command = systemProcessor.Commands
+        Command offered = systemProcessor.Commands
             .FirstOrDefault(x => x.Name.Equals(functionName, StringComparison.OrdinalIgnoreCase))
             ?? throw new Exception($"Could not find {functionName} command!");
+
+        // One response may call a tool several times, and every call keeps its own arguments
+        Command command = _commandFactory.Create(offered.Name);
 
         if (string.IsNullOrEmpty(argumentsJson))
         {
