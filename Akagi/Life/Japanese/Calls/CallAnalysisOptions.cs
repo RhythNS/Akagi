@@ -16,19 +16,18 @@ internal class CallAnalysisOptions
     public string StorageDirectory { get; set; } = Path.Combine(AppContext.BaseDirectory, "calls");
     public string FfmpegPath { get; set; } = "ffmpeg";
     /// <summary>
-    /// Length of the audio parts sent to transcription; 10 minutes of 32 kbit/s mono stays far below upload limits.
+    /// Length of the audio parts sent to transcription. 32 kbit/s mono stays far below the 25 MB upload limit; the
+    /// tighter bound is the 60 seconds the providers behind OpenRouter get per request.
     /// </summary>
-    public int PartMinutes { get; set; } = 10;
+    public int PartMinutes { get; set; } = 5;
     /// <summary>
     /// Transcript characters per analysis call.
     /// </summary>
     public int ChunkCharacters { get; set; } = 2500;
     /// <summary>
-    /// OpenAI compatible speech-to-text endpoint; a local faster-whisper server works the same way.
+    /// OpenRouter speech-to-text model; requests use the credentials of the "OpenRouter" section.
     /// </summary>
-    public string TranscriptionBaseUrl { get; set; } = "https://api.openai.com/v1/";
-    public string TranscriptionApiKey { get; set; } = string.Empty;
-    public string TranscriptionModel { get; set; } = "whisper-1";
+    public string TranscriptionModel { get; set; } = "microsoft/mai-transcribe-2";
     public string Language { get; set; } = "ja";
     /// <summary>
     /// Names of the user's characters that analyze calls (the tutor) and tell the user about them (the companion).

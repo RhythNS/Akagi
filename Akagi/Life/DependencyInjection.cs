@@ -25,7 +25,7 @@ static class DependencyInjection
         services.AddHostedService<RoutineService>();
 
         services.Configure<CallAnalysisOptions>(configuration.GetSection("CallAnalysis"));
-        services.AddHttpClient<ITranscriber, OpenAiTranscriber>(client => client.Timeout = TimeSpan.FromMinutes(10));
+        services.AddHttpClient<ITranscriber, OpenRouterTranscriber>(client => client.Timeout = TimeSpan.FromMinutes(10));
         services.AddHostedService<CallAnalysisService>();
 
         Type[] routineTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<Routine>();

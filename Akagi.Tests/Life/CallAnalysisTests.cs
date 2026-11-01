@@ -1,5 +1,6 @@
 using Akagi.Life.Japanese;
 using Akagi.Life.Japanese.Calls;
+using Akagi.LLMs.OpenRouter;
 using Akagi.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -86,47 +87,72 @@ public class TranscriptTests
     [Fact]
     public void Transcriber_ParsesVerboseAndPlainResponses()
     {
-        List<TranscriptSegment> verbose = OpenAiTranscriber.ParseResponse(
+        List<TranscriptSegment> verbose = OpenRouterTranscriber.ParseResponse(
             """{"text":"ignored","segments":[{"start":0.5,"end":2.0,"text":" こんにちは "},{"start":2.0,"end":3.0,"text":""}]}""");
-        List<TranscriptSegment> plain = OpenAiTranscriber.ParseResponse("""{"text":"元気？","duration":4.5}""");
+        List<TranscriptSegment> plain = OpenRouterTranscriber.ParseResponse("""{"text":"元気？","duration":4.5}""");
+        List<TranscriptSegment> billed = OpenRouterTranscriber.ParseResponse("""{"text":"元気？","usage":{"seconds":9.2,"cost":0.0003}}""");
 
         TranscriptSegment segment = Assert.Single(verbose);
         Assert.Equal("こんにちは", segment.Text);
         Assert.Equal(0.5, segment.Start);
         Assert.Equal(4.5, Assert.Single(plain).End);
+        Assert.Equal(9.2, Assert.Single(billed).End);
     }
 
     [Fact]
-    public async Task Transcriber_PostsMultipartWithKeyAndLanguage()
+    public async Task Transcriber_PostsMultipartToOpenRouterWithItsCredentials()
     {
         using TempDirectory temp = new();
         string audio = Path.Combine(temp.Path, "part_0000.mp3");
         await File.WriteAllBytesAsync(audio, [1, 2, 3]);
         RecordingHandler handler = new("""{"segments":[{"start":0,"end":1,"text":"はい"}]}""");
-        OpenAiTranscriber transcriber = new(new HttpClient(handler), Options(new CallAnalysisOptions
-        {
-            TranscriptionBaseUrl = "http://localhost:9000/v1/",
-            TranscriptionApiKey = "key",
-            TranscriptionModel = "whisper-large"
-        }));
+        OpenRouterTranscriber transcriber = new(new HttpClient(handler), Options(new CallAnalysisOptions()), OpenRouter("key", "https://openrouter.ai/api/v1/"));
 
         List<TranscriptSegment> segments = await transcriber.TranscribeAsync(audio, CancellationToken.None);
 
         Assert.Equal("はい", Assert.Single(segments).Text);
-        Assert.Equal("http://localhost:9000/v1/audio/transcriptions", handler.Request!.RequestUri!.ToString());
+        Assert.True(transcriber.IsConfigured);
+        Assert.Equal("https://openrouter.ai/api/v1/audio/transcriptions", handler.Request!.RequestUri!.ToString());
         Assert.Equal("Bearer key", handler.Request.Headers.Authorization!.ToString());
-        Assert.Contains("whisper-large", handler.Body);
+        Assert.Contains("microsoft/mai-transcribe-2", handler.Body);
         Assert.Contains("name=language", handler.Body);
         Assert.Contains("verbose_json", handler.Body);
     }
 
-    internal static IOptionsMonitor<CallAnalysisOptions> Options(CallAnalysisOptions value) => new StaticOptions(value);
-
-    private sealed class StaticOptions(CallAnalysisOptions value) : IOptionsMonitor<CallAnalysisOptions>
+    [Theory]
+    [InlineData("", "https://openrouter.ai/api/v1/")]
+    [InlineData("key", "")]
+    public void Transcriber_NeedsBothOpenRouterCredentials(string apiKey, string baseUrl)
     {
-        public CallAnalysisOptions CurrentValue => value;
-        public CallAnalysisOptions Get(string? name) => value;
-        public IDisposable? OnChange(Action<CallAnalysisOptions, string?> listener) => null;
+        OpenRouterTranscriber transcriber = new(new HttpClient(), Options(new CallAnalysisOptions()), OpenRouter(apiKey, baseUrl));
+
+        Assert.False(transcriber.IsConfigured);
+    }
+
+    [Fact]
+    public async Task Transcriber_AcceptsABaseUrlWithoutTrailingSlash()
+    {
+        using TempDirectory temp = new();
+        string audio = Path.Combine(temp.Path, "part_0000.mp3");
+        await File.WriteAllBytesAsync(audio, [1]);
+        RecordingHandler handler = new("""{"text":"はい"}""");
+        OpenRouterTranscriber transcriber = new(new HttpClient(handler), Options(new CallAnalysisOptions()), OpenRouter("key", "https://openrouter.ai/api/v1"));
+
+        await transcriber.TranscribeAsync(audio, CancellationToken.None);
+
+        Assert.Equal("https://openrouter.ai/api/v1/audio/transcriptions", handler.Request!.RequestUri!.ToString());
+    }
+
+    internal static IOptionsMonitor<CallAnalysisOptions> Options(CallAnalysisOptions value) => new StaticOptions<CallAnalysisOptions>(value);
+
+    private static IOptionsMonitor<OpenRouterClient.Options> OpenRouter(string apiKey, string baseUrl) =>
+        new StaticOptions<OpenRouterClient.Options>(new OpenRouterClient.Options { ApiKey = apiKey, BaseUrl = baseUrl, ResponsePath = "chat/completions" });
+
+    private sealed class StaticOptions<T>(T value) : IOptionsMonitor<T>
+    {
+        public T CurrentValue => value;
+        public T Get(string? name) => value;
+        public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 }
 

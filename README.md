@@ -97,9 +97,9 @@ endings, keigo, repeated openers and endings, and N2 patterns used.
 
 Recorded calls go through a resumable pipeline: send them with `/analyzeCall [partner] [casual|polite|formal]
 [left|right] [speaker=Me]`, or drop them into `CallAnalysis:InboxDirectory/<username>/` (Telegram only passes 20 MB),
-named like `2026-10-27 Yuki [left].m4a`. Audio is cut into ten minute parts with ffmpeg (PCM WAV also works without it),
-transcribed through an OpenAI compatible endpoint (`CallAnalysis:TranscriptionBaseUrl`, a local Whisper server works),
-and each transcript chunk is analyzed by Sensei with its diagnosis tools. Speech measurements only feed the trend when
+named like `2026-10-27 Yuki [left].m4a`. Audio is cut into five minute parts with ffmpeg (PCM WAV also works without it),
+transcribed through OpenRouter with the existing `OpenRouter` credentials (`CallAnalysis:TranscriptionModel`, default
+`microsoft/mai-transcribe-2`, about $0.10 per audio hour), and each transcript chunk is analyzed by Sensei with its diagnosis tools. Speech measurements only feed the trend when
 your voice is separated (stereo channel or speaker label). Akagi tells you the result; `/calls [id]` shows the reports.
 SRT, VTT and plain text transcripts skip the audio steps.
 

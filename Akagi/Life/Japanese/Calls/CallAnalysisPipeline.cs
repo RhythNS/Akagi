@@ -83,7 +83,7 @@ internal class CallAnalysisPipeline
         {
             if (!_transcriber.IsConfigured)
             {
-                throw new InvalidOperationException("No transcription endpoint configured (CallAnalysis:TranscriptionBaseUrl).");
+                throw new InvalidOperationException("Transcription needs the OpenRouter credentials (OpenRouter:apikey and OpenRouter:baseUrl).");
             }
 
             IReadOnlyList<AudioPart> parts = await _splitter.SplitAsync(job.SourcePath, TimeSpan.FromMinutes(Math.Max(1, _options.PartMinutes)),
