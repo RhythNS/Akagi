@@ -61,7 +61,7 @@ internal class CallsCommand : TextCommand
 {
     public override string Name => "/calls";
 
-    public override string Description => "Lists your analyzed calls, shows one report, or retries a failed call. Usage: /calls [id] | /calls retry <id>";
+    public override string Description => "Lists your analyzed calls, shows one report, retries a failed call, or has the companion tell you about a finished one again. Usage: /calls [id] | /calls retry <id> | /calls deliver <id>";
 
     public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
@@ -86,6 +86,34 @@ internal class CallsCommand : TextCommand
                 reply = $"[{failed.ShortId}] has not failed: {CallAnalysisPipeline.DescribeProgress(failed)}";
             }
             await Communicator.SendMessage(context.User, reply);
+            return CommandResult.Ok;
+        }
+
+        if (args.Length > 0 && string.Equals(args[0], "deliver", StringComparison.OrdinalIgnoreCase))
+        {
+            CallJob? finished = args.Length > 1 ? Find(jobs, args[1]) : null;
+            if (finished == null)
+            {
+                await Communicator.SendMessage(context.User, args.Length > 1 ? $"No call with id '{args[1]}'." : "Which call? Usage: /calls deliver <id>");
+                return CommandResult.Ok;
+            }
+            if (finished.Status != CallJobStatus.Completed)
+            {
+                await Communicator.SendMessage(context.User, $"[{finished.ShortId}] is not finished yet: {CallAnalysisPipeline.DescribeProgress(finished)}");
+                return CommandResult.Ok;
+            }
+
+            try
+            {
+                // Uses the stored report; nothing is analyzed again
+                await Globals.Instance.ServiceProvider.GetRequiredService<ICallDelivery>().DeliverAsync(finished);
+                finished.Delivered = true;
+                await context.DatabaseFactory.GetDatabase<ICallJobDatabase>().SaveDocumentAsync(finished);
+            }
+            catch (InvalidOperationException ex)
+            {
+                await Communicator.SendMessage(context.User, $"Could not deliver [{finished.ShortId}]: {ex.Message}");
+            }
             return CommandResult.Ok;
         }
 

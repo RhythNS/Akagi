@@ -1,4 +1,4 @@
-﻿using Akagi.Communication.Commands;
+using Akagi.Communication.Commands;
 using Akagi.Communication.SocketComs;
 using Akagi.Communication.SocketComs.Transmissions;
 using Akagi.Communication.TelegramComs;
@@ -28,6 +28,8 @@ static class DependencyInjection
         services.AddHttpClient();
 
         services.AddSingleton<ICommunicator>(provider => provider.GetRequiredService<TelegramService>());
+        // The website; without it nothing the characters start on their own reaches users who last wrote there
+        services.AddSingleton<ICommunicator>(provider => provider.GetRequiredService<SocketService>());
         services.AddSingleton<ICommunicatorFactory, CommunicatorFactory>();
     }
 }

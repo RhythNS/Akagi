@@ -94,28 +94,9 @@ internal class CallAnalysisService : BackgroundService
             new AudioSplitter(options.FfmpegPath),
             _services.GetRequiredService<ITranscriber>(),
             analyzer,
-            DeliverAsync,
+            _services.GetRequiredService<ICallDelivery>().DeliverAsync,
             options,
             _logger);
-    }
-
-    private async Task DeliverAsync(CallJob job)
-    {
-        Character? character = await _services.GetRequiredService<ICharacterDatabase>().GetCharacter(job.DeliveryCharacterId);
-        User? user = await _services.GetRequiredService<IUserDatabase>().GetDocumentByIdAsync(job.UserId);
-        if (character == null || user == null)
-        {
-            return;
-        }
-
-        TextMessage message = new()
-        {
-            From = Message.Type.System,
-            Time = DateTime.UtcNow,
-            Text = CallJobs.BuildDeliveryInstruction(job),
-            CharacterId = null
-        };
-        await _services.GetRequiredService<IProactiveDelivery>().DeliverAsync(character, user, message);
     }
 
     /// <summary>
