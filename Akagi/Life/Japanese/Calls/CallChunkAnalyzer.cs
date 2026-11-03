@@ -76,7 +76,8 @@ internal class ToolCallChunkAnalyzer : ICallChunkAnalyzer
             Name = "Call Analysis",
             Description = "Finds communication issues in a recorded call",
             RunMode = ILLM.RunMode.CommandsOnly,
-            Usage = ILLM.LLMUsage.ReflectionGeneral,
+            // Reviewing the learner's Japanese is tutoring, so it runs on the model chosen for lessons
+            Usage = ILLM.LLMUsage.Learning,
             ReadableMessages = Message.Type.System,
             Output = Message.Type.System,
             MessageCompiler = new ContextOnlyConversationCompiler(),

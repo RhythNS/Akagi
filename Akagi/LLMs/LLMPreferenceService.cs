@@ -35,8 +35,8 @@ internal class LLMPreferenceService : ILLMPreferenceService
         [ILLM.LLMUsage.CommandsRoleplay] = "Tool calls of roleplay characters.",
         [ILLM.LLMUsage.CommandsGeneral] = "Tool calls of assistant characters.",
         [ILLM.LLMUsage.ReflectionRoleplay] = "Background thinking of roleplay characters, such as memory consolidation.",
-        [ILLM.LLMUsage.ReflectionGeneral] = "Background analysis, such as reviewing calls.",
-        [ILLM.LLMUsage.Learning] = "Writing and grading lessons."
+        [ILLM.LLMUsage.ReflectionGeneral] = "Background analysis of assistant characters.",
+        [ILLM.LLMUsage.Learning] = "Writing and grading lessons, and reviewing your recorded calls."
     };
 
     private readonly ILLMDefinitionDatabase _definitions;

@@ -194,12 +194,17 @@ public class ConversationMergerTests
     private sealed class OneResponseLLM : ILLM, ILLMFactory, ICommandFactory
     {
         public int Requests { get; private set; }
+        public ILLM.LLMUsage? Usage { get; private set; }
 
         public void SetModel(string model)
         {
         }
 
-        public Task<ILLM> Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType) => Task.FromResult<ILLM>(this);
+        public Task<ILLM> Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType)
+        {
+            Usage = usageType;
+            return Task.FromResult<ILLM>(this);
+        }
 
         public T Create<T>() where T : Command => throw new NotSupportedException();
 
@@ -252,6 +257,8 @@ public class ConversationMergerTests
 
         Assert.Equal(2, issues);
         Assert.Equal(1, llm.Requests);
+        // Call reviews run on the model picked for Learning
+        Assert.Equal(ILLM.LLMUsage.Learning, llm.Usage);
         Assert.Equal(2, diagnoses.Items.Single().Issues.Count(i => i.Category == IssueCategory.Comprehension));
     }
 
