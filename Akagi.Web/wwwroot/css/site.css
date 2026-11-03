@@ -78,3 +78,11 @@
 .lesson-option:disabled {
     opacity: 1;
 }
+
+/* Model picker suggestions (Settings > Models) */
+.model-picker-list {
+    max-height: 22rem;
+    overflow-y: auto;
+    z-index: 1060;
+}
+

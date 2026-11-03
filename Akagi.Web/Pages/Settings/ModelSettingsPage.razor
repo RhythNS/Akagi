@@ -1,0 +1,264 @@
+@page "/Settings/Models"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Pages.Settings.Components
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+
+<PageTitle>Models - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Settings</div>
+			<h2 class="page-title">Models</h2>
+			<div class="text-secondary mt-1">Choose which model does each kind of work. Without a choice the default is used.</div>
+		</div>
+		<div class="col-auto ms-auto">
+			<button type="button" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" disabled="@(_loading)" @onclick="LoadAsync">
+				<Icon IconType="@Icons.Refresh" Size="16" />
+				<span>Reload</span>
+			</button>
+		</div>
+	</div>
+</div>
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert">@_error</div>
+}
+@foreach (string modelError in _modelErrors)
+{
+	<div class="alert alert-warning" role="alert">@modelError You can still type a model id.</div>
+}
+
+@if (_loading && _usages.Length == 0)
+{
+	<div class="card">
+		<div class="card-body py-5 text-center">
+			<div class="spinner-border text-primary mb-3" role="status"></div>
+			<div class="text-secondary">Loading your models...</div>
+		</div>
+	</div>
+}
+else if (_usages.Length == 0)
+{
+	<div class="card border-danger">
+		<div class="card-body py-5 text-center">
+			<div class="text-danger mb-2">
+				<Icon IconType="@Icons.AlertCircle" Size="36" />
+			</div>
+			<h3 class="h4 mb-1">Socket Service Offline</h3>
+			<p class="text-secondary mb-3">Unable to reach the Akagi backend.</p>
+			<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="LoadAsync">
+				<Icon IconType="@Icons.Refresh" Size="16" />
+				<span>Retry Connection</span>
+			</button>
+		</div>
+	</div>
+}
+else
+{
+	<div class="card">
+		<div class="list-group list-group-flush">
+			@foreach (LLMUsageSetting usage in _usages)
+			{
+				<div class="list-group-item" data-usage="@usage.Usage">
+					<div class="row g-3 align-items-center">
+						<div class="col-12 col-lg-4">
+							<div class="fw-medium">@ModelSearch.Humanize(usage.Usage)</div>
+							<div class="text-secondary small">@usage.Description</div>
+						</div>
+						<div class="col-12 col-lg-4">
+							@if (usage.Model != null)
+							{
+								<div class="fw-medium text-truncate" title="@usage.Model">@NameOf(usage.Provider, usage.Model)</div>
+								<div class="text-secondary small text-truncate">
+									@usage.Model
+									@if (usage.NeedsTools && Lookup(usage.Provider, usage.Model) is { SupportsTools: false })
+									{
+										<span class="badge bg-warning-lt ms-1">no tools</span>
+									}
+								</div>
+							}
+							else
+							{
+								<div class="text-secondary text-truncate" title="@usage.DefaultModel">
+									Default: @(usage.DefaultModel == null ? "none" : NameOf(usage.DefaultProvider, usage.DefaultModel))
+								</div>
+							}
+						</div>
+						<div class="col">
+							<ModelPicker Models="_models"
+										 NeedsTools="usage.NeedsTools"
+										 Disabled="_saving != null"
+										 CustomProvider="@(usage.Provider ?? usage.DefaultProvider)"
+										 OnPick="model => SetAsync(usage, model)" />
+						</div>
+						<div class="col-auto" style="min-width: 5.5rem;">
+							@if (_saving == usage.Usage)
+							{
+								<div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+							}
+							else if (_saved == usage.Usage)
+							{
+								<span class="text-success d-inline-flex align-items-center gap-1"><Icon IconType="@Icons.Check" Size="16" /> Saved</span>
+							}
+							else if (usage.Model != null)
+							{
+								<button type="button" class="btn btn-sm btn-ghost-secondary" title="Use the default model again"
+										disabled="@(_saving != null)" @onclick="() => ResetAsync(usage)">
+									Default
+								</button>
+							}
+						</div>
+					</div>
+				</div>
+			}
+		</div>
+	</div>
+}
+
+@code {
+	private readonly CancellationTokenSource _disposed = new();
+	private LLMUsageSetting[] _usages = [];
+	private LLMModel[] _models = [];
+	private string[] _modelErrors = [];
+	private string? _error;
+	private bool _loading;
+	private string? _saving;
+	private string? _saved;
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override Task OnInitializedAsync() => LoadAsync();
+
+	private async Task LoadAsync()
+	{
+		_loading = true;
+		_error = null;
+		LLMSettingsResponseTransmission? response = await SendAsync(new LLMSettingsRequestTransmission { Action = LLMSettingsAction.Overview });
+		_loading = false;
+		if (response != null)
+		{
+			_usages = response.Usages;
+			_models = response.Models;
+			_modelErrors = response.ModelErrors;
+		}
+	}
+
+	private async Task SetAsync(LLMUsageSetting usage, LLMModel model)
+	{
+		await SaveAsync(usage, new LLMSettingsRequestTransmission
+		{
+			Action = LLMSettingsAction.Set,
+			Usage = usage.Usage,
+			Provider = model.Provider,
+			Model = model.Id
+		});
+	}
+
+	private Task ResetAsync(LLMUsageSetting usage) =>
+		SaveAsync(usage, new LLMSettingsRequestTransmission { Action = LLMSettingsAction.Reset, Usage = usage.Usage });
+
+	private async Task SaveAsync(LLMUsageSetting usage, LLMSettingsRequestTransmission transmission)
+	{
+		_error = null;
+		_saved = null;
+		_saving = usage.Usage;
+		LLMSettingsResponseTransmission? response = await SendAsync(transmission);
+		_saving = null;
+		if (response == null)
+		{
+			return;
+		}
+
+		if (response.Usages.Length > 0)
+		{
+			_usages = response.Usages;
+		}
+		if (response.Error == null)
+		{
+			_saved = usage.Usage;
+			_ = ClearSavedAsync(usage.Usage);
+		}
+	}
+
+	private async Task ClearSavedAsync(string usage)
+	{
+		try
+		{
+			await Task.Delay(TimeSpan.FromSeconds(2), _disposed.Token);
+			await InvokeAsync(() =>
+			{
+				if (_saved == usage)
+				{
+					_saved = null;
+					StateHasChanged();
+				}
+			});
+		}
+		catch (OperationCanceledException)
+		{
+			// The page was left
+		}
+	}
+
+	private LLMModel? Lookup(string? provider, string id) =>
+		_models.FirstOrDefault(m => m.Provider == provider && m.Id == id);
+
+	private string NameOf(string? provider, string id) => Lookup(provider, id)?.Name ?? id;
+
+	/// <summary>
+	/// Failures end up in <see cref="_error"/>; null means there is no response to work with.
+	/// </summary>
+	private async Task<LLMSettingsResponseTransmission?> SendAsync(LLMSettingsRequestTransmission transmission)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			_error = "The connection to the backend is gone. Try again in a moment.";
+			return null;
+		}
+
+		try
+		{
+			LLMSettingsResponseTransmission response = await new LLMSettingsRequest(transmission).Get(client, LLMSettingsRequest.Timeout);
+			_error = response.Error;
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Try again in a moment.";
+			return null;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_usages.Length == 0 && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+		_disposed.Cancel();
+		_disposed.Dispose();
+	}
+}

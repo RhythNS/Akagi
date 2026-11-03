@@ -1,0 +1,157 @@
+@using Akagi.Bridge.Chat.Models
+
+@* Type part of a model's name or id and pick one of the suggestions. *@
+<div class="position-relative">
+	<input type="text"
+		   class="form-control"
+		   placeholder="@Placeholder"
+		   value="@_query"
+		   disabled="@Disabled"
+		   autocomplete="off"
+		   spellcheck="false"
+		   aria-label="@Placeholder"
+		   aria-autocomplete="list"
+		   aria-expanded="@(ShowList ? "true" : "false")"
+		   @oninput="OnInput"
+		   @onkeydown="OnKeyDown"
+		   @onfocus="() => _open = true"
+		   @onblur="() => _open = false" />
+
+	@if (ShowList)
+	{
+		<div class="dropdown-menu show w-100 shadow model-picker-list" role="listbox">
+			@if (_matches.Count == 0 && Custom == null)
+			{
+				<span class="dropdown-item-text text-secondary small">No model matches "@_query".</span>
+			}
+			@for (int i = 0; i < _matches.Count; i++)
+			{
+				LLMModel model = _matches[i];
+				int index = i;
+				<button type="button"
+						role="option"
+						aria-selected="@(index == _active ? "true" : "false")"
+						class="dropdown-item d-flex justify-content-between align-items-start gap-3 @(index == _active ? "active" : "")"
+						@onmousedown="() => PickAsync(model)"
+						@onmousedown:preventDefault
+						@onmouseover="() => _active = index">
+					<span class="text-truncate">
+						<span class="d-block fw-medium text-truncate">@model.Name</span>
+						<span class="d-block small opacity-75 text-truncate">@model.Id</span>
+					</span>
+					<span class="flex-shrink-0 text-end small">
+						@if (NeedsTools && !model.SupportsTools)
+						{
+							<span class="badge bg-warning-lt d-block mb-1">no tools</span>
+						}
+						<span class="d-block opacity-75">@ModelSearch.FormatPrice(model)</span>
+						<span class="d-block opacity-75">@ModelSearch.FormatContext(model.ContextLength)</span>
+					</span>
+				</button>
+			}
+			@if (Custom is LLMModel custom)
+			{
+				<button type="button"
+						role="option"
+						aria-selected="@(_active == _matches.Count ? "true" : "false")"
+						class="dropdown-item small @(_active == _matches.Count ? "active" : "")"
+						@onmousedown="() => PickAsync(custom)"
+						@onmousedown:preventDefault
+						@onmouseover="() => _active = _matches.Count">
+					Use "@custom.Id" as typed
+				</button>
+			}
+		</div>
+	}
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public IReadOnlyList<LLMModel> Models { get; set; } = [];
+
+	/// <summary>
+	/// Marks models that cannot call tools.
+	/// </summary>
+	[Parameter]
+	public bool NeedsTools { get; set; }
+
+	[Parameter]
+	public bool Disabled { get; set; }
+
+	[Parameter]
+	public string Placeholder { get; set; } = "Type to search models, e.g. gemini";
+
+	[Parameter]
+	public EventCallback<LLMModel> OnPick { get; set; }
+
+	/// <summary>
+	/// The provider of a model id typed in full. Without one only listed models can be picked.
+	/// </summary>
+	[Parameter]
+	public string? CustomProvider { get; set; }
+
+	private string _query = string.Empty;
+	private IReadOnlyList<LLMModel> _matches = [];
+	private int _active;
+	private bool _open;
+
+	private bool ShowList => _open && !Disabled && _query.Trim().Length > 0;
+
+	/// <summary>
+	/// What was typed, as a model id, when it looks like one and is not listed.
+	/// </summary>
+	private LLMModel? Custom
+	{
+		get
+		{
+			string id = _query.Trim();
+			if (CustomProvider == null || !id.Contains('/') || id.Contains(' ')
+				|| Models.Any(m => string.Equals(m.Id, id, StringComparison.OrdinalIgnoreCase)))
+			{
+				return null;
+			}
+			return new LLMModel { Provider = CustomProvider, Id = id, Name = id };
+		}
+	}
+
+	private int OptionCount => _matches.Count + (Custom == null ? 0 : 1);
+
+	private void OnInput(ChangeEventArgs e)
+	{
+		_query = e.Value?.ToString() ?? string.Empty;
+		_matches = ModelSearch.Find(Models, _query);
+		_active = 0;
+		_open = true;
+	}
+
+	private async Task OnKeyDown(KeyboardEventArgs e)
+	{
+		switch (e.Key)
+		{
+			case "ArrowDown" when OptionCount > 0:
+				_active = (_active + 1) % OptionCount;
+				_open = true;
+				break;
+			case "ArrowUp" when OptionCount > 0:
+				_active = (_active - 1 + OptionCount) % OptionCount;
+				break;
+			case "Enter" when ShowList && _active < _matches.Count:
+				await PickAsync(_matches[_active]);
+				break;
+			case "Enter" when ShowList && Custom is LLMModel custom:
+				await PickAsync(custom);
+				break;
+			case "Escape":
+				_open = false;
+				break;
+		}
+	}
+
+	private async Task PickAsync(LLMModel model)
+	{
+		_query = string.Empty;
+		_matches = [];
+		_open = false;
+		await OnPick.InvokeAsync(model);
+	}
+}

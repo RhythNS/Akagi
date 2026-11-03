@@ -78,6 +78,16 @@
 				</NavLink>
 			</li>
 
+			<!-- Settings -->
+			<li class="nav-item @(IsSettingsActive ? "active" : "")">
+				<NavLink class="nav-link d-flex align-items-center" href="Settings/Models" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+					<span class="nav-link-icon d-md-none d-lg-inline-block">
+						<Icon class="icon" IconType="@Icons.Settings" />
+					</span>
+					<span class="nav-link-title">Models</span>
+				</NavLink>
+			</li>
+
 			<!-- Time Tracking -->
 			<li class="nav-item dropdown @(IsTimeTrackingActive ? "active" : "")">
 				<a class="nav-link dropdown-toggle @(_timeTrackingExpanded ? "show" : "")"
@@ -151,6 +161,9 @@
 
 	private bool IsLearnActive =>
 		_currentPath.StartsWith("Learn", StringComparison.OrdinalIgnoreCase);
+
+	private bool IsSettingsActive =>
+		_currentPath.StartsWith("Settings", StringComparison.OrdinalIgnoreCase);
 
 	private bool IsTimeTrackingActive =>
 		_currentPath.StartsWith("TimeTracking", StringComparison.OrdinalIgnoreCase);
