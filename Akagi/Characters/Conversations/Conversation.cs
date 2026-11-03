@@ -152,13 +152,24 @@ internal class Conversation : DirtyTrackable
         List<Bridge.Chat.Models.TextMessage> bridgeMessages = [];
         foreach (Message message in _messages)
         {
-            if (message is TextMessage textMessage)
+            switch (message)
             {
-                bridgeMessages.Add(textMessage.ToBridgeMessage());
-            }
-            else
-            {
-                throw new NotSupportedException($"Unsupported message type: {message.GetType().Name}");
+                case TextMessage textMessage:
+                    bridgeMessages.Add(textMessage.ToBridgeMessage());
+                    break;
+
+                case VoiceMessage voiceMessage:
+                    bridgeMessages.Add(new Bridge.Chat.Models.TextMessage
+                    {
+                        Time = voiceMessage.Time,
+                        From = Message.ToBridgeType(voiceMessage.From),
+                        Text = string.IsNullOrWhiteSpace(voiceMessage.Content) ? "(voice message)" : voiceMessage.Content
+                    });
+                    break;
+
+                default:
+                    // Tool calls (CommandMessage) and their results are the character's own workings, not part of the chat
+                    break;
             }
         }
 
