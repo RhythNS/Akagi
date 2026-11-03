@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 
 namespace Akagi.Life.Japanese.Calls;
 
@@ -142,17 +143,46 @@ internal class CallAnalysisPipeline
         for (int i = job.TranscribedParts; i < count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            ChannelTranscript learner = await TranscribeChannelAsync(learnerParts[i], cancellationToken);
-            ChannelTranscript partner = await TranscribeChannelAsync(partnerParts[i], cancellationToken);
-            List<TranscriptWord> mix = await _transcriber.TranscribeWordsAsync(mixParts[i].Path, cancellationToken);
+            ChannelTranscript learner = await TranscribeChannelAsync(job, "learner", i, learnerParts[i], cancellationToken);
+            ChannelTranscript partner = await TranscribeChannelAsync(job, "partner", i, partnerParts[i], cancellationToken);
+            List<TranscriptWord> mix = await TranscribeWordsCachedAsync(job, "mix", i, mixParts[i], cancellationToken);
 
             List<TranscriptSegment> segments = ConversationMerger.Merge(learner, partner, mix, job.LearnerSpeaker, job.PartnerLabel);
             await AddPartAsync(job, segments, learnerParts[i].OffsetSeconds, i, count);
         }
     }
 
-    private async Task<ChannelTranscript> TranscribeChannelAsync(AudioPart part, CancellationToken cancellationToken) =>
-        new(await _transcriber.TranscribeWordsAsync(part.Path, cancellationToken), await _splitter.MeasureLoudnessAsync(part.Path, cancellationToken));
+    private async Task<ChannelTranscript> TranscribeChannelAsync(CallJob job, string pass, int index, AudioPart part, CancellationToken cancellationToken) =>
+        new(await TranscribeWordsCachedAsync(job, pass, index, part, cancellationToken), await _splitter.MeasureLoudnessAsync(part.Path, cancellationToken));
+
+    /// <summary>
+    /// A part takes three paid passes. Each finished pass is kept on disk, so a failure in a later pass of the same part
+    /// does not pay for the earlier ones again.
+    /// </summary>
+    private async Task<List<TranscriptWord>> TranscribeWordsCachedAsync(CallJob job, string pass, int index, AudioPart part, CancellationToken cancellationToken)
+    {
+        string cachePath = Path.Combine(_options.StorageDirectory, job.Id ?? "unsaved", "transcripts", $"{pass}-{index}.json");
+        if (File.Exists(cachePath))
+        {
+            try
+            {
+                List<TranscriptWord>? cached = JsonSerializer.Deserialize<List<TranscriptWord>>(await File.ReadAllTextAsync(cachePath, cancellationToken));
+                if (cached != null)
+                {
+                    return cached;
+                }
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "Call {JobId}: ignoring unreadable transcript {Path}", job.Id, cachePath);
+            }
+        }
+
+        List<TranscriptWord> words = await _transcriber.TranscribeWordsAsync(part.Path, cancellationToken);
+        Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
+        await File.WriteAllTextAsync(cachePath, JsonSerializer.Serialize(words), cancellationToken);
+        return words;
+    }
 
     private async Task AddPartAsync(CallJob job, List<TranscriptSegment> segments, double offsetSeconds, int index, int count)
     {

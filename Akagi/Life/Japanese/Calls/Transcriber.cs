@@ -1,5 +1,6 @@
 using Akagi.LLMs.OpenRouter;
 using Microsoft.Extensions.Options;
+using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
 
@@ -34,12 +35,26 @@ internal class OpenRouterTranscriber : ITranscriber
     private readonly HttpClient _httpClient;
     private readonly IOptionsMonitor<CallAnalysisOptions> _options;
     private readonly IOptionsMonitor<OpenRouterClient.Options> _openRouter;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+
+    /// <summary>
+    /// Tries per request. The provider behind OpenRouter throttles now and then and asks to wait a second.
+    /// </summary>
+    public const int MaxTries = 6;
+    public static readonly TimeSpan MaxWait = TimeSpan.FromSeconds(60);
 
     public OpenRouterTranscriber(HttpClient httpClient, IOptionsMonitor<CallAnalysisOptions> options, IOptionsMonitor<OpenRouterClient.Options> openRouter)
+        : this(httpClient, options, openRouter, Task.Delay)
+    {
+    }
+
+    internal OpenRouterTranscriber(HttpClient httpClient, IOptionsMonitor<CallAnalysisOptions> options, IOptionsMonitor<OpenRouterClient.Options> openRouter,
+        Func<TimeSpan, CancellationToken, Task> delay)
     {
         _httpClient = httpClient;
         _options = options;
         _openRouter = openRouter;
+        _delay = delay;
     }
 
     public bool IsConfigured =>
@@ -51,7 +66,41 @@ internal class OpenRouterTranscriber : ITranscriber
     public async Task<List<TranscriptWord>> TranscribeWordsAsync(string audioPath, CancellationToken cancellationToken) =>
         ParseWords(await PostAsync(audioPath, wordTimestamps: true, cancellationToken));
 
+    /// <summary>
+    /// Waits and tries again when throttled (429) or when the provider is briefly unavailable (5xx).
+    /// </summary>
     private async Task<string> PostAsync(string audioPath, bool wordTimestamps, CancellationToken cancellationToken)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            (HttpStatusCode status, TimeSpan? retryAfter, string body) = await SendOnceAsync(audioPath, wordTimestamps, cancellationToken);
+            if ((int)status is >= 200 and < 300)
+            {
+                return body;
+            }
+            if (!IsTransient(status) || attempt >= MaxTries)
+            {
+                throw new HttpRequestException($"Transcription failed ({(int)status}): {body}", null, status);
+            }
+            await _delay(RetryDelay(attempt, retryAfter), cancellationToken);
+        }
+    }
+
+    internal static bool IsTransient(HttpStatusCode status) =>
+        status == HttpStatusCode.TooManyRequests || (int)status >= 500;
+
+    /// <summary>
+    /// The provider's Retry-After, but never less than an exponential backoff (2, 4, 8 ... seconds): asking again after
+    /// exactly one second tends to hit the same limit.
+    /// </summary>
+    internal static TimeSpan RetryDelay(int attempt, TimeSpan? retryAfter)
+    {
+        TimeSpan backoff = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+        TimeSpan wait = retryAfter is TimeSpan asked && asked > backoff ? asked : backoff;
+        return wait > MaxWait ? MaxWait : wait;
+    }
+
+    private async Task<(HttpStatusCode Status, TimeSpan? RetryAfter, string Body)> SendOnceAsync(string audioPath, bool wordTimestamps, CancellationToken cancellationToken)
     {
         CallAnalysisOptions options = _options.CurrentValue;
         OpenRouterClient.Options openRouter = _openRouter.CurrentValue;
@@ -79,11 +128,9 @@ internal class OpenRouterTranscriber : ITranscriber
 
         using HttpResponseMessage response = await _httpClient.SendAsync(request, cancellationToken);
         string body = await response.Content.ReadAsStringAsync(cancellationToken);
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new HttpRequestException($"Transcription failed ({(int)response.StatusCode}): {body}");
-        }
-        return body;
+        RetryConditionHeaderValue? retry = response.Headers.RetryAfter;
+        TimeSpan? retryAfter = retry?.Delta ?? (retry?.Date is DateTimeOffset date ? date - DateTimeOffset.UtcNow : null);
+        return (response.StatusCode, retryAfter, body);
     }
 
     private static void AddField(MultipartFormDataContent form, string name, string value)

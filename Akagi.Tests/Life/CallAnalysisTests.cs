@@ -169,6 +169,73 @@ public class TranscriptTests
         Assert.Equal("https://openrouter.ai/api/v1/audio/transcriptions", handler.Request!.RequestUri!.ToString());
     }
 
+    private sealed class SequenceHandler(params Func<HttpResponseMessage>[] responses) : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
+            Task.FromResult(responses[Math.Min(Calls++, responses.Length - 1)]());
+    }
+
+    private static HttpResponseMessage Throttled(int? retryAfterSeconds = null)
+    {
+        HttpResponseMessage response = new(HttpStatusCode.TooManyRequests)
+        {
+            Content = new StringContent("""{"error":{"message":"Provider returned 429","code":429}}""")
+        };
+        if (retryAfterSeconds is int seconds)
+        {
+            response.Headers.RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(seconds));
+        }
+        return response;
+    }
+
+    private static async Task<(OpenRouterTranscriber Transcriber, List<TimeSpan> Waits, string Audio, TempDirectory Temp)> RetryingTranscriber(SequenceHandler handler)
+    {
+        TempDirectory temp = new();
+        string audio = Path.Combine(temp.Path, "part_0000.mp3");
+        await File.WriteAllBytesAsync(audio, [1]);
+        List<TimeSpan> waits = [];
+        OpenRouterTranscriber transcriber = new(new HttpClient(handler), Options(new CallAnalysisOptions()), OpenRouter("key", "https://openrouter.ai/api/v1"),
+            (wait, _) => { waits.Add(wait); return Task.CompletedTask; });
+        return (transcriber, waits, audio, temp);
+    }
+
+    [Fact]
+    public async Task Transcriber_WaitsAndTriesAgainWhenThrottled()
+    {
+        SequenceHandler handler = new(() => Throttled(1), () => Throttled(10),
+            () => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("""{"words":[{"word":"は","start":0,"end":0.1}]}""") });
+        (OpenRouterTranscriber transcriber, List<TimeSpan> waits, string audio, TempDirectory temp) = await RetryingTranscriber(handler);
+        using TempDirectory cleanup = temp;
+
+        List<TranscriptWord> words = await transcriber.TranscribeWordsAsync(audio, CancellationToken.None);
+
+        Assert.Single(words);
+        Assert.Equal(3, handler.Calls);
+        // Never less than the backoff; longer when the provider asks for more
+        Assert.Equal([TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10)], waits);
+    }
+
+    [Fact]
+    public async Task Transcriber_GivesUpAfterMaxTriesAndDoesNotRetryClientErrors()
+    {
+        SequenceHandler throttled = new(() => Throttled());
+        (OpenRouterTranscriber transcriber, List<TimeSpan> waits, string audio, TempDirectory temp) = await RetryingTranscriber(throttled);
+        using TempDirectory cleanup = temp;
+
+        HttpRequestException error = await Assert.ThrowsAsync<HttpRequestException>(() => transcriber.TranscribeWordsAsync(audio, CancellationToken.None));
+        Assert.Equal(HttpStatusCode.TooManyRequests, error.StatusCode);
+        Assert.Equal(OpenRouterTranscriber.MaxTries, throttled.Calls);
+        Assert.All(waits, w => Assert.True(w <= OpenRouterTranscriber.MaxWait));
+
+        SequenceHandler refused = new(() => new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent("bad") });
+        (OpenRouterTranscriber once, _, string audio2, TempDirectory temp2) = await RetryingTranscriber(refused);
+        using TempDirectory cleanup2 = temp2;
+        await Assert.ThrowsAsync<HttpRequestException>(() => once.TranscribeWordsAsync(audio2, CancellationToken.None));
+        Assert.Equal(1, refused.Calls);
+    }
+
     internal static IOptionsMonitor<CallAnalysisOptions> Options(CallAnalysisOptions value) => new StaticOptions<CallAnalysisOptions>(value);
 
     private static IOptionsMonitor<OpenRouterClient.Options> OpenRouter(string apiKey, string baseUrl) =>
@@ -449,8 +516,18 @@ public class CallPipelineTests
             return Task.FromResult<List<TranscriptSegment>>([new() { Start = 1, End = 300, Text = text }, new() { Start = 300, End = 590, Text = text }]);
         }
 
+        /// <summary>
+        /// Fails this path once, as a throttled provider would.
+        /// </summary>
+        public string? FailOnce { get; set; }
+
         public Task<List<TranscriptWord>> TranscribeWordsAsync(string audioPath, CancellationToken cancellationToken)
         {
+            if (audioPath == FailOnce)
+            {
+                FailOnce = null;
+                throw new HttpRequestException("Transcription failed (429)");
+            }
             Transcribed.Add(audioPath);
             string text = audioPath.StartsWith("partner", StringComparison.Ordinal)
                 ? "最近どう？"
@@ -539,6 +616,33 @@ public class CallPipelineTests
         JapaneseDiagnosis diagnosis = fixture.Diagnoses.Items.Single();
         Assert.Single(diagnosis.Snapshots);
         Assert.Contains(diagnosis.Issues, i => i.Category == IssueCategory.CrutchWord && i.Pattern == "なんか");
+    }
+
+    [Fact]
+    public async Task Run_AFailedPassDoesNotPayForTheFinishedPassesAgainAndRetryResumes()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        CallJob job = await fixture.Queue();
+        fixture.Transcriber.FailOnce = "mix/p1";
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => fixture.Pipeline.RunAsync(job, CancellationToken.None));
+        for (int i = 0; i < CallJob.MaxAttempts; i++)
+        {
+            await fixture.Pipeline.FailAttemptAsync(job, new HttpRequestException("429"));
+        }
+        Assert.Equal(CallJobStatus.Failed, job.Status);
+        Assert.Equal(1, job.TranscribedParts);
+
+        Assert.True(CallJobs.Requeue(job));
+        Assert.Equal((CallJobStatus.Transcribing, 0, string.Empty), (job.Status, job.Attempts, job.Error));
+        Assert.False(CallJobs.Requeue(job));
+
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+
+        Assert.Equal(CallJobStatus.Completed, job.Status);
+        // Part 1's two channel passes were kept on disk; only its mix pass ran again
+        Assert.Equal(["learner/p0", "partner/p0", "mix/p0", "learner/p1", "partner/p1", "mix/p1"], fixture.Transcriber.Transcribed);
     }
 
     [Fact]

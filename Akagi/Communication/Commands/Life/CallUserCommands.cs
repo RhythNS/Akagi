@@ -61,12 +61,33 @@ internal class CallsCommand : TextCommand
 {
     public override string Name => "/calls";
 
-    public override string Description => "Lists your analyzed calls, or shows one report. Usage: /calls [id]";
+    public override string Description => "Lists your analyzed calls, shows one report, or retries a failed call. Usage: /calls [id] | /calls retry <id>";
 
     public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
         List<CallJob> jobs = [.. (await context.DatabaseFactory.GetDatabase<ICallJobDatabase>().GetForUser(context.User.Id!))
             .OrderByDescending(j => j.CreatedAt)];
+
+        if (args.Length > 0 && string.Equals(args[0], "retry", StringComparison.OrdinalIgnoreCase))
+        {
+            CallJob? failed = args.Length > 1 ? Find(jobs, args[1]) : null;
+            string reply;
+            if (failed == null)
+            {
+                reply = args.Length > 1 ? $"No call with id '{args[1]}'." : "Which call? Usage: /calls retry <id>";
+            }
+            else if (CallJobs.Requeue(failed))
+            {
+                await context.DatabaseFactory.GetDatabase<ICallJobDatabase>().SaveDocumentAsync(failed);
+                reply = $"[{failed.ShortId}] is queued again and continues where it stopped.";
+            }
+            else
+            {
+                reply = $"[{failed.ShortId}] has not failed: {CallAnalysisPipeline.DescribeProgress(failed)}";
+            }
+            await Communicator.SendMessage(context.User, reply);
+            return CommandResult.Ok;
+        }
 
         if (args.Length > 0)
         {
@@ -83,4 +104,7 @@ internal class CallsCommand : TextCommand
             : string.Join(Environment.NewLine, jobs.Take(15).Select(CallAnalysisPipeline.DescribeProgress)));
         return CommandResult.Ok;
     }
+
+    private static CallJob? Find(IEnumerable<CallJob> jobs, string id) =>
+        jobs.FirstOrDefault(j => string.Equals(j.ShortId, id.Trim('[', ']'), StringComparison.OrdinalIgnoreCase));
 }

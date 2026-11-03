@@ -136,6 +136,24 @@ internal static partial class CallJobs
             .FirstOrDefault();
 
     /// <summary>
+    /// Gives a failed job its attempts back. It resumes at the step it stopped in; finished parts, passes and chunks are
+    /// not paid for again.
+    /// </summary>
+    public static bool Requeue(CallJob job)
+    {
+        if (job.Status != CallJobStatus.Failed)
+        {
+            return false;
+        }
+        job.Attempts = 0;
+        job.Error = string.Empty;
+        job.Status = job.Chunks.Count == 0 ? CallJobStatus.Transcribing
+            : job.Chunks.All(c => c.Analyzed) ? CallJobStatus.Reporting
+            : CallJobStatus.Analyzing;
+        return true;
+    }
+
+    /// <summary>
     /// The system message that asks the companion to share the result in her own voice.
     /// </summary>
     public static string BuildDeliveryInstruction(CallJob job)
