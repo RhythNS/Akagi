@@ -25,6 +25,11 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         public required string ApiKey { init; get; }
         public required string BaseUrl { init; get; }
         public required string ResponsePath { init; get; }
+        /// <summary>
+        /// How long a non-streaming request may take. Reasoning models reviewing a long text need minutes, more than
+        /// HttpClient's default of 100 seconds.
+        /// </summary>
+        public int RequestTimeoutSeconds { init; get; } = 300;
     }
 
     private readonly Options _options;
@@ -387,7 +392,8 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
 
     public override async Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context)
     {
-        using HttpClient httpClient = new();
+        TimeSpan timeout = TimeSpan.FromSeconds(Math.Max(10, _options.RequestTimeoutSeconds));
+        using HttpClient httpClient = new() { Timeout = timeout };
 
         if (string.IsNullOrEmpty(_options.ApiKey))
         {
@@ -406,8 +412,18 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         request.Headers.TryAddWithoutValidation("Content-Type", "application/json");
         request.Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json");
 
-        _logger.LogDebug("Sending request to OpenRouter using model {Model}", Model);
-        HttpResponseMessage response = await httpClient.SendAsync(request);
+        string model = Model;
+        _logger.LogDebug("Sending request to OpenRouter using model {Model}", model);
+        HttpResponseMessage response;
+        try
+        {
+            response = await httpClient.SendAsync(request);
+        }
+        catch (TaskCanceledException ex)
+        {
+            // Nothing else cancels this request; callers must not mistake it for a shutdown
+            throw new TimeoutException($"OpenRouter did not answer within {timeout.TotalSeconds:0} seconds (model {model}).", ex);
+        }
         if (response.IsSuccessStatusCode == false)
         {
             throw new Exception($"Request failed with status code {response.StatusCode}: {await response.Content.ReadAsStringAsync()}");

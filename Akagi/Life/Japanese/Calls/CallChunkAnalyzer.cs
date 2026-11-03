@@ -100,6 +100,7 @@ internal class ToolCallChunkAnalyzer : ICallChunkAnalyzer
         // One request holding every finding: Gemini 3 models reject a replayed tool call unless its reasoning details are
         // sent back, which conversations do not store, so this must not continue a tool exchange
         ILLM llm = await _llmFactory.Create(user, processor.SpecificLLM, processor.Usage);
+        _logger.LogInformation("Call {JobId}: chunk {Chunk} goes to {Character} on the {Usage} model", job.Id, chunk.Index + 1, character.Name, processor.Usage);
         Command[] calls = await llm.GetNextSteps(processor, context);
         if (calls.Length == 0)
         {

@@ -44,6 +44,8 @@ internal class CallAnalysisPipeline
 
     public async Task RunAsync(CallJob job, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Call {JobId}: working on {Title} ({Status}, attempt {Attempt} of {MaxAttempts})",
+            job.Id, job.Title, job.Status, job.Attempts + 1, CallJob.MaxAttempts);
         if (job.Status is CallJobStatus.Queued or CallJobStatus.Transcribing)
         {
             await TranscribeAsync(job, cancellationToken);
@@ -108,6 +110,8 @@ internal class CallAnalysisPipeline
         job.Chunks = TranscriptChunker.Chunk(job.Segments, Math.Max(500, _options.ChunkCharacters));
         job.Status = CallJobStatus.Analyzing;
         await SaveAsync(job);
+        _logger.LogInformation("Call {JobId}: transcript has {Lines} lines, {Characters} characters, cut into {Chunks} chunks for analysis",
+            job.Id, job.Segments.Count, job.Chunks.Sum(c => c.Text.Length), job.Chunks.Count);
     }
 
     private TimeSpan PartLength => TimeSpan.FromMinutes(Math.Max(1, _options.PartMinutes));
@@ -140,6 +144,8 @@ internal class CallAnalysisPipeline
         IReadOnlyList<AudioPart> mixParts = await _splitter.SplitBalancedAsync(job.SourcePath, PartLength, Path.Combine(work, "mix"), cancellationToken);
 
         int count = Math.Min(learnerParts.Count, Math.Min(partnerParts.Count, mixParts.Count));
+        _logger.LogInformation("Call {JobId}: split into {Parts} parts of {Minutes} minutes, three passes each; {Done} already transcribed",
+            job.Id, count, PartLength.TotalMinutes, job.TranscribedParts);
         for (int i = job.TranscribedParts; i < count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -199,14 +205,19 @@ internal class CallAnalysisPipeline
 
     private async Task AnalyzeAsync(CallJob job, CancellationToken cancellationToken)
     {
+        _logger.LogInformation("Call {JobId}: analyzing {Pending} of {Chunks} chunks", job.Id, job.Chunks.Count(c => !c.Analyzed), job.Chunks.Count);
         foreach (CallChunk chunk in job.Chunks.Where(c => !c.Analyzed))
         {
             cancellationToken.ThrowIfCancellationRequested();
+            System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+            _logger.LogInformation("Call {JobId}: analyzing chunk {Chunk}/{Chunks} ({Characters} characters)...",
+                job.Id, chunk.Index + 1, job.Chunks.Count, chunk.Text.Length);
             chunk.IssuesRecorded = await _analyzer.AnalyzeAsync(job, chunk, cancellationToken);
             chunk.Analyzed = true;
             job.Dirty = true;
             await SaveAsync(job);
-            _logger.LogInformation("Call {JobId}: analyzed chunk {Chunk}/{Chunks}, {Issues} issue(s)", job.Id, chunk.Index + 1, job.Chunks.Count, chunk.IssuesRecorded);
+            _logger.LogInformation("Call {JobId}: analyzed chunk {Chunk}/{Chunks} in {Seconds:0}s, {Issues} issue(s)",
+                job.Id, chunk.Index + 1, job.Chunks.Count, watch.Elapsed.TotalSeconds, chunk.IssuesRecorded);
         }
 
         job.Status = CallJobStatus.Reporting;
@@ -237,12 +248,14 @@ internal class CallAnalysisPipeline
         job.Status = CallJobStatus.Completed;
         job.Error = string.Empty;
         await SaveAsync(job);
+        _logger.LogInformation("Call {JobId}: report written, {Issues} issue(s) in total; delivering it", job.Id, job.Chunks.Sum(c => c.IssuesRecorded));
 
         try
         {
             await _deliver(job);
             job.Delivered = true;
             await SaveAsync(job);
+            _logger.LogInformation("Call {JobId}: done and delivered", job.Id);
         }
         catch (Exception ex)
         {

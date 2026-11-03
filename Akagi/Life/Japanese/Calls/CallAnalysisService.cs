@@ -43,12 +43,13 @@ internal class CallAnalysisService : BackgroundService
                 await ScanInboxAsync(stoppingToken);
                 await ProcessNextAsync(stoppingToken);
             }
-            catch (OperationCanceledException)
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 break;
             }
             catch (Exception ex)
             {
+                // Also an OperationCanceledException that is not the shutdown, such as an HTTP timeout: the loop goes on
                 _logger.LogError(ex, "Call analysis tick failed");
             }
         }
@@ -68,12 +69,13 @@ internal class CallAnalysisService : BackgroundService
         {
             await pipeline.RunAsync(job, cancellationToken);
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
         }
         catch (Exception ex)
         {
+            // A timed out request is a TaskCanceledException; it is a failed attempt, not the shutdown
             _logger.LogError(ex, "Call {JobId} failed (attempt {Attempt})", job.Id, job.Attempts + 1);
             await pipeline.FailAttemptAsync(job, ex);
         }
