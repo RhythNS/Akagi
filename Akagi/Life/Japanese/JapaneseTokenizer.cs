@@ -24,6 +24,18 @@ internal enum WordClass
 internal readonly record struct JapaneseToken(string Surface, string Lemma, string Reading, WordClass? Class);
 
 /// <summary>
+/// A token with MeCab's grammar fields: part of speech and its first two sub-types (名詞 / 固有名詞 / 人名), the
+/// conjugation type (五段・カ行イ音便) and the conjugated form (連用タ接続).
+/// </summary>
+internal readonly record struct DetailedToken(string Surface, string Lemma, string Reading, WordClass? Class,
+    string Pos, string Pos1, string Pos2, string ConjugationType, string ConjugatedForm)
+{
+    public bool IsPunctuation => Pos == "記号";
+    public bool IsFiller => Pos == "フィラー";
+    public bool IsProperNoun => Pos == "名詞" && Pos1 == "固有名詞";
+}
+
+/// <summary>
 /// Splits Japanese into words with MeCab (NMeCab with the IPA dictionary): dictionary form, reading and word class.
 /// The dictionary is about 50 MB and loads once, on first use.
 /// </summary>
@@ -48,7 +60,10 @@ internal static class JapaneseTokenizer
     private static readonly object Gate = new();
     private static readonly ConcurrentDictionary<string, string> LemmaReadings = new();
 
-    public static List<JapaneseToken> Tokenize(string text)
+    public static List<JapaneseToken> Tokenize(string text) =>
+        [.. TokenizeDetailed(text).Select(t => new JapaneseToken(t.Surface, t.Lemma, t.Reading, t.Class))];
+
+    public static List<DetailedToken> TokenizeDetailed(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -62,24 +77,28 @@ internal static class JapaneseTokenizer
             nodes = Tagger.Value.Parse(text);
         }
 
-        List<JapaneseToken> tokens = new(nodes.Length);
+        List<DetailedToken> tokens = new(nodes.Length);
         foreach (MeCabIpaDicNode node in nodes)
         {
             if (string.IsNullOrEmpty(node.Surface))
             {
                 continue;
             }
-            string reading = string.IsNullOrEmpty(node.Reading) || node.Reading == "*" ? string.Empty : node.Reading;
+            string reading = Field(node.Reading);
             if (Exclamations.Contains(node.Surface))
             {
-                tokens.Add(new JapaneseToken(node.Surface, node.Surface, reading, WordClass.Interjection));
+                tokens.Add(new DetailedToken(node.Surface, node.Surface, reading, WordClass.Interjection, "感動詞", string.Empty, string.Empty, string.Empty, string.Empty));
                 continue;
             }
-            string lemma = string.IsNullOrEmpty(node.OriginalForm) || node.OriginalForm == "*" ? node.Surface : node.OriginalForm;
-            tokens.Add(new JapaneseToken(node.Surface, lemma, reading, Classify(node.PartsOfSpeech, node.PartsOfSpeechSection1, lemma)));
+            string lemma = Field(node.OriginalForm) is { Length: > 0 } original ? original : node.Surface;
+            tokens.Add(new DetailedToken(node.Surface, lemma, reading, Classify(node.PartsOfSpeech, node.PartsOfSpeechSection1, lemma),
+                Field(node.PartsOfSpeech), Field(node.PartsOfSpeechSection1), Field(node.PartsOfSpeechSection2),
+                Field(node.ConjugatedForm), Field(node.Inflection)));
         }
         return tokens;
     }
+
+    private static string Field(string? value) => string.IsNullOrEmpty(value) || value == "*" ? string.Empty : value;
 
     /// <summary>
     /// The reading of a dictionary form, in hiragana. Readings MeCab reports belong to the surface (忙しく), so the

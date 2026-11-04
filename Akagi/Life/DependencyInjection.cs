@@ -4,6 +4,7 @@ using Akagi.Characters.Routines;
 using Akagi.Characters.Upgrades;
 using Akagi.Life.Japanese;
 using Akagi.Life.Japanese.Calls;
+using Akagi.Life.Japanese.Vocabulary;
 using Akagi.Utils;
 using Akagi.Utils.Extensions;
 using Microsoft.Extensions.Configuration;
@@ -23,6 +24,9 @@ static class DependencyInjection
         services.AddSingleton<ICallJobDatabase, CallJobDatabase>();
         services.AddSingleton<IPersonProfileDatabase, PersonProfileDatabase>();
         services.AddSingleton<ICallMemory, CallMemory>();
+        services.AddSingleton<IWordDictionary, JmdictWordDictionary>();
+        services.AddSingleton<IVocabularyIndex, VocabularyIndex>();
+        Array.ForEach(TypeUtils.GetNonAbstractTypesExtendingFrom<VocabularyReport>(), type => services.AddSingleton(typeof(VocabularyReport), type));
         services.AddSingleton<IProactiveDelivery, ProactiveDelivery>();
         services.AddHostedService<RoutineService>();
 

@@ -16,6 +16,11 @@ internal class DesuConnector : IDesuConnector, ISystemInitializer
 {
     private static IJapaneseEntry[]? _entries;
 
+    /// <summary>
+    /// The parsed JMdict entries, once the background load at startup finished; null before that.
+    /// </summary>
+    internal static IReadOnlyList<IJapaneseEntry>? LoadedEntries => _entries;
+
     private readonly ILogger<DesuConnector> _logger;
 
     public DesuConnector(ILogger<DesuConnector> logger)
