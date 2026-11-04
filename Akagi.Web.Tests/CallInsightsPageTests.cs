@@ -73,7 +73,14 @@ public class CallInsightsPageTests : BunitContext
         ],
         HeardNotSaid = [new InsightWord { Lemma = "無理", Reading = "むり", Class = "AdjectivalNoun", Partner = 4 }],
         Struggles = [new InsightStruggle { IssueId = "i1", Category = "Register", Pattern = "too polite with friends", Times = 7, Calls = 2, Severity = 2, LastSeen = new DateTime(2026, 10, 27, 0, 0, 0, DateTimeKind.Utc), CorrectUses = 2,
-            Example = new CallFindingView { Said = "楽しかったです", Better = "楽しかった" } }],
+            Example = new CallFindingView { Said = "楽しかったです", Better = "楽しかった" },
+            Occurrences =
+            [
+                new InsightOccurrence { CallId = "b", CallName = "Call with Ken", Date = new DateTime(2026, 10, 27, 0, 0, 0, DateTimeKind.Utc),
+                    Finding = new CallFindingView { Id = "f2", Said = "楽しかったです", Better = "楽しかった", Explanation = "Friends drop です.", Time = 95 } },
+                new InsightOccurrence { CallId = "a", CallName = "Call with Yuki", Date = new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc),
+                    Finding = new CallFindingView { Id = "f1", Said = "行きます", Better = "行く" } }
+            ] }],
         Phrases = [new InsightPhrase { Phrase = "無理しないでね", Meaning = "take it easy", CallId = "a", CallName = "Call with Yuki", Date = new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc) }]
     };
 
@@ -118,6 +125,31 @@ public class CallInsightsPageTests : BunitContext
 
         cut.Find("[data-trend='Fillers per 100 characters'] [data-point='b']").Click();
         Assert.EndsWith("/Learn/Calls/b", Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().Uri);
+    }
+
+    [Fact]
+    public void AStruggle_OpensToEveryTimeAndItsCorrection()
+    {
+        Services.AddSingleton<ISocketClientContainer>(new Sockets { Client = _client });
+        IRenderedComponent<CallInsightsPage> cut = Render<CallInsightsPage>();
+        Respond(new CallAnalysisResponseTransmission { Insights = Insights() });
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-struggle-toggle]")));
+        Assert.Empty(cut.FindAll("[data-occurrence]"));
+
+        cut.Find("[data-struggle-toggle='i1']").Click();
+
+        Assert.Equal(["f2", "f1"], cut.FindAll("[data-occurrence]").Select(e => e.GetAttribute("data-occurrence")));
+        Assert.Equal(["b", "a"], cut.FindAll("[data-occurrence-call]").Select(e => e.GetAttribute("data-occurrence-call")));
+        string newest = cut.Find("[data-occurrence='f2']").TextContent;
+        Assert.Contains("楽しかった", newest);
+        Assert.Contains("Friends drop です.", newest);
+        Assert.Equal("Learn/Calls/b?at=95", cut.Find("[data-occurrence='f2'] a").GetAttribute("href"));
+        Assert.Contains("行く", cut.Find("[data-occurrence='f1']").TextContent);
+        Assert.Equal("true", cut.Find("[data-struggle-toggle='i1']").GetAttribute("aria-expanded"));
+
+        cut.Find("[data-struggle-toggle='i1']").Click();
+
+        Assert.Empty(cut.FindAll("[data-occurrence]"));
     }
 
     [Fact]

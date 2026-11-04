@@ -217,6 +217,10 @@ public class CallAnalysisSocketTests
         Assert.DoesNotContain(insights.HeardNotSaid, w => w.Lemma == "仕事");
         InsightStruggle struggle = Assert.Single(insights.Struggles);
         Assert.Equal((2, 1), (struggle.Times, struggle.Calls));
+        Assert.Equal(struggle.Times, struggle.Occurrences.Length);
+        Assert.All(struggle.Occurrences, o => Assert.Equal((first.Id, "Call with Yuki"), (o.CallId, o.CallName)));
+        Assert.All(struggle.Occurrences, o => Assert.False(string.IsNullOrEmpty(o.Finding.Better)));
+        Assert.Equal(["すごく忙しいです", "毎日残業です"], struggle.Occurrences.Select(o => o.Finding.Said).Order(StringComparer.Ordinal));
         Assert.Equal("無理しないでね", Assert.Single(insights.Phrases).Phrase);
     }
 

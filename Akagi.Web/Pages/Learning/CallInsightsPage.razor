@@ -196,28 +196,96 @@ else
 		else
 		{
 			<div class="list-group list-group-flush" data-insight-struggles>
-				@foreach (InsightStruggle struggle in insights.Struggles)
+				@for (int index = 0; index < insights.Struggles.Length; index++)
 				{
-					<div class="list-group-item">
-						<div class="d-flex flex-wrap align-items-center gap-1 mb-1">
-							<span class="badge bg-purple-lt">@struggle.Category</span>
-							<span class="badge @CallText.SeverityClass(struggle.Severity)">@CallText.SeverityLabel(struggle.Severity)</span>
-							@if (struggle.Status is { Length: > 0 } status && status != "active")
-							{
-								<span class="badge @CallText.StatusClass(status)">@status</span>
-							}
-							<span class="ms-auto text-secondary small">
-								@struggle.Times&times; in @struggle.Calls call@(struggle.Calls == 1 ? "" : "s")@(struggle.CorrectUses > 0 ? $", right {struggle.CorrectUses}×" : ""), last @struggle.LastSeen.ToLocalTime().ToString("d")
-							</span>
-						</div>
-						<div class="fw-medium" lang="ja">@struggle.Pattern</div>
-						@if (struggle.Example is CallFindingView example && !string.IsNullOrWhiteSpace(example.Said))
-						{
-							<div class="small" lang="ja">
-								<span class="text-danger">@example.Said</span>
-								@if (!string.IsNullOrWhiteSpace(example.Better))
+					InsightStruggle struggle = insights.Struggles[index];
+					string key = StruggleKey(struggle, index);
+					bool open = _openStruggles.Contains(key);
+					<div class="list-group-item p-0" data-struggle="@key">
+						<div class="list-group-item-action px-3 py-2" role="button" tabindex="0" style="cursor: pointer;"
+							 aria-expanded="@(open ? "true" : "false")"
+							 title="@(open ? "Hide the times you made this mistake" : "Show every time you made this mistake")"
+							 data-struggle-toggle="@key"
+							 @onclick="() => Toggle(key)" @onkeydown="e => OnToggleKey(e, key)">
+							<div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+								<span class="badge bg-purple-lt">@struggle.Category</span>
+								<span class="badge @CallText.SeverityClass(struggle.Severity)">@CallText.SeverityLabel(struggle.Severity)</span>
+								@if (struggle.Status is { Length: > 0 } status && status != "active")
 								{
-									<span class="text-secondary mx-1">&rarr;</span><span class="text-success">@example.Better</span>
+									<span class="badge @CallText.StatusClass(status)">@status</span>
+								}
+								<span class="ms-auto text-secondary small">
+									@struggle.Times&times; in @struggle.Calls call@(struggle.Calls == 1 ? "" : "s")@(struggle.CorrectUses > 0 ? $", right {struggle.CorrectUses}×" : ""), last @struggle.LastSeen.ToLocalTime().ToString("d")
+								</span>
+								<span class="text-secondary d-inline-flex" style="transition: transform .15s; @(open ? "transform: rotate(180deg);" : "")">
+									<Icon IconType="@Icons.ChevronDown" Size="16" />
+								</span>
+							</div>
+							<div class="fw-medium" lang="ja">@struggle.Pattern</div>
+							@if (!open && struggle.Example is CallFindingView example && !string.IsNullOrWhiteSpace(example.Said))
+							{
+								<div class="small" lang="ja">
+									<span class="text-danger">@example.Said</span>
+									@if (!string.IsNullOrWhiteSpace(example.Better))
+									{
+										<span class="text-secondary mx-1">&rarr;</span><span class="text-success">@example.Better</span>
+									}
+								</div>
+							}
+						</div>
+						@if (open)
+						{
+							<div class="px-3 pb-3" data-struggle-occurrences="@key">
+								@if (struggle.Occurrences.Length == 0)
+								{
+									<div class="text-secondary small">No single times recorded for this struggle.</div>
+								}
+								@foreach (IGrouping<string, InsightOccurrence> call in struggle.Occurrences.GroupBy(o => o.CallId))
+								{
+									InsightOccurrence first = call.First();
+									<div class="mt-2" data-occurrence-call="@call.Key">
+										<div class="d-flex align-items-baseline gap-2 small">
+											<a class="fw-medium" href="@($"Learn/Calls/{call.Key}")">@first.CallName</a>
+											<span class="text-secondary">@first.Date.ToLocalTime().ToString("d")</span>
+											<span class="text-secondary ms-auto">@call.Count()&times;</span>
+										</div>
+										@foreach (InsightOccurrence occurrence in call)
+										{
+											CallFindingView finding = occurrence.Finding;
+											<div class="mt-1 ps-2 border-start border-2 small" data-occurrence="@finding.Id">
+												<div class="d-flex flex-wrap align-items-center gap-1">
+													@if (finding.Time is double time)
+													{
+														<a class="font-monospace text-decoration-none" href="@VocabText.CallUri(occurrence.CallId, time)" title="Show in the transcript">@CallText.Timestamp(time)</a>
+													}
+													@if (finding.Origin != "review")
+													{
+														<span class="badge bg-secondary-lt">@finding.Origin</span>
+													}
+													@if (CallText.QuoteLabel(finding.Quote) is { Length: > 0 } quote)
+													{
+														<span class="badge @CallText.QuoteClass(finding.Quote)" title="@CallText.QuoteTitle(finding.Quote)">@quote</span>
+													}
+													@if (finding.Feedback == CallFindingFeedback.Useful)
+													{
+														<span class="badge bg-green-lt">marked useful</span>
+													}
+												</div>
+												@if (!string.IsNullOrWhiteSpace(finding.Said))
+												{
+													<div lang="ja"><span class="text-secondary">Said:</span> <span class="text-danger">@finding.Said</span></div>
+												}
+												@if (!string.IsNullOrWhiteSpace(finding.Better))
+												{
+													<div lang="ja"><span class="text-secondary">Better:</span> <span class="text-success">@finding.Better</span></div>
+												}
+												@if (!string.IsNullOrWhiteSpace(finding.Explanation))
+												{
+													<div class="text-secondary">@finding.Explanation</div>
+												}
+											</div>
+										}
+									</div>
 								}
 							</div>
 						}
@@ -338,6 +406,29 @@ else
 	private bool _heard;
 	private string _class = CallText.ContentFilter;
 	private string _search = string.Empty;
+	private readonly HashSet<string> _openStruggles = [];
+
+	/// <summary>
+	/// Keeps a struggle open across refreshes; struggles the diagnosis no longer has fall back to their place in the list.
+	/// </summary>
+	private static string StruggleKey(InsightStruggle struggle, int index) =>
+		struggle.IssueId.Length > 0 ? struggle.IssueId : $"s{index}";
+
+	private void Toggle(string key)
+	{
+		if (!_openStruggles.Remove(key))
+		{
+			_openStruggles.Add(key);
+		}
+	}
+
+	private void OnToggleKey(KeyboardEventArgs e, string key)
+	{
+		if (e.Key is "Enter" or " ")
+		{
+			Toggle(key);
+		}
+	}
 
 	private double? AverageShare
 	{

@@ -373,7 +373,18 @@ internal static partial class CallAnalysisViews
                     Status = issue?.Status.ToString().ToLowerInvariant() ?? string.Empty,
                     LastSeen = group.Max(m => Date(m.Job)),
                     Example = View(example, diagnosis),
-                    CorrectUses = issue != null && correct.TryGetValue(issue.Id, out int right) ? right : 0
+                    CorrectUses = issue != null && correct.TryGetValue(issue.Id, out int right) ? right : 0,
+                    Occurrences = [.. group
+                        .OrderByDescending(m => Date(m.Job))
+                        .ThenByDescending(m => m.Job.CreatedAt)
+                        .ThenBy(m => m.Finding.Time ?? double.MaxValue)
+                        .Select(m => new InsightOccurrence
+                        {
+                            CallId = m.Job.Id!,
+                            CallName = Name(m.Job),
+                            Date = Date(m.Job),
+                            Finding = View(m.Finding, diagnosis)
+                        })]
                 };
             })
             .OrderByDescending(s => s.Severity * s.Times)

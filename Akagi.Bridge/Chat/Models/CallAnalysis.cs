@@ -626,6 +626,27 @@ public class InsightStruggle
     public CallFindingView? Example { get; set; }
     [Key(9)]
     public int CorrectUses { get; set; }
+    /// <summary>
+    /// Every time the mistake counted, newest call first and in call order within a call.
+    /// </summary>
+    [Key(10)]
+    public InsightOccurrence[] Occurrences { get; set; } = [];
+}
+
+/// <summary>
+/// One time a struggle showed up, with the call it was in.
+/// </summary>
+[MessagePackObject]
+public class InsightOccurrence
+{
+    [Key(0)]
+    public string CallId { get; set; } = string.Empty;
+    [Key(1)]
+    public string CallName { get; set; } = string.Empty;
+    [Key(2)]
+    public DateTime Date { get; set; }
+    [Key(3)]
+    public CallFindingView Finding { get; set; } = new();
 }
 
 [MessagePackObject]
