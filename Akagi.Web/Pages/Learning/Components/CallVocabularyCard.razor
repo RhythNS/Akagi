@@ -24,7 +24,8 @@
 				}
 			</div>
 			<select class="form-select form-select-sm w-auto" @bind="_class" aria-label="Word class">
-				<option value="">All word classes</option>
+				<option value="@CallText.ContentFilter">Content words</option>
+					<option value="">All words</option>
 				@foreach (string wordClass in CallText.WordClasses)
 				{
 					<option value="@wordClass">@CallText.ClassLabel(wordClass)</option>
@@ -114,7 +115,7 @@
 	public EventCallback<CallWordView> OnWord { get; set; }
 
 	private View _view;
-	private string _class = string.Empty;
+	private string _class = CallText.ContentFilter;
 	private string _search = string.Empty;
 	private bool _showAll;
 
@@ -127,7 +128,7 @@
 				View.HeardOnly => w.Learner == 0 && w.Partner > 0,
 				_ => w.Learner > 0
 			})
-			.Where(w => _class.Length == 0 || w.Class == _class)
+			.Where(w => CallText.MatchesClass(_class, w.Class))
 			.Where(w => _search.Length == 0 || w.Lemma.Contains(_search.Trim(), StringComparison.Ordinal)
 						|| w.Reading.Contains(_search.Trim(), StringComparison.Ordinal)
 						|| w.Surfaces.Any(s => s.Contains(_search.Trim(), StringComparison.Ordinal)))

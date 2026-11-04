@@ -32,7 +32,17 @@ internal static class JapaneseTokenizer
     /// <summary>
     /// Words too common to tell anything about someone's vocabulary.
     /// </summary>
-    private static readonly HashSet<string> LightWords = ["する", "ある", "いる", "なる", "れる", "られる", "せる", "させる", "くる", "いく", "おる"];
+    private static readonly HashSet<string> LightWords = ["する", "ある", "いる", "なる", "れる", "られる", "せる", "させる", "くる", "いく", "おる", "ない"];
+
+    /// <summary>
+    /// Spoken forms the dictionary misreads: a surprised えっ comes out as the verb える.
+    /// </summary>
+    private static readonly HashSet<string> Exclamations = ["えっ", "えー", "ええっ", "あっ", "おっ", "はっ"];
+
+    /// <summary>
+    /// The word classes that carry meaning, as opposed to back-channel words and grammar-like adnominals.
+    /// </summary>
+    public static readonly WordClass[] ContentClasses = [WordClass.Noun, WordClass.Verb, WordClass.Adjective, WordClass.AdjectivalNoun, WordClass.Adverb];
 
     private static readonly Lazy<MeCabIpaDicTagger> Tagger = new(() => MeCabIpaDicTagger.Create(), LazyThreadSafetyMode.ExecutionAndPublication);
     private static readonly object Gate = new();
@@ -59,8 +69,13 @@ internal static class JapaneseTokenizer
             {
                 continue;
             }
-            string lemma = string.IsNullOrEmpty(node.OriginalForm) || node.OriginalForm == "*" ? node.Surface : node.OriginalForm;
             string reading = string.IsNullOrEmpty(node.Reading) || node.Reading == "*" ? string.Empty : node.Reading;
+            if (Exclamations.Contains(node.Surface))
+            {
+                tokens.Add(new JapaneseToken(node.Surface, node.Surface, reading, WordClass.Interjection));
+                continue;
+            }
+            string lemma = string.IsNullOrEmpty(node.OriginalForm) || node.OriginalForm == "*" ? node.Surface : node.OriginalForm;
             tokens.Add(new JapaneseToken(node.Surface, lemma, reading, Classify(node.PartsOfSpeech, node.PartsOfSpeechSection1, lemma)));
         }
         return tokens;

@@ -231,7 +231,8 @@ else
 					<button type="button" class="btn @(_heard ? "btn-primary" : "btn-outline-primary")" data-insight-view="heard" @onclick="() => _heard = true">Heard, not said</button>
 				</div>
 				<select class="form-select form-select-sm w-auto" @bind="_class" aria-label="Word class">
-					<option value="">All word classes</option>
+					<option value="@CallText.ContentFilter">Content words</option>
+					<option value="">All words</option>
 					@foreach (string wordClass in CallText.WordClasses)
 					{
 						<option value="@wordClass">@CallText.ClassLabel(wordClass)</option>
@@ -329,7 +330,7 @@ else
 	private bool _loading = true;
 	private string? _error;
 	private bool _heard;
-	private string _class = string.Empty;
+	private string _class = CallText.ContentFilter;
 	private string _search = string.Empty;
 
 	private double? AverageShare
@@ -345,7 +346,7 @@ else
 	private List<InsightWord> ShownWords =>
 	[
 		.. (_heard ? _insights!.HeardNotSaid : _insights!.Words)
-			.Where(w => _class.Length == 0 || w.Class == _class)
+			.Where(w => CallText.MatchesClass(_class, w.Class))
 			.Where(w => _search.Trim().Length == 0 || w.Lemma.Contains(_search.Trim(), StringComparison.Ordinal) || w.Reading.Contains(_search.Trim(), StringComparison.Ordinal))
 	];
 

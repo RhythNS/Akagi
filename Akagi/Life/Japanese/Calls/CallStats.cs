@@ -32,7 +32,10 @@ internal class CallWord
 /// </summary>
 internal class CallStats
 {
-    public const int CurrentVersion = 1;
+    /// <summary>
+    /// Raised whenever the measuring changes; stored statistics of an older version are computed again.
+    /// </summary>
+    public const int CurrentVersion = 2;
     public const double WindowSeconds = 300;
     public const double LongPauseSeconds = 2.0;
     /// <summary>

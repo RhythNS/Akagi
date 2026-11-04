@@ -450,7 +450,7 @@ internal class CallAnalysisPipeline
                 string response = stats.MedianResponseSeconds is double median ? $", answered after {median.ToString("0.0", CultureInfo.InvariantCulture)}s (median)" : string.Empty;
                 text.AppendLine($"Conversation: the learner spoke {share.ToString("P0", CultureInfo.InvariantCulture)} of the time in {stats.LearnerTurns} turns{response}, {stats.LongPauses} long pause(s) mid-turn.");
             }
-            List<CallWord> top = [.. stats.Words.Where(w => w.Learner > 0 && w.Class is not WordClass.Interjection).OrderByDescending(w => w.Learner).Take(8)];
+            List<CallWord> top = [.. stats.Words.Where(w => w.Learner > 0 && JapaneseTokenizer.ContentClasses.Contains(w.Class)).OrderByDescending(w => w.Learner).Take(8)];
             if (top.Count > 0)
             {
                 text.AppendLine($"Vocabulary: {stats.LearnerDistinct} different words; most used: {string.Join(", ", top.Select(w => $"{w.Lemma} {w.Learner}x"))}.");

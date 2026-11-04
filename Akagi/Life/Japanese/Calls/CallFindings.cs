@@ -120,7 +120,7 @@ internal class CallReview
 /// <summary>
 /// Finds quoted words in the transcript, so a finding about words nobody said, or the partner's words, does not count.
 /// </summary>
-internal static class CallQuotes
+internal static partial class CallQuotes
 {
     /// <summary>
     /// Share of a quote that must appear in one piece for an approximate match.
@@ -139,6 +139,19 @@ internal static class CallQuotes
         // A phrase is the partner's; everything else is about the learner's own words
         bool wantLearner = finding.Kind != FindingKind.Phrase;
         (QuoteCheck check, TranscriptSegment? segment) = Locate(job, finding.Said, wantLearner, finding.ChunkIndex);
+        if (check == QuoteCheck.NotFound && Pieces(finding.Said) is { Count: > 1 } pieces)
+        {
+            // A quote of several lines ("Me: ちかわ。 / Rii: ちーかわ") counts when one of its pieces is the learner's
+            foreach (string piece in pieces)
+            {
+                (QuoteCheck part, TranscriptSegment? partSegment) = Locate(job, piece, wantLearner, finding.ChunkIndex);
+                if (part is QuoteCheck.Found or QuoteCheck.Approximate or QuoteCheck.Disputed)
+                {
+                    (check, segment) = (part == QuoteCheck.Disputed ? QuoteCheck.Disputed : QuoteCheck.Approximate, partSegment);
+                    break;
+                }
+            }
+        }
         if (check is QuoteCheck.NotFound)
         {
             (QuoteCheck other, TranscriptSegment? otherSegment) = Locate(job, finding.Said, !wantLearner, finding.ChunkIndex);
@@ -171,6 +184,19 @@ internal static class CallQuotes
         }
         return true;
     }
+
+    /// <summary>
+    /// The lines of a quote that strings several together, without speaker labels, longest first.
+    /// </summary>
+    internal static List<string> Pieces(string quote) =>
+        [.. SpeakerLabel().Split(quote)
+            .SelectMany(p => p.Split(['/', '\n', '（', '）', '(', ')'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(p => SpeakerLabel().Replace(p, string.Empty).Trim())
+            .Where(p => Normalize(p).Length >= 2)
+            .OrderByDescending(p => Normalize(p).Length)];
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"(?:^|\s)[\p{L}\p{N}]{1,12}[:：]\s*")]
+    private static partial System.Text.RegularExpressions.Regex SpeakerLabel();
 
     internal static (QuoteCheck Check, TranscriptSegment? Segment) Locate(CallJob job, string quote, bool learner, int chunkIndex)
     {

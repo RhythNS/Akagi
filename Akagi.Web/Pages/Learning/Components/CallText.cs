@@ -104,6 +104,19 @@ public static class CallText
         _ => wordClass.ToLowerInvariant()
     };
 
+    /// <summary>
+    /// The default word filter: words that carry meaning, without back-channel words such as うん and はい.
+    /// </summary>
+    public const string ContentFilter = "Content";
+
+    private static readonly string[] ContentClasses = ["Noun", "Verb", "Adjective", "AdjectivalNoun", "Adverb"];
+
+    /// <summary>
+    /// Whether a word of <paramref name="wordClass"/> passes the filter: empty for all, <see cref="ContentFilter"/>, or one class.
+    /// </summary>
+    public static bool MatchesClass(string filter, string wordClass) =>
+        filter.Length == 0 || (filter == ContentFilter ? ContentClasses.Contains(wordClass) : wordClass == filter);
+
     public static readonly string[] WordClasses = ["Noun", "Verb", "Adjective", "AdjectivalNoun", "Adverb", "Adnominal", "Conjunction", "Interjection"];
 
     public static string Seconds(double seconds) => seconds.ToString(seconds < 10 ? "0.0" : "0", CultureInfo.InvariantCulture) + " s";

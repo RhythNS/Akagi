@@ -83,6 +83,17 @@ public class CallQuoteTests
     }
 
     [Fact]
+    public void AQuoteOfSeveralLines_CountsWhenTheLearnersLineIsInIt()
+    {
+        CallFinding finding = Check(TwoVoices(), "Me: ちかわ見ました。 / Yuki: ちいかわのこと？");
+
+        Assert.Equal(QuoteCheck.Disputed, finding.Quote);
+        Assert.Equal(16, finding.Time);
+        Assert.Equal(QuoteCheck.Approximate, Check(TwoVoices(), "Me: でも、週末は休みます。\nYuki: 本当？").Quote);
+        Assert.Equal(["でも、週末は休みます。", "本当？"], CallQuotes.Pieces("Me: でも、週末は休みます。\nYuki: 本当？"));
+    }
+
+    [Fact]
     public void WithoutSeparateVoices_EveryLineMayBeTheLearners()
     {
         CallJob job = TwoVoices();
@@ -196,6 +207,17 @@ public class CallStatsTests
         Assert.Null(tokens.Single(t => t.Surface == "が").Class);
         Assert.Null(tokens.Single(t => t.Surface == "えーと").Class);
         Assert.Equal("いそがしい", JapaneseTokenizer.ReadingOf("忙しい"));
+    }
+
+    [Fact]
+    public void Tokenizer_ReadsASurprisedEhAsAnInterjection_AndSkipsNai()
+    {
+        List<JapaneseToken> tokens = JapaneseTokenizer.Tokenize("えっ、そうなの？時間がない。");
+
+        JapaneseToken eh = tokens.Single(t => t.Surface == "えっ");
+        Assert.Equal(("えっ", WordClass.Interjection), (eh.Lemma, eh.Class));
+        Assert.DoesNotContain(tokens, t => t.Lemma == "える");
+        Assert.Null(tokens.Single(t => t.Surface == "ない").Class);
     }
 
     [Fact]
