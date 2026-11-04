@@ -12,7 +12,7 @@ using MongoDB.Bson;
 namespace Akagi.Tests.Life;
 
 /// <summary>
-/// What the website's call analysis page gets from the server.
+/// What the website's call analysis pages get from the server.
 /// </summary>
 public class CallAnalysisSocketTests
 {
@@ -28,7 +28,7 @@ public class CallAnalysisSocketTests
         _handler = new CallAnalysisRequestHandler(_jobs, _diagnoses, NullLogger<CallAnalysisRequestHandler>.Instance);
     }
 
-    private CallJob AddJob(string userId, string partner, DateTime recordedAt, CallJobStatus status = CallJobStatus.Completed)
+    private CallJob AddJob(string userId, string partner, DateTime recordedAt, CallJobStatus status = CallJobStatus.Completed, string learnerText = "えーと、仕事がすごく忙しいです。えーと、毎日残業です。")
     {
         CallJob job = new()
         {
@@ -45,21 +45,46 @@ public class CallAnalysisSocketTests
             Report = "Call analysis: done.",
             Segments =
             [
-                new TranscriptSegment { Start = 0, End = 4, Speaker = partner, Text = "最近どう？" },
-                new TranscriptSegment { Start = 5, End = 9, Speaker = "Me", Text = "えーと、仕事がすごく忙しいです。えーと、毎日残業です。", Disputed = "残業 -> 残業中" },
-                new TranscriptSegment { Start = 10, End = 14, Speaker = "Me", Text = "えーと、でも休むに越したことはないです。" }
+                new TranscriptSegment { Start = 0, End = 4, Speaker = partner, Text = "最近どう？仕事は大変？" },
+                new TranscriptSegment { Start = 5, End = 9, Speaker = "Me", Text = learnerText, Disputed = "残業 -> 残業中" },
+                new TranscriptSegment { Start = 10, End = 14, Speaker = "Me", Text = "えーと、でも休むに越したことはないです。" },
+                new TranscriptSegment { Start = 15, End = 17, Speaker = partner, Text = "無理しないでね。" }
             ],
-            Chunks = [new CallChunk { Index = 0, Analyzed = true, IssuesRecorded = 2 }]
+            Chunks = [new CallChunk { Index = 0, Start = 0, End = 17, Analyzed = true, IssuesRecorded = 2 }]
         };
         _jobs.SaveDocumentAsync(job).Wait();
         return job;
     }
 
-    private Task<CallAnalysisResponseTransmission> Send(CallAnalysisAction action, string callId = "", string userId = UserId) =>
-        _handler.ProcessAsync(userId, new CallAnalysisRequestTransmission { RequestId = "r1", Action = action, CallId = callId });
+    private Task<CallAnalysisResponseTransmission> Send(CallAnalysisAction action, string callId = "", string userId = UserId,
+        string findingId = "", CallFindingFeedback feedback = CallFindingFeedback.None) =>
+        _handler.ProcessAsync(userId, new CallAnalysisRequestTransmission { RequestId = "r1", Action = action, CallId = callId, FindingId = findingId, Feedback = feedback });
+
+    /// <summary>
+    /// A call analyzed the current way: findings on the call, counted in the diagnosis.
+    /// </summary>
+    private async Task<(CallJob Job, JapaneseDiagnosis Diagnosis)> Analyzed()
+    {
+        CallJob job = AddJob(UserId, "Yuki", new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc));
+        JapaneseDiagnosis diagnosis = new() { UserId = UserId };
+        job.Review = new CallReview { Summary = "Lively call.", Priorities = ["Casual endings"] };
+        CallFinding first = new() { Kind = FindingKind.Mistake, Category = IssueCategory.UnnaturalPhrasing, Pattern = "すごく忙しい", Said = "すごく忙しいです", Better = "めっちゃ忙しい", Explanation = "Stiff.", Severity = 3, State = FindingState.Kept, Time = 5, Quote = QuoteCheck.Found };
+        CallFinding second = new() { Kind = FindingKind.Mistake, Category = IssueCategory.UnnaturalPhrasing, Pattern = "すごく忙しい", Said = "毎日残業です", Better = "毎日残業", Severity = 2, State = FindingState.Kept, Time = 5, Quote = QuoteCheck.Disputed };
+        CallFinding dropped = new() { Kind = FindingKind.Mistake, Category = IssueCategory.Particle, Pattern = "は vs が", Said = "仕事が", State = FindingState.Dropped, Note = "natives say this too" };
+        CallFinding phrase = new() { Kind = FindingKind.Phrase, Said = "無理しないでね", Better = "take it easy", State = FindingState.Kept, Time = 15 };
+        CallFinding strength = new() { Kind = FindingKind.Strength, Pattern = "uses ～に越したことはない", Said = "休むに越したことはない", State = FindingState.Kept };
+        job.Findings = [first, second, dropped, phrase, strength];
+        foreach (CallFinding finding in job.Findings)
+        {
+            CallDiagnosis.Apply(diagnosis, job, finding, DateTime.UtcNow);
+        }
+        await _diagnoses.SaveDocumentAsync(diagnosis);
+        await _jobs.SaveDocumentAsync(job);
+        return (job, diagnosis);
+    }
 
     [Fact]
-    public async Task List_ShowsOnlyTheUsersCalls_NewestFirst()
+    public async Task List_ShowsOnlyTheUsersCalls_NewestFirst_WithTheirSpeakingShare()
     {
         CallJob older = AddJob(UserId, "Yuki", new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc));
         CallJob newer = AddJob(UserId, "Ken", new DateTime(2026, 10, 27, 0, 0, 0, DateTimeKind.Utc), CallJobStatus.Analyzing);
@@ -70,43 +95,112 @@ public class CallAnalysisSocketTests
         Assert.Equal("r1", response.RequestId);
         Assert.Equal([newer.Id, older.Id], response.Calls.Select(c => c.Id));
         Assert.Equal(CallAnalysisState.Analyzing, response.Calls[0].State);
-        Assert.Equal(2, response.Calls[1].IssueCount);
-        Assert.Equal(14, response.Calls[1].DurationSeconds);
+        Assert.Equal(17, response.Calls[1].DurationSeconds);
+        Assert.Equal(8.0 / 14.0, response.Calls[1].LearnerShare!.Value, 3);
+        // Statistics are computed once and kept, but only on finished calls; a running one belongs to the pipeline
+        Assert.NotNull(_jobs.Items.Single(j => j.Id == older.Id).Stats);
     }
 
     [Fact]
-    public async Task Detail_GathersStrugglesSpeechAndTranscriptOfThatCall()
+    public async Task Detail_ShowsTheCallsOwnFindings_GroupedByIssue()
     {
-        CallJob job = AddJob(UserId, "Yuki", new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc));
-        JapaneseDiagnosis diagnosis = new() { UserId = UserId };
-        DateTime during = job.CreatedAt.AddMinutes(30);
-        diagnosis.RecordIssue(IssueCategory.UnnaturalPhrasing, "すごく忙しい", "Sounds stiff here.",
-            new IssueExample { Said = "すごく忙しいです", Better = "めっちゃ忙しい", Source = job.SourceLabel }, 3, during);
-        diagnosis.RecordIssue(IssueCategory.Particle, "に vs で", "Place of action takes で.",
-            new IssueExample { Said = "家に勉強する", Better = "家で勉強する", Source = "chat" }, 2, during);
-        diagnosis.RecordStrength("Natural back-channeling", during);
-        diagnosis.RecordStrength("Something from long ago", job.CreatedAt.AddDays(-5));
-        await _diagnoses.SaveDocumentAsync(diagnosis);
+        (CallJob job, JapaneseDiagnosis diagnosis) = await Analyzed();
 
         CallAnalysisDetail detail = (await Send(CallAnalysisAction.Detail, job.Id!)).Detail!;
 
         CallStruggle struggle = Assert.Single(detail.Struggles);
-        Assert.Equal("Unnatural phrasing", struggle.Category);
-        Assert.Equal("めっちゃ忙しい", Assert.Single(struggle.Examples).Better);
-        Assert.Equal(1, struggle.TimesInCall);
-        Assert.Equal(["Natural back-channeling"], detail.Strengths);
-        Assert.Equal("Call analysis: done.", detail.Report);
-        Assert.Equal("casual", detail.Register);
+        Assert.Equal(("Unnatural phrasing", "すごく忙しい", 3, 2, 2), (struggle.Category, struggle.Pattern, struggle.Severity, struggle.TimesInCall, struggle.TimesOverall));
+        Assert.Equal(diagnosis.Issues.Single(i => i.Pattern == "すごく忙しい").Id, struggle.IssueId);
+        Assert.Equal(CallQuoteState.Possibly, struggle.Findings[1].Quote);
+        Assert.Equal("natives say this too", Assert.Single(detail.FilteredOut).Note);
+        Assert.Equal("無理しないでね", Assert.Single(detail.Phrases).Said);
+        Assert.Equal("uses ～に越したことはない", Assert.Single(detail.Strengths).Pattern);
+        Assert.Equal(("Lively call.", "Casual endings"), (detail.ReviewSummary, detail.Priorities.Single()));
+        Assert.True(detail.CanGiveFeedback);
+        Assert.False(detail.Legacy);
 
-        Assert.Equal(3, detail.Transcript.Length);
-        Assert.False(detail.Transcript[0].IsLearner);
+        Assert.True(detail.Flow!.Separated);
+        Assert.Equal(2, detail.Flow.PartnerTurns);
+        Assert.Equal(1, detail.Flow.MedianResponseSeconds);
+        Assert.Contains(detail.Vocabulary!.Words, w => w.Lemma == "忙しい" && w.Learner == 1 && w.NewForLearner);
+        Assert.Contains(detail.Vocabulary.Words, w => w.Lemma == "無理" && w.Partner == 1 && w.Learner == 0);
+        Assert.Contains(detail.Speech!.Fillers, f => f.Form == "えーと" && f.Count == 3);
+        Assert.Contains(detail.Speech.Grammar, g => g.Count > 0);
         Assert.True(detail.Transcript[1].IsLearner);
-        Assert.Equal("残業 -> 残業中", detail.Transcript[1].Disputed);
+    }
 
-        CallSpeech speech = detail.Speech!;
-        Assert.True(speech.LearnerOnly);
-        Assert.Contains(speech.Fillers, f => f.Form == "えーと" && f.Count == 3);
-        Assert.Contains(speech.Grammar, g => g.Count > 0);
+    [Fact]
+    public async Task Feedback_TakesAFindingOutOfTheDiagnosis_AndBack()
+    {
+        (CallJob job, JapaneseDiagnosis diagnosis) = await Analyzed();
+        string findingId = job.Findings[0].Id;
+
+        CallAnalysisResponseTransmission response = await Send(CallAnalysisAction.Feedback, job.Id!, findingId: findingId, feedback: CallFindingFeedback.NotAMistake);
+
+        Assert.Null(response.Error);
+        CallStruggle struggle = response.Detail!.Struggles.Single();
+        Assert.Equal((1, 1), (struggle.TimesInCall, struggle.TimesOverall));
+        Assert.Equal(CallFindingFeedback.NotAMistake, struggle.Findings.Single(f => f.Id == findingId).Feedback);
+        Assert.Equal(1, _diagnoses.Items.Single().Issues.Single(i => i.Pattern == "すごく忙しい").Count);
+        Assert.Contains("1 issue(s) noted", _jobs.Items.Single(j => j.Id == job.Id).Report);
+
+        response = await Send(CallAnalysisAction.Feedback, job.Id!, findingId: findingId, feedback: CallFindingFeedback.Useful);
+
+        Assert.Equal(2, response.Detail!.Struggles.Single().TimesOverall);
+    }
+
+    [Fact]
+    public async Task Feedback_IsRefusedForDroppedFindingsAndRunningCalls()
+    {
+        (CallJob job, _) = await Analyzed();
+        CallJob running = AddJob(UserId, "Ken", new DateTime(2026, 10, 27, 0, 0, 0, DateTimeKind.Utc), CallJobStatus.Analyzing);
+
+        Assert.NotNull((await Send(CallAnalysisAction.Feedback, job.Id!, findingId: job.Findings[2].Id, feedback: CallFindingFeedback.NotAMistake)).Error);
+        Assert.NotNull((await Send(CallAnalysisAction.Feedback, running.Id!, findingId: "x", feedback: CallFindingFeedback.NotAMistake)).Error);
+    }
+
+    [Fact]
+    public async Task Detail_ForAnOldCall_CopiesWhatTheDiagnosisStillHas()
+    {
+        CallJob job = AddJob(UserId, "Yuki", new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc));
+        JapaneseDiagnosis diagnosis = new() { UserId = UserId };
+        diagnosis.RecordIssue(IssueCategory.UnnaturalPhrasing, "すごく忙しい", "Sounds stiff here.",
+            new IssueExample { Said = "すごく忙しいです", Better = "めっちゃ忙しい", Source = job.SourceLabel }, 3, DateTime.UtcNow);
+        diagnosis.RecordIssue(IssueCategory.Particle, "に vs で", "Place of action takes で.",
+            new IssueExample { Said = "家に勉強する", Better = "家で勉強する", Source = "chat" }, 2, DateTime.UtcNow);
+        await _diagnoses.SaveDocumentAsync(diagnosis);
+
+        CallAnalysisDetail detail = (await Send(CallAnalysisAction.Detail, job.Id!)).Detail!;
+
+        Assert.True(detail.Legacy);
+        CallFindingView finding = Assert.Single(Assert.Single(detail.Struggles).Findings);
+        Assert.Equal(("earlier analysis", CallQuoteState.Found, 5.0), (finding.Origin, finding.Quote, finding.Time));
+        CallJob stored = _jobs.Items.Single(j => j.Id == job.Id);
+        Assert.True(stored.LegacyImported);
+        Assert.Single(stored.Findings);
+    }
+
+    [Fact]
+    public async Task Insights_GatherWordsTrendsStrugglesAndPhrasesAcrossCalls()
+    {
+        (CallJob first, _) = await Analyzed();
+        CallJob second = AddJob(UserId, "Ken", new DateTime(2026, 10, 27, 0, 0, 0, DateTimeKind.Utc), learnerText: "最近、仕事が忙しい。週末は映画を見た。");
+
+        CallInsights insights = (await Send(CallAnalysisAction.Insights)).Insights!;
+
+        Assert.Equal([first.Id, second.Id], insights.Calls.Select(c => c.CallId));
+        Assert.True(insights.Calls[1].NewWords > 0);
+        Assert.All(insights.Calls, c => Assert.True(c.Separated));
+        Assert.NotNull(insights.Calls[0].FillersPer100);
+        InsightWord busy = insights.Words.Single(w => w.Lemma == "忙しい");
+        Assert.Equal((2, 2), (busy.Learner, busy.Calls));
+        Assert.Equal(first.RecordedAt, busy.FirstUsed);
+        // Both partners said 無理 or 大変, the learner never did
+        Assert.Contains(insights.HeardNotSaid, w => w.Lemma == "無理" && w.Partner == 2);
+        Assert.DoesNotContain(insights.HeardNotSaid, w => w.Lemma == "仕事");
+        InsightStruggle struggle = Assert.Single(insights.Struggles);
+        Assert.Equal((2, 1), (struggle.Times, struggle.Calls));
+        Assert.Equal("無理しないでね", Assert.Single(insights.Phrases).Phrase);
     }
 
     [Fact]
@@ -121,16 +215,20 @@ public class CallAnalysisSocketTests
     }
 
     [Fact]
-    public async Task Detail_SurvivesTheWire()
+    public async Task DetailAndInsights_SurviveTheWire()
     {
-        CallJob job = AddJob(UserId, "Yuki", new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc));
+        (CallJob job, _) = await Analyzed();
 
-        CallAnalysisResponseTransmission response = await Send(CallAnalysisAction.Detail, job.Id!);
-        CallAnalysisResponseTransmission copy = MessagePackSerializer.Deserialize<CallAnalysisResponseTransmission>(MessagePackSerializer.Serialize(response));
+        CallAnalysisResponseTransmission detail = await Send(CallAnalysisAction.Detail, job.Id!);
+        CallAnalysisResponseTransmission insights = await Send(CallAnalysisAction.Insights);
+        CallAnalysisResponseTransmission detailCopy = MessagePackSerializer.Deserialize<CallAnalysisResponseTransmission>(MessagePackSerializer.Serialize(detail));
+        CallAnalysisResponseTransmission insightsCopy = MessagePackSerializer.Deserialize<CallAnalysisResponseTransmission>(MessagePackSerializer.Serialize(insights));
 
-        Assert.Equal(job.Id, copy.Detail!.Summary.Id);
-        Assert.Equal(3, copy.Detail.Transcript.Length);
-        Assert.Equal(response.Detail!.Speech!.Fillers.Length, copy.Detail.Speech!.Fillers.Length);
+        Assert.Equal(job.Id, detailCopy.Detail!.Summary.Id);
+        Assert.Equal(4, detailCopy.Detail.Transcript.Length);
+        Assert.Equal(detail.Detail!.Vocabulary!.Words.Length, detailCopy.Detail.Vocabulary!.Words.Length);
+        Assert.Equal(2, detailCopy.Detail.Struggles[0].Findings.Length);
+        Assert.Equal(insights.Insights!.Words.Length, insightsCopy.Insights!.Words.Length);
     }
 
     [Theory]
@@ -139,6 +237,6 @@ public class CallAnalysisSocketTests
     [InlineData("GrammarPattern", "Grammar pattern")]
     public void Humanize_SplitsCategoryNames(string name, string expected)
     {
-        Assert.Equal(expected, CallAnalysisRequestHandler.Humanize(name));
+        Assert.Equal(expected, CallAnalysisViews.Humanize(name));
     }
 }

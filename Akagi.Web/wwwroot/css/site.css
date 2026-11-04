@@ -86,3 +86,61 @@
     z-index: 1060;
 }
 
+
+/* Call analysis charts (Learn > Call Analysis, Speaking Insights).
+   Two validated categorical slots: you (blue) and your partner (orange), stepped per theme. */
+.call-viz {
+    --viz-you: #2a78d6;
+    --viz-partner: #eb6834;
+    --viz-surface: var(--tblr-bg-surface, #ffffff);
+    --viz-grid: rgba(127, 127, 127, 0.18);
+}
+
+[data-bs-theme="dark"] .call-viz {
+    --viz-you: #3987e5;
+    --viz-partner: #d95926;
+}
+
+.call-viz .viz-key {
+    display: inline-block;
+    width: 0.65rem;
+    height: 0.65rem;
+    border-radius: 2px;
+    vertical-align: baseline;
+}
+
+.call-viz .viz-you { background: var(--viz-you); }
+.call-viz .viz-partner { background: var(--viz-partner); }
+
+/* A 100% bar: segments separated by a 2px surface gap, rounded outer ends */
+.call-viz .viz-share {
+    display: flex;
+    gap: 2px;
+    height: 0.75rem;
+    background: var(--viz-surface);
+}
+
+.call-viz .viz-share > div:first-child { border-radius: 4px 0 0 4px; }
+.call-viz .viz-share > div:last-child { border-radius: 0 4px 4px 0; }
+.call-viz .viz-share > div:only-child { border-radius: 4px; }
+
+.call-viz svg .viz-you-fill { fill: var(--viz-you); }
+.call-viz svg .viz-partner-fill { fill: var(--viz-partner); }
+.call-viz svg .viz-gridline { stroke: var(--viz-grid); stroke-width: 1; }
+.call-viz svg .viz-hit { fill: transparent; cursor: pointer; }
+.call-viz svg .viz-hit:hover, .call-viz svg .viz-hit.active { fill: rgba(127, 127, 127, 0.12); }
+.call-viz svg text { fill: var(--tblr-secondary, #6c7a91); font-size: 10px; }
+
+.call-viz .viz-readout {
+    min-height: 1.25rem;
+}
+
+/* Transcript line a finding or word jumped to */
+.call-line-target {
+    outline: 2px solid var(--tblr-primary);
+    outline-offset: -2px;
+}
+
+.call-word {
+    cursor: pointer;
+}

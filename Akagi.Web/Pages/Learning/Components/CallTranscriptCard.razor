@@ -1,0 +1,202 @@
+@using Akagi.Bridge.Chat.Models
+@using System.Net
+@using System.Text
+
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="card mb-3" @ref="_card" data-transcript-card>
+	<div class="card-header flex-wrap gap-2">
+		<h3 class="card-title m-0">Transcript</h3>
+		<span class="badge bg-secondary-lt ms-2">@Lines.Length lines</span>
+		<div class="ms-auto d-flex flex-wrap align-items-center gap-2">
+			@if (_open)
+			{
+				<input type="search" class="form-control form-control-sm w-auto" placeholder="Search" lang="ja"
+					   @bind="_search" @bind:event="oninput" aria-label="Search the transcript" />
+				<label class="form-check form-switch m-0 small">
+					<input class="form-check-input" type="checkbox" @bind="_onlyMine" />
+					<span class="form-check-label">Only my lines</span>
+				</label>
+			}
+			<button type="button" class="btn btn-sm btn-outline-primary" data-transcript-toggle @onclick="Toggle">
+				@(_open ? "Hide" : "Show")
+			</button>
+		</div>
+	</div>
+	@if (_open)
+	{
+		@if (_word != null)
+		{
+			<div class="card-body py-2 border-bottom small d-flex align-items-center gap-2">
+				<span>Lines with <span class="fw-medium" lang="ja">@_word.Lemma</span>: @Shown.Count()</span>
+				<button type="button" class="btn btn-sm btn-ghost-secondary py-0" data-word-clear @onclick="() => _word = null">Show all lines</button>
+			</div>
+		}
+		<div class="card-body p-0" style="max-height: 70vh; overflow-y: auto;" data-transcript>
+			@foreach ((CallTranscriptLine line, int index) in Shown)
+			{
+				<div class="d-flex gap-3 px-3 py-2 border-bottom @(line.IsLearner ? "bg-primary-lt" : "") @(index == _target ? "call-line-target" : "")"
+					 data-line="@index">
+					<span class="text-secondary small font-monospace flex-shrink-0" style="min-width: 3.5rem;">@CallText.Timestamp(line.Start)</span>
+					<div class="min-w-0">
+						<div class="small fw-medium text-secondary">@line.Speaker</div>
+						<div lang="ja">@Highlight(line.Text)</div>
+						@if (!string.IsNullOrWhiteSpace(line.Disputed))
+						{
+							<div class="small text-secondary fst-italic">Second hearing: @line.Disputed</div>
+						}
+					</div>
+				</div>
+			}
+		</div>
+	}
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public CallTranscriptLine[] Lines { get; set; } = [];
+
+	/// <summary>
+	/// The call shown; the same call refreshed after feedback keeps its filters.
+	/// </summary>
+	[Parameter]
+	public string CallId { get; set; } = string.Empty;
+
+	private ElementReference _card;
+	private IJSObjectReference? _module;
+	private bool _open;
+	private bool _onlyMine;
+	private string _search = string.Empty;
+	private CallWordView? _word;
+	private int _target = -1;
+	private bool _scrollPending;
+	private string? _shownFor;
+
+	private IEnumerable<(CallTranscriptLine Line, int Index)> Shown =>
+		Lines.Select((line, index) => (line, index))
+			.Where(l => !_onlyMine || l.line.IsLearner)
+			.Where(l => _search.Trim().Length == 0 || l.line.Text.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase))
+			.Where(l => _word == null || _word.Surfaces.Any(s => l.line.Text.Contains(s, StringComparison.Ordinal)));
+
+	protected override void OnParametersSet()
+	{
+		// Another call starts folded and unfiltered
+		if (_shownFor != CallId)
+		{
+			_shownFor = CallId;
+			_open = false;
+			_onlyMine = false;
+			_search = string.Empty;
+			_word = null;
+			_target = -1;
+		}
+	}
+
+	/// <summary>
+	/// Opens the transcript at the line said at <paramref name="time"/> seconds.
+	/// </summary>
+	public void JumpTo(double time)
+	{
+		int index = Array.FindLastIndex(Lines, l => l.Start <= time + 0.01);
+		_target = Math.Max(0, index);
+		_open = true;
+		_onlyMine = false;
+		_search = string.Empty;
+		_word = null;
+		_scrollPending = true;
+		StateHasChanged();
+	}
+
+	/// <summary>
+	/// Opens the transcript showing only the lines with <paramref name="word"/>.
+	/// </summary>
+	public void ShowWord(CallWordView word)
+	{
+		_word = word;
+		_target = -1;
+		_open = true;
+		_search = string.Empty;
+		_onlyMine = false;
+		_scrollPending = true;
+		StateHasChanged();
+	}
+
+	private void Toggle()
+	{
+		_open = !_open;
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!_scrollPending)
+		{
+			return;
+		}
+		_scrollPending = false;
+		try
+		{
+			_module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Learning/Components/CallTranscriptCard.razor.js");
+			if (_module != null)
+			{
+				await _module.InvokeVoidAsync("reveal", _card, _target);
+			}
+		}
+		catch (JSException)
+		{
+			// Scrolling is a convenience
+		}
+		catch (InvalidOperationException)
+		{
+			// Prerendering has no JavaScript
+		}
+	}
+
+	/// <summary>
+	/// The line with the searched text or the chosen word marked.
+	/// </summary>
+	private MarkupString Highlight(string text)
+	{
+		List<string> needles = _word != null ? [.. _word.Surfaces] : _search.Trim().Length > 0 ? [_search.Trim()] : [];
+		if (needles.Count == 0)
+		{
+			return new MarkupString(WebUtility.HtmlEncode(text));
+		}
+
+		StringBuilder html = new();
+		int position = 0;
+		while (position < text.Length)
+		{
+			(int at, string needle) = needles
+				.Select(n => (At: text.IndexOf(n, position, StringComparison.OrdinalIgnoreCase), Needle: n))
+				.Where(m => m.At >= 0)
+				.OrderBy(m => m.At)
+				.ThenByDescending(m => m.Needle.Length)
+				.FirstOrDefault((-1, string.Empty));
+			if (at < 0 || needle.Length == 0)
+			{
+				break;
+			}
+			html.Append(WebUtility.HtmlEncode(text[position..at]));
+			html.Append("<mark>").Append(WebUtility.HtmlEncode(text.Substring(at, needle.Length))).Append("</mark>");
+			position = at + needle.Length;
+		}
+		html.Append(WebUtility.HtmlEncode(text[position..]));
+		return new MarkupString(html.ToString());
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		if (_module != null)
+		{
+			try
+			{
+				await _module.DisposeAsync();
+			}
+			catch (JSDisconnectedException)
+			{
+				// The circuit is gone
+			}
+		}
+	}
+}

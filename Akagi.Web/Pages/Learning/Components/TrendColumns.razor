@@ -1,0 +1,84 @@
+@inject NavigationManager Navigation
+
+<div class="card call-viz h-100" data-trend="@Title">
+	<div class="card-body">
+		<div class="d-flex justify-content-between align-items-baseline">
+			<div class="fw-medium">@Title</div>
+			<div class="text-secondary small">@LatestText</div>
+		</div>
+		@* Always one line, so charts side by side start at the same height *@
+		<div class="text-secondary small text-truncate" style="min-height: 1.25rem;" title="@Hint">@Hint</div>
+		<div class="viz-readout small text-secondary my-1">
+			@if (_hovered is Point hoveredPoint)
+			{
+				<span>@hoveredPoint.Label, @hoveredPoint.Date.ToLocalTime().ToString("d"): <span class="text-body fw-medium">@(hoveredPoint.Value is double v ? Format(v) : "not measured")</span></span>
+			}
+			else
+			{
+				<span>Point at a column; click it to open the call.</span>
+			}
+		</div>
+		@if (Points.All(p => p.Value is null))
+		{
+			<div class="text-secondary small py-4 text-center">Not measured in any call yet.</div>
+		}
+		else
+		{
+			<div class="d-flex align-items-start gap-2">
+				<div class="d-flex flex-column justify-content-between text-secondary small text-end" style="height: 6rem; min-width: 2.5rem;">
+					<span>@Format(Max)</span>
+					<span>0</span>
+				</div>
+				<div class="flex-fill d-flex align-items-end border-bottom" style="height: 6rem; gap: 3px; border-top: 1px dashed var(--viz-grid);"
+					 role="img" aria-label="@($"{Title} per call")">
+					@foreach (Point point in Points)
+					{
+						<div class="h-100 flex-fill d-flex flex-column justify-content-end @(_hovered == point ? "bg-secondary-lt" : "")"
+							 style="min-width: 6px; max-width: 3rem; cursor: pointer;"
+							 data-point="@point.CallId"
+							 @onmouseenter="() => _hovered = point"
+							 @onmouseleave="() => _hovered = null"
+							 @onclick="() => Navigation.NavigateTo(Uri(point))">
+							@if (point.Value is double value && value > 0)
+							{
+								<div class="viz-you" style="height: @Height(value)%; border-radius: 4px 4px 0 0;"></div>
+							}
+						</div>
+					}
+				</div>
+			</div>
+		}
+	</div>
+</div>
+
+@code {
+	public record Point(string CallId, string Label, DateTime Date, double? Value);
+
+	[Parameter, EditorRequired]
+	public string Title { get; set; } = string.Empty;
+
+	[Parameter]
+	public string Hint { get; set; } = string.Empty;
+
+	[Parameter, EditorRequired]
+	public IReadOnlyList<Point> Points { get; set; } = [];
+
+	[Parameter]
+	public Func<double, string> Format { get; set; } = v => v.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+	/// <summary>
+	/// A fixed top of the scale, e.g. 1 for shares; otherwise the largest value.
+	/// </summary>
+	[Parameter]
+	public double? Scale { get; set; }
+
+	private Point? _hovered;
+
+	private double Max => Scale ?? Math.Max(Points.Max(p => p.Value ?? 0), 0.0001);
+
+	private string LatestText => Points.LastOrDefault(p => p.Value is not null)?.Value is double latest ? $"latest {Format(latest)}" : string.Empty;
+
+	private string Height(double value) => Math.Clamp(value / Max * 100, 0, 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+	private static string Uri(Point point) => $"Learn/Calls/{point.CallId}";
+}

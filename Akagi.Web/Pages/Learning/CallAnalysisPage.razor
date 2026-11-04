@@ -19,11 +19,12 @@
 		<div class="col">
 			<div class="page-pretitle">Learn</div>
 			<h2 class="page-title">Call analysis</h2>
-			<div class="text-secondary small mt-1">What your recorded calls revealed: struggles, speech habits and the full transcript.</div>
+			<div class="text-secondary small mt-1">What your recorded calls revealed: struggles, speaking share, vocabulary and the full transcript.</div>
 		</div>
 		@if (_state == State.Ready)
 		{
-			<div class="col-auto ms-auto">
+			<div class="col-auto ms-auto d-flex gap-2">
+				<a href="Learn/Insights" class="btn btn-outline-secondary">Across all calls</a>
 				<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" data-calls-refresh @onclick="LoadAsync">
 					<Icon IconType="@Icons.Refresh" Size="16" />
 					<span>Refresh</span>
@@ -105,6 +106,10 @@
 									{
 										<span>@call.IssueCount issue@(call.IssueCount == 1 ? "" : "s")</span>
 									}
+									@if (call.LearnerShare is double share)
+									{
+										<span>you spoke @CallText.Percent(share)</span>
+									}
 								</div>
 							</a>
 						}
@@ -123,7 +128,7 @@
 				}
 				else if (_detail != null)
 				{
-					<CallAnalysisDetailView Detail="_detail" />
+					<CallAnalysisDetailView Detail="_detail" Busy="_feedbackBusy" OnFeedback="FeedbackAsync" />
 				}
 			</div>
 		</div>
@@ -146,6 +151,7 @@
 	private CallAnalysisDetail? _detail;
 	private string? _selectedId;
 	private bool _detailLoading;
+	private bool _feedbackBusy;
 	private string? _error;
 	private bool _loaded;
 
@@ -198,6 +204,29 @@
 		if (_selectedId == callId)
 		{
 			_detail = response?.Detail;
+		}
+	}
+
+	private async Task FeedbackAsync(CallFindingItem.Feedback feedback)
+	{
+		if (_detail == null)
+		{
+			return;
+		}
+		_feedbackBusy = true;
+		CallAnalysisResponseTransmission? response = await SendAsync(new CallAnalysisRequestTransmission
+		{
+			Action = CallAnalysisAction.Feedback,
+			CallId = _detail.Summary.Id,
+			FindingId = feedback.FindingId,
+			Feedback = feedback.Value
+		});
+		_feedbackBusy = false;
+		if (response?.Detail is CallAnalysisDetail updated && updated.Summary.Id == _selectedId)
+		{
+			_detail = updated;
+			// The list shows the same count
+			_calls = [.. _calls.Select(c => c.Id == updated.Summary.Id ? updated.Summary : c)];
 		}
 	}
 

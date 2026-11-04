@@ -1,0 +1,152 @@
+@using Akagi.Bridge.Chat.Models
+
+<div class="card mb-3 call-viz" data-flow>
+	<div class="card-header">
+		<h3 class="card-title m-0">Conversation flow</h3>
+		@if (Flow.HasPartner)
+		{
+			<div class="ms-auto d-flex gap-3 small text-secondary">
+				<span><span class="viz-key viz-you me-1"></span>You</span>
+				<span><span class="viz-key viz-partner me-1"></span>@PartnerName</span>
+			</div>
+		}
+	</div>
+	<div class="card-body">
+		@if (!Flow.HasPartner)
+		{
+			<div class="text-secondary small mb-3">
+				@(Flow.Separated
+					? "Only your own voice was transcribed, so there is nothing to compare your speaking time with."
+					: "The voices were not recorded separately, so who spoke how much is unknown.")
+			</div>
+		}
+		else
+		{
+			@foreach ((string label, double you, double partner, string youText, string partnerText) in Shares)
+			{
+				<div class="mb-3" data-share="@label">
+					<div class="d-flex justify-content-between small mb-1">
+						<span>@label</span>
+						<span class="text-secondary">You @youText &middot; @PartnerName @partnerText</span>
+					</div>
+					<div class="viz-share" role="img" aria-label="@($"{label}: you {youText}, {PartnerName} {partnerText}")">
+						@if (you > 0)
+						{
+							<div class="viz-you" style="width: @Css(you)%" title="You @youText"></div>
+						}
+						@if (partner > 0)
+						{
+							<div class="viz-partner" style="width: @Css(partner)%" title="@PartnerName @partnerText"></div>
+						}
+					</div>
+				</div>
+			}
+		}
+
+		<div class="row g-3 text-center my-1">
+			<div class="col-6 col-md-3">
+				<div class="h3 m-0">@Flow.LearnerTurns</div>
+				<div class="text-secondary small">your turns</div>
+			</div>
+			<div class="col-6 col-md-3">
+				<div class="h3 m-0">@CallText.Number(Flow.LearnerCharactersPerTurn)</div>
+				<div class="text-secondary small">characters per turn@(Flow.HasPartner ? $" ({CallText.Number(Flow.PartnerCharactersPerTurn)} for {PartnerName})" : "")</div>
+			</div>
+			<div class="col-6 col-md-3">
+				<div class="h3 m-0" data-stat="response">@(Flow.MedianResponseSeconds is double median ? CallText.Seconds(median) : "-")</div>
+				<div class="text-secondary small">until you answer (median)</div>
+			</div>
+			<div class="col-6 col-md-3">
+				<div class="h3 m-0">@Flow.LongPauses</div>
+				<div class="text-secondary small">pauses of 2 s+ mid-turn</div>
+			</div>
+		</div>
+		<div class="text-secondary small text-center">
+			Longest turn @CallText.Seconds(Flow.LongestLearnerTurnSeconds)
+			@if (Flow.HasPartner)
+			{
+				<span>&nbsp;&middot; you started @Flow.LearnerOverlaps time@(Flow.LearnerOverlaps == 1 ? "" : "s") while @PartnerName was still talking</span>
+			}
+		</div>
+
+		@if (Flow.Windows.Length > 1)
+		{
+			<div class="form-label mt-4 mb-1">Speaking time per 5 minutes</div>
+			<div class="viz-readout small text-secondary mb-1" data-readout>
+				@if (_hovered is CallFlowWindow hoveredWindow)
+				{
+					<span>
+						<span class="font-monospace">@CallText.Timestamp(hoveredWindow.Start)</span>:
+						you @Minutes(hoveredWindow.LearnerSeconds)@(Flow.HasPartner ? $", {PartnerName} {Minutes(hoveredWindow.PartnerSeconds)}" : "")
+					</span>
+				}
+				else
+				{
+					<span>Point at a column for its numbers.</span>
+				}
+			</div>
+			<div class="d-flex align-items-end border-bottom" style="height: 7rem; gap: 3px;" role="img" aria-label="Speaking time in each five minute stretch of the call">
+				@foreach (CallFlowWindow window in Flow.Windows)
+				{
+					<div class="h-100 flex-fill d-flex flex-column-reverse @(_hovered == window ? "bg-secondary-lt" : "")"
+						 style="gap: 2px; min-width: 4px; cursor: default;"
+						 @onmouseenter="() => _hovered = window"
+						 @onmouseleave="() => _hovered = null">
+						@if (window.LearnerSeconds > 0)
+						{
+							<div class="viz-you" style="height: @Css(window.LearnerSeconds / WindowSeconds * 100)%; border-radius: @(window.PartnerSeconds > 0 && Flow.HasPartner ? "0" : "4px 4px 0 0");"></div>
+						}
+						@if (Flow.HasPartner && window.PartnerSeconds > 0)
+						{
+							<div class="viz-partner" style="height: @Css(window.PartnerSeconds / WindowSeconds * 100)%; border-radius: 4px 4px 0 0;"></div>
+						}
+					</div>
+				}
+			</div>
+			<div class="d-flex justify-content-between small text-secondary mt-1 font-monospace">
+				<span>00:00</span>
+				<span>@CallText.Timestamp(Flow.Windows[^1].Start + WindowSeconds)</span>
+			</div>
+		}
+	</div>
+</div>
+
+@code {
+	private const double WindowSeconds = 300;
+
+	[Parameter, EditorRequired]
+	public CallFlow Flow { get; set; } = default!;
+
+	[Parameter]
+	public string PartnerName { get; set; } = "Partner";
+
+	private CallFlowWindow? _hovered;
+
+	private IEnumerable<(string Label, double You, double Partner, string YouText, string PartnerText)> Shares
+	{
+		get
+		{
+			double time = Flow.LearnerSeconds + Flow.PartnerSeconds;
+			if (time > 0)
+			{
+				yield return ("Speaking time", Flow.LearnerSeconds / time * 100, Flow.PartnerSeconds / time * 100,
+					$"{CallText.Percent(Flow.LearnerSeconds / time)} ({Minutes(Flow.LearnerSeconds)})",
+					$"{CallText.Percent(Flow.PartnerSeconds / time)} ({Minutes(Flow.PartnerSeconds)})");
+			}
+			double characters = Flow.LearnerCharacters + Flow.PartnerCharacters;
+			if (characters > 0)
+			{
+				yield return ("Words said (characters)", Flow.LearnerCharacters / characters * 100, Flow.PartnerCharacters / characters * 100,
+					CallText.Percent(Flow.LearnerCharacters / characters), CallText.Percent(Flow.PartnerCharacters / characters));
+			}
+		}
+	}
+
+	private static string Minutes(double seconds)
+	{
+		TimeSpan span = TimeSpan.FromSeconds(seconds);
+		return span.TotalMinutes >= 1 ? $"{(int)span.TotalMinutes}m {span.Seconds:00}s" : $"{span.Seconds}s";
+	}
+
+	private static string Css(double percent) => Math.Clamp(percent, 0, 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+}

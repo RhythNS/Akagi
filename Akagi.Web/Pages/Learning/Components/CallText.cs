@@ -30,6 +30,7 @@ public static class CallText
         CallAnalysisState.Transcribing => "Transcribing",
         CallAnalysisState.Analyzing => "Analyzing",
         CallAnalysisState.Reporting => "Reporting",
+        CallAnalysisState.Consolidating => "Merging",
         CallAnalysisState.Completed => "Done",
         _ => "Failed"
     };
@@ -62,7 +63,52 @@ public static class CallText
         _ => "bg-secondary-lt"
     };
 
-    public static string Percent(double ratio) => ratio.ToString("P0", CultureInfo.InvariantCulture);
+    /// <summary>
+    /// What the quote check found, for a badge; empty when there is nothing to point out.
+    /// </summary>
+    public static string QuoteLabel(CallQuoteState quote) => quote switch
+    {
+        CallQuoteState.Approximate => "quote approximate",
+        CallQuoteState.Possibly => "possibly",
+        CallQuoteState.NotFound => "quote not found",
+        CallQuoteState.OtherSpeaker => "other speaker",
+        _ => string.Empty
+    };
+
+    public static string QuoteTitle(CallQuoteState quote) => quote switch
+    {
+        CallQuoteState.Approximate => "The quote was found with small differences, e.g. a dropped filler.",
+        CallQuoteState.Possibly => "The two transcriptions disagree on these words, so this is only possible.",
+        CallQuoteState.NotFound => "The quoted words are not in the transcript.",
+        CallQuoteState.OtherSpeaker => "The quoted words were said by the other side.",
+        _ => string.Empty
+    };
+
+    public static string QuoteClass(CallQuoteState quote) => quote switch
+    {
+        CallQuoteState.Possibly or CallQuoteState.Approximate => "bg-yellow-lt",
+        CallQuoteState.NotFound or CallQuoteState.OtherSpeaker => "bg-red-lt",
+        _ => "bg-secondary-lt"
+    };
+
+    public static string ClassLabel(string wordClass) => wordClass switch
+    {
+        "Noun" => "noun",
+        "Verb" => "verb",
+        "Adjective" => "i-adjective",
+        "AdjectivalNoun" => "na-adjective",
+        "Adverb" => "adverb",
+        "Adnominal" => "adnominal",
+        "Conjunction" => "conjunction",
+        "Interjection" => "interjection",
+        _ => wordClass.ToLowerInvariant()
+    };
+
+    public static readonly string[] WordClasses = ["Noun", "Verb", "Adjective", "AdjectivalNoun", "Adverb", "Adnominal", "Conjunction", "Interjection"];
+
+    public static string Seconds(double seconds) => seconds.ToString(seconds < 10 ? "0.0" : "0", CultureInfo.InvariantCulture) + " s";
+
+    public static string Percent(double ratio) => (ratio * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
 
     public static string Number(double value) => value.ToString("0.0", CultureInfo.InvariantCulture);
 }

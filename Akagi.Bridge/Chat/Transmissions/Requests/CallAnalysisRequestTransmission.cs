@@ -1,3 +1,4 @@
+using Akagi.Bridge.Chat.Models;
 using MessagePack;
 
 namespace Akagi.Bridge.Chat.Transmissions.Requests;
@@ -5,7 +6,11 @@ namespace Akagi.Bridge.Chat.Transmissions.Requests;
 public enum CallAnalysisAction
 {
     List,
-    Detail
+    Detail,
+    /// <summary>The user's say on one finding: useful, not a mistake, or neither.</summary>
+    Feedback,
+    /// <summary>Trends, vocabulary and recurring struggles across all calls.</summary>
+    Insights
 }
 
 [MessagePackObject]
@@ -22,4 +27,8 @@ public class CallAnalysisRequestTransmission : Transmission
     public CallAnalysisAction Action { get; set; }
     [Key(2)]
     public string CallId { get; set; } = string.Empty;
+    [Key(3)]
+    public string FindingId { get; set; } = string.Empty;
+    [Key(4)]
+    public CallFindingFeedback Feedback { get; set; }
 }

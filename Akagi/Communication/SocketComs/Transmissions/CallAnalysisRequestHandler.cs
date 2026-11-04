@@ -6,15 +6,14 @@ using Akagi.Life.Japanese;
 using Akagi.Life.Japanese.Calls;
 using Akagi.Users;
 using Microsoft.Extensions.Logging;
-using System.Text.RegularExpressions;
 
 namespace Akagi.Communication.SocketComs.Transmissions;
 
 /// <summary>
-/// Shows the website what the call analyses found: the calls, and for one call its report, the struggles it added to the
-/// diagnosis, the local speech measurements and the transcript.
+/// Shows the website what the call analyses found: the calls, everything one call gathered, the user's feedback on a
+/// finding, and the trends across all calls.
 /// </summary>
-internal partial class CallAnalysisRequestHandler : SocketTransmissionHandler
+internal class CallAnalysisRequestHandler : SocketTransmissionHandler
 {
     public override string HandlesType => nameof(CallAnalysisRequestTransmission);
 
@@ -49,10 +48,12 @@ internal partial class CallAnalysisRequestHandler : SocketTransmissionHandler
             switch (request.Action)
             {
                 case CallAnalysisAction.List:
-                    response.Calls = [.. jobs.OrderByDescending(j => j.RecordedAt ?? j.CreatedAt).ThenByDescending(j => j.CreatedAt).Select(ToSummary)];
+                    await PrepareAsync(jobs, null);
+                    response.Calls = [.. CallAnalysisViews.Newest(jobs).Select(CallAnalysisViews.Summary)];
                     break;
 
                 case CallAnalysisAction.Detail:
+                {
                     // Looked up among the user's own calls, so nobody reads someone else's
                     CallJob? job = jobs.FirstOrDefault(j => j.Id == request.CallId);
                     if (job == null)
@@ -60,8 +61,23 @@ internal partial class CallAnalysisRequestHandler : SocketTransmissionHandler
                         response.Error = "That call analysis does not exist.";
                         break;
                     }
-                    response.Detail = ToDetail(job, await _diagnoses.GetForUser(userId));
+                    JapaneseDiagnosis? diagnosis = await _diagnoses.GetForUser(userId);
+                    await PrepareAsync(jobs, diagnosis);
+                    response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs);
                     break;
+                }
+
+                case CallAnalysisAction.Feedback:
+                    response.Error = await FeedbackAsync(userId, jobs, request, response);
+                    break;
+
+                case CallAnalysisAction.Insights:
+                {
+                    JapaneseDiagnosis? diagnosis = await _diagnoses.GetForUser(userId);
+                    await PrepareAsync(jobs, diagnosis);
+                    response.Insights = CallAnalysisViews.Insights(jobs, diagnosis);
+                    break;
+                }
 
                 default:
                     response.Error = "Unknown call analysis request.";
@@ -76,114 +92,57 @@ internal partial class CallAnalysisRequestHandler : SocketTransmissionHandler
         return response;
     }
 
-    internal static CallAnalysisSummary ToSummary(CallJob job) => new()
+    private async Task<string?> FeedbackAsync(string userId, List<CallJob> jobs, CallAnalysisRequestTransmission request, CallAnalysisResponseTransmission response)
     {
-        Id = job.Id!,
-        Title = job.Title,
-        Partner = job.Partner,
-        State = (CallAnalysisState)(int)job.Status,
-        RecordedAt = job.RecordedAt,
-        CreatedAt = job.CreatedAt,
-        DurationSeconds = job.DurationSeconds,
-        IssueCount = job.Chunks.Sum(c => c.IssuesRecorded),
-        ChunksAnalyzed = job.Chunks.Count(c => c.Analyzed),
-        ChunkCount = job.Chunks.Count,
-        Error = job.Error
-    };
-
-    internal static CallAnalysisDetail ToDetail(CallJob job, JapaneseDiagnosis? diagnosis)
-    {
-        CallAnalysisDetail detail = new()
+        CallJob? job = jobs.FirstOrDefault(j => j.Id == request.CallId);
+        if (job == null)
         {
-            Summary = ToSummary(job),
-            Register = job.Register.ToString().ToLowerInvariant(),
-            Report = job.Report,
-            Delivered = job.Delivered,
-            Transcript = [.. job.Segments.Select(s => new CallTranscriptLine
-            {
-                Start = s.Start,
-                Speaker = s.Speaker,
-                Text = s.Text,
-                Disputed = s.Disputed,
-                IsLearner = IsLearner(job, s)
-            })]
-        };
-
-        if (diagnosis != null)
+            return "That call analysis does not exist.";
+        }
+        if (job.Status != CallJobStatus.Completed)
         {
-            detail.Struggles = [.. Struggles(job, diagnosis)];
-            DateTime until = job.IsFinished ? job.UpdatedAt.AddMinutes(1) : DateTime.MaxValue;
-            detail.Strengths = [.. diagnosis.Strengths
-                .Where(s => s.LastSeen >= job.CreatedAt && s.LastSeen <= until)
-                .OrderByDescending(s => s.LastSeen)
-                .Select(s => s.Text)];
+            return "Feedback works once the analysis is finished.";
+        }
+        JapaneseDiagnosis diagnosis = await _diagnoses.GetOrCreate(userId);
+        await PrepareAsync(jobs, diagnosis);
+        CallFinding? finding = job.Findings.FirstOrDefault(f => f.Id == request.FindingId);
+        if (finding == null || finding.State != FindingState.Kept)
+        {
+            return "That finding cannot take feedback.";
         }
 
-        if (job.Segments.Count > 0)
-        {
-            detail.Speech = ToSpeech(SpeechAnalysis.Analyze(job.LearnerText(), job.Register), job.HasLearnerSeparation);
-        }
-        return detail;
+        DateTime now = DateTime.UtcNow;
+        CallDiagnosis.SetFeedback(diagnosis, job, finding, (FindingFeedback)(int)request.Feedback, now);
+        await _diagnoses.SaveDocumentAsync(diagnosis);
+        // The report the companion and /calls show follows what the user said
+        job.Report = CallAnalysisPipeline.BuildReport(job, SpeechAnalysis.Analyze(job.LearnerText(), job.Register), diagnosis, now);
+        job.Touch(now);
+        await _jobs.SaveDocumentAsync(job);
+        _logger.LogInformation("Call {JobId}: finding {FindingId} marked {Feedback}", job.Id, finding.Id, finding.Feedback);
+
+        response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs);
+        return null;
     }
 
     /// <summary>
-    /// The struggles whose evidence came from this call, the most serious and most frequent first.
+    /// Brings finished calls up to date for free: copies what the diagnosis still holds about calls analyzed before
+    /// findings were stored on calls, and computes the local statistics. A call still being analyzed is only computed,
+    /// never saved, because the pipeline owns it.
     /// </summary>
-    private static IEnumerable<CallStruggle> Struggles(CallJob job, JapaneseDiagnosis diagnosis)
+    private async Task PrepareAsync(List<CallJob> jobs, JapaneseDiagnosis? diagnosis)
     {
-        string source = job.SourceLabel;
-        return diagnosis.Issues
-            .Select(issue => (Issue: issue, Examples: issue.Examples.Where(e => e.Source == source).ToList()))
-            .Where(found => found.Examples.Count > 0)
-            .OrderByDescending(found => found.Issue.Severity * found.Examples.Count)
-            .ThenByDescending(found => found.Issue.Severity)
-            .Select(found => new CallStruggle
-            {
-                Id = found.Issue.Id,
-                Category = Humanize(found.Issue.Category.ToString()),
-                Pattern = found.Issue.Pattern,
-                Explanation = found.Issue.Explanation,
-                Severity = found.Issue.Severity,
-                Status = found.Issue.Status.ToString().ToLowerInvariant(),
-                TimesInCall = found.Examples.Count,
-                TimesOverall = found.Issue.Count,
-                Examples = [.. found.Examples.Select(e => new CallStruggleExample { Said = e.Said, Better = e.Better })]
-            });
-    }
-
-    private static CallSpeech ToSpeech(SpeechReport report, bool learnerOnly)
-    {
-        HashSet<string> habits = [.. report.Fillers.Habits.Select(h => h.Form)];
-        return new CallSpeech
+        foreach (CallJob job in jobs)
         {
-            LearnerOnly = learnerOnly,
-            JapaneseCharacters = report.Fillers.JapaneseCharacters,
-            Sentences = report.Register.Sentences,
-            FillersPer100 = Math.Round(report.Fillers.Per100, 2),
-            Fillers = [.. report.Fillers.Counts.Select(c => new CallFiller { Form = c.Form, Count = c.Count, IsHabit = habits.Contains(c.Form), Example = c.Example })],
-            PoliteRatio = report.Register.PoliteRatio,
-            Keigo = report.Register.Keigo,
-            ExpectedRegister = report.ExpectedRegister.ToString().ToLowerInvariant(),
-            RegisterMismatch = report.RegisterMismatch ?? string.Empty,
-            RecurringStructures = [.. report.Structures.Select(s => s.Describe())],
-            Grammar = [.. report.Patterns.Select(p => new CallGrammarUse { Pattern = p.Pattern.Key, Meaning = p.Pattern.Meaning, Count = p.Count, Example = p.Example })]
-        };
+            bool changed = diagnosis != null && CallDiagnosis.ImportLegacy(job, diagnosis);
+            if (job.Segments.Count > 0 && job.Stats?.Version != CallStats.CurrentVersion)
+            {
+                job.Stats = CallStats.Compute(job);
+                changed = true;
+            }
+            if (changed && job.IsFinished)
+            {
+                await _jobs.SaveDocumentAsync(job);
+            }
+        }
     }
-
-    /// <summary>
-    /// Matches <see cref="CallJob.LearnerText"/>: a labeled learner, or everything when the recording held only the learner.
-    /// </summary>
-    private static bool IsLearner(CallJob job, TranscriptSegment segment) =>
-        string.IsNullOrWhiteSpace(job.LearnerSpeaker)
-            ? job.HasLearnerSeparation
-            : string.Equals(segment.Speaker, job.LearnerSpeaker, StringComparison.OrdinalIgnoreCase);
-
-    internal static string Humanize(string name)
-    {
-        string spaced = WordStart().Replace(name, " $1").Trim();
-        return spaced.Length == 0 ? spaced : spaced[0] + spaced[1..].ToLowerInvariant();
-    }
-
-    [GeneratedRegex("(?<!^)([A-Z])")]
-    private static partial Regex WordStart();
 }

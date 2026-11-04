@@ -22,4 +22,6 @@ public class CallAnalysisResponseTransmission : Transmission
     /// </summary>
     [Key(3)]
     public string? Error { get; set; }
+    [Key(4)]
+    public CallInsights? Insights { get; set; }
 }

@@ -77,20 +77,38 @@ public class CallAnalysisPageTests : BunitContext
         ChunksAnalyzed = 3
     };
 
+    private static CallFindingView Finding(string id, string said, string better = "", double? time = null,
+        CallQuoteState quote = CallQuoteState.Found, CallFindingKind kind = CallFindingKind.Mistake) => new()
+    {
+        Id = id,
+        Kind = kind,
+        Origin = "review",
+        Category = "Unnatural phrasing",
+        Pattern = "すごく忙しい",
+        Said = said,
+        Better = better,
+        Time = time,
+        Quote = quote,
+        State = CallFindingState.Kept
+    };
+
     private static CallAnalysisDetail Detail(CallAnalysisSummary summary) => new()
     {
         Summary = summary,
         Register = "casual",
         Report = "Call analysis: the whole report.",
+        CanGiveFeedback = summary.State == CallAnalysisState.Completed,
+        ReviewSummary = "A relaxed call with good listening.",
+        Priorities = ["Drop です with friends", "Vary 思う"],
         Struggles =
         [
             new CallStruggle
             {
-                Id = "a1", Category = "Unnatural phrasing", Pattern = "すごく忙しい", Explanation = "Sounds stiff.", Severity = 3,
+                IssueId = "a1", Category = "Unnatural phrasing", Pattern = "すごく忙しい", Explanation = "Sounds stiff.", Severity = 3,
                 Status = "active", TimesInCall = 2, TimesOverall = 5,
-                Examples = [new CallStruggleExample { Said = "すごく忙しいです", Better = "めっちゃ忙しい" }]
+                Findings = [Finding("f1", "すごく忙しいです", "めっちゃ忙しい", 65), Finding("f2", "毎日残業です", "毎日残業", 70, CallQuoteState.Possibly)]
             },
-            new CallStruggle { Id = "b2", Category = "Particle", Pattern = "に vs で", Severity = 2, Status = "improving", TimesInCall = 1, TimesOverall = 3 }
+            new CallStruggle { IssueId = "b2", Category = "Particle", Pattern = "に vs で", Severity = 2, Status = "improving", TimesInCall = 1, TimesOverall = 3 }
         ],
         Speech = new CallSpeech
         {
@@ -102,11 +120,45 @@ public class CallAnalysisPageTests : BunitContext
             RegisterMismatch = "Too polite for a friend.",
             Grammar = [new CallGrammarUse { Pattern = "～わけではない", Meaning = "it is not that", Count = 2 }]
         },
-        Strengths = ["Natural back-channeling"],
+        Strengths = [new CallFindingView { Id = "s1", Kind = CallFindingKind.Strength, Origin = "review", Pattern = "Natural back-channeling", State = CallFindingState.Kept }],
+        CorrectUses = [new CallFindingView { Id = "c1", Kind = CallFindingKind.Correct, Origin = "review", Said = "公園で遊んだ", IssuePattern = "に vs で", State = CallFindingState.Kept, Time = 0 }],
+        Phrases = [new CallFindingView { Id = "p1", Kind = CallFindingKind.Phrase, Origin = "review", Said = "無理しないでね", Better = "take it easy", State = CallFindingState.Kept }],
+        FilteredOut = [new CallFindingView { Id = "x1", Origin = "review", Category = "Particle", Pattern = "invented", Said = "誰も言っていない", State = CallFindingState.Rejected, Quote = CallQuoteState.NotFound, Note = "The quoted words are not in the transcript." }],
+        Flow = new CallFlow
+        {
+            Separated = true,
+            HasPartner = true,
+            LearnerSeconds = 600,
+            PartnerSeconds = 400,
+            LearnerCharacters = 3000,
+            PartnerCharacters = 1000,
+            LearnerTurns = 40,
+            PartnerTurns = 41,
+            LearnerCharactersPerTurn = 75,
+            PartnerCharactersPerTurn = 24.4,
+            MedianResponseSeconds = 0.8,
+            LongPauses = 3,
+            Windows = [new CallFlowWindow { Start = 0, LearnerSeconds = 180, PartnerSeconds = 100 }, new CallFlowWindow { Start = 300, LearnerSeconds = 120, PartnerSeconds = 150 }]
+        },
+        Vocabulary = new CallVocabulary
+        {
+            Separated = true,
+            LearnerWords = 3,
+            LearnerDistinct = 2,
+            PartnerWords = 2,
+            PartnerDistinct = 2,
+            Words =
+            [
+                new CallWordView { Lemma = "忙しい", Reading = "いそがしい", Class = "Adjective", Learner = 2, Partner = 1, Surfaces = ["忙しい"], NewForLearner = true },
+                new CallWordView { Lemma = "残業", Reading = "ざんぎょう", Class = "Noun", Learner = 1, Surfaces = ["残業"] },
+                new CallWordView { Lemma = "無理", Reading = "むり", Class = "AdjectivalNoun", Partner = 1, Surfaces = ["無理"] }
+            ]
+        },
         Transcript =
         [
-            new CallTranscriptLine { Start = 0, Speaker = "Yuki", Text = "最近どう？" },
-            new CallTranscriptLine { Start = 65, Speaker = "Me", Text = "えーと、忙しいです。", IsLearner = true, Disputed = "忙しい -> 忙しく" }
+            new CallTranscriptLine { Start = 0, Speaker = "Yuki", Text = "最近どう？無理しないでね。" },
+            new CallTranscriptLine { Start = 65, Speaker = "Me", Text = "えーと、忙しいです。", IsLearner = true, Disputed = "忙しい -> 忙しく" },
+            new CallTranscriptLine { Start = 70, Speaker = "Me", Text = "毎日残業です。", IsLearner = true }
         ]
     };
 
@@ -147,8 +199,21 @@ public class CallAnalysisPageTests : BunitContext
         Assert.Contains("Too polite for a friend.", cut.Markup);
         Assert.Contains("～わけではない", cut.Markup);
         Assert.Contains("Natural back-channeling", cut.Markup);
-        Assert.Contains("Call analysis: the whole report.", cut.Markup);
+        Assert.Contains("A relaxed call with good listening.", cut.Find("[data-review]").TextContent);
+        Assert.Contains("無理しないでね", cut.Find("[data-phrases]").TextContent);
+        Assert.Contains("公園で遊んだ", cut.Find("[data-went-well]").TextContent);
         Assert.Equal("2", cut.Find("[data-stat='struggles']").TextContent.Trim());
+        Assert.Equal("60%", cut.Find("[data-stat='share']").TextContent.Trim());
+        Assert.Equal("0.8 s", cut.Find("[data-stat='response']").TextContent.Trim());
+        Assert.Contains("possibly", cut.Find("[data-finding='f2']").TextContent);
+
+        // The report and the filtered findings stay folded until asked for
+        Assert.DoesNotContain("Call analysis: the whole report.", cut.Markup);
+        cut.Find("[data-report-toggle]").Click();
+        Assert.Contains("Call analysis: the whole report.", cut.Markup);
+        Assert.DoesNotContain("誰も言っていない", cut.Markup);
+        cut.Find("[data-filtered-toggle]").Click();
+        Assert.Contains("The quoted words are not in the transcript.", cut.Find("[data-filtered]").TextContent);
 
         cut.Find("[data-category='Particle']").Click();
         Assert.Empty(cut.FindAll("[data-struggle='a1']"));
@@ -158,6 +223,82 @@ public class CallAnalysisPageTests : BunitContext
         cut.Find("[data-transcript-toggle]").Click();
         Assert.Contains("01:05", cut.Find("[data-transcript]").TextContent);
         Assert.Contains("忙しい -> 忙しく", cut.Find("[data-transcript]").TextContent);
+    }
+
+    private IRenderedComponent<CallAnalysisPage> OpenDone()
+    {
+        IRenderedComponent<CallAnalysisPage> cut = RenderOnline();
+        Respond(_ => new CallAnalysisResponseTransmission { Calls = [Summary("done", "Yuki")] });
+        Respond(_ => new CallAnalysisResponseTransmission { Detail = Detail(Summary("done", "Yuki")) });
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-call-detail='done']")));
+        return cut;
+    }
+
+    [Fact]
+    public void AFindingsTime_OpensTheTranscriptAtItsLine()
+    {
+        IRenderedComponent<CallAnalysisPage> cut = OpenDone();
+
+        // The page finishes its async load in a last render; a click racing it is simply repeated, as jumping is idempotent
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find("[data-jump='f2']").Click();
+            Assert.Equal("2", cut.Find(".call-line-target").GetAttribute("data-line"));
+        });
+    }
+
+    [Fact]
+    public void AWord_ShowsOnlyTheLinesWithIt()
+    {
+        IRenderedComponent<CallAnalysisPage> cut = OpenDone();
+        Assert.Contains("new", cut.Find("[data-word='忙しい']").TextContent);
+        Assert.Empty(cut.FindAll("[data-word='無理']"));
+
+        cut.WaitForAssertion(() =>
+        {
+            cut.Find("[data-word='残業']").Click();
+            IReadOnlyList<AngleSharp.Dom.IElement> lines = cut.FindAll("[data-line]");
+            Assert.Equal("2", Assert.Single(lines).GetAttribute("data-line"));
+            Assert.Contains("<mark>残業</mark>", lines[0].InnerHtml);
+        });
+
+        cut.Find("[data-vocab-view='heard']").Click();
+        Assert.NotEmpty(cut.FindAll("[data-word='無理']"));
+    }
+
+    [Fact]
+    public void Feedback_IsSentAndTheAnswerReplacesTheCall()
+    {
+        IRenderedComponent<CallAnalysisPage> cut = OpenDone();
+
+        cut.Find("[data-finding='f1'] [data-feedback='not-a-mistake']").Click();
+
+        CallAnalysisDetail updated = Detail(Summary("done", "Yuki"));
+        updated.Struggles[0].Findings[0].Feedback = CallFindingFeedback.NotAMistake;
+        updated.Struggles[0].TimesInCall = 1;
+        updated.Summary.IssueCount = 3;
+        CallAnalysisRequestTransmission sent = Respond(_ => new CallAnalysisResponseTransmission { Detail = updated });
+
+        Assert.Equal((CallAnalysisAction.Feedback, "done", "f1", CallFindingFeedback.NotAMistake), (sent.Action, sent.CallId, sent.FindingId, sent.Feedback));
+        cut.WaitForAssertion(() => Assert.Contains("you said: not a mistake", cut.Find("[data-finding='f1']").TextContent));
+        Assert.Equal("3", cut.Find("[data-stat='issues']").TextContent.Trim());
+
+        // Clicking the active choice again takes it back
+        cut.Find("[data-finding='f1'] [data-feedback='not-a-mistake']").Click();
+        CallAnalysisRequestTransmission undone = Respond(_ => new CallAnalysisResponseTransmission { Detail = Detail(Summary("done", "Yuki")) });
+        Assert.Equal(CallFindingFeedback.None, undone.Feedback);
+    }
+
+    [Fact]
+    public void ARunningCall_TakesNoFeedback()
+    {
+        Services.AddSingleton<ISocketClientContainer>(new Sockets { Client = _client });
+        IRenderedComponent<CallAnalysisPage> cut = Render<CallAnalysisPage>(p => p.Add(x => x.CallId, "run"));
+        Respond(_ => new CallAnalysisResponseTransmission { Calls = [Summary("run", "Ken", CallAnalysisState.Consolidating)] });
+        Respond(_ => new CallAnalysisResponseTransmission { Detail = Detail(Summary("run", "Ken", CallAnalysisState.Consolidating)) });
+
+        cut.WaitForAssertion(() => Assert.Contains("Merging and checking the findings.", cut.Markup));
+        Assert.Empty(cut.FindAll("[data-feedback]"));
     }
 
     [Fact]

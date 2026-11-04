@@ -401,7 +401,8 @@ internal static class CallDiagnosis
     /// </summary>
     public static bool ImportLegacy(CallJob job, JapaneseDiagnosis? diagnosis)
     {
-        if (job.LegacyImported || job.Findings.Count > 0 || job.Status != CallJobStatus.Completed)
+        // A call with a review was analyzed with findings on the call; it has nothing to copy, even when it found nothing
+        if (job.LegacyImported || job.Findings.Count > 0 || job.Review != null || job.Status != CallJobStatus.Completed)
         {
             return false;
         }

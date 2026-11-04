@@ -1,0 +1,143 @@
+@using Akagi.Bridge.Chat.Models
+
+<div class="card mb-3" data-vocabulary>
+	<div class="card-header flex-wrap gap-2">
+		<h3 class="card-title m-0">Vocabulary</h3>
+		<span class="ms-auto text-secondary small">
+			You: @Vocabulary.LearnerDistinct different words, @Vocabulary.LearnerWords in all
+			@if (Vocabulary.Separated && Vocabulary.PartnerWords > 0)
+			{
+				<span>&middot; @PartnerName: @Vocabulary.PartnerDistinct, @Vocabulary.PartnerWords in all</span>
+			}
+		</span>
+	</div>
+	<div class="card-body border-bottom py-2">
+		<div class="d-flex flex-wrap gap-2 align-items-center">
+			<div class="btn-group btn-group-sm" role="group">
+				<button type="button" class="btn @(_view == View.Yours ? "btn-primary" : "btn-outline-primary")" data-vocab-view="yours" @onclick="() => Show(View.Yours)">Your words</button>
+				<button type="button" class="btn @(_view == View.New ? "btn-primary" : "btn-outline-primary")" data-vocab-view="new" @onclick="() => Show(View.New)">
+					New for you <span class="ms-1 opacity-75">@Vocabulary.Words.Count(w => w.NewForLearner)</span>
+				</button>
+				@if (Vocabulary.Separated && Vocabulary.PartnerWords > 0)
+				{
+					<button type="button" class="btn @(_view == View.HeardOnly ? "btn-primary" : "btn-outline-primary")" data-vocab-view="heard" @onclick="() => Show(View.HeardOnly)">Only @PartnerName said</button>
+				}
+			</div>
+			<select class="form-select form-select-sm w-auto" @bind="_class" aria-label="Word class">
+				<option value="">All word classes</option>
+				@foreach (string wordClass in CallText.WordClasses)
+				{
+					<option value="@wordClass">@CallText.ClassLabel(wordClass)</option>
+				}
+			</select>
+			<input type="search" class="form-control form-control-sm w-auto" placeholder="Find a word" lang="ja"
+				   @bind="_search" @bind:event="oninput" aria-label="Find a word" />
+		</div>
+		@if (!Vocabulary.Separated)
+		{
+			<div class="text-secondary small mt-2">The voices were not recorded separately, so these counts include everyone on the call.</div>
+		}
+	</div>
+	@if (Shown.Count == 0)
+	{
+		<div class="card-body text-secondary small">No words match.</div>
+	}
+	else
+	{
+		<div class="table-responsive">
+			<table class="table table-sm table-vcenter table-hover card-table mb-0">
+				<thead>
+					<tr>
+						<th>Word</th>
+						<th>Class</th>
+						<th class="text-end">You</th>
+						@if (Vocabulary.Separated)
+						{
+							<th class="text-end">@PartnerName</th>
+						}
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (CallWordView word in Shown.Take(_showAll ? int.MaxValue : PageSize))
+					{
+						<tr class="call-word" data-word="@word.Lemma" title="Show the lines with this word" @onclick="() => OnWord.InvokeAsync(word)">
+							<td lang="ja">
+								<span class="fw-medium">@word.Lemma</span>
+								@if (!string.IsNullOrEmpty(word.Reading) && word.Reading != word.Lemma)
+								{
+									<span class="text-secondary small ms-1">@word.Reading</span>
+								}
+								@if (word.NewForLearner)
+								{
+									<span class="badge bg-green-lt ms-1">new</span>
+								}
+							</td>
+							<td class="text-secondary small">@CallText.ClassLabel(word.Class)</td>
+							<td class="text-end">@word.Learner</td>
+							@if (Vocabulary.Separated)
+							{
+								<td class="text-end text-secondary">@word.Partner</td>
+							}
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		@if (Shown.Count > PageSize)
+		{
+			<div class="card-footer py-2 text-center">
+				<button type="button" class="btn btn-sm btn-ghost-primary" @onclick="() => _showAll = !_showAll">
+					@(_showAll ? "Show fewer" : $"Show all {Shown.Count}")
+				</button>
+			</div>
+		}
+	}
+</div>
+
+@code {
+	private const int PageSize = 40;
+
+	private enum View
+	{
+		Yours,
+		New,
+		HeardOnly
+	}
+
+	[Parameter, EditorRequired]
+	public CallVocabulary Vocabulary { get; set; } = default!;
+
+	[Parameter]
+	public string PartnerName { get; set; } = "Partner";
+
+	[Parameter]
+	public EventCallback<CallWordView> OnWord { get; set; }
+
+	private View _view;
+	private string _class = string.Empty;
+	private string _search = string.Empty;
+	private bool _showAll;
+
+	private List<CallWordView> Shown =>
+	[
+		.. Vocabulary.Words
+			.Where(w => _view switch
+			{
+				View.New => w.NewForLearner,
+				View.HeardOnly => w.Learner == 0 && w.Partner > 0,
+				_ => w.Learner > 0
+			})
+			.Where(w => _class.Length == 0 || w.Class == _class)
+			.Where(w => _search.Length == 0 || w.Lemma.Contains(_search.Trim(), StringComparison.Ordinal)
+						|| w.Reading.Contains(_search.Trim(), StringComparison.Ordinal)
+						|| w.Surfaces.Any(s => s.Contains(_search.Trim(), StringComparison.Ordinal)))
+			.OrderByDescending(w => _view == View.HeardOnly ? w.Partner : w.Learner)
+			.ThenBy(w => w.Lemma, StringComparer.Ordinal)
+	];
+
+	private void Show(View view)
+	{
+		_view = view;
+		_showAll = false;
+	}
+}

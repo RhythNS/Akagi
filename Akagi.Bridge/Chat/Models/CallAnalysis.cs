@@ -9,7 +9,50 @@ public enum CallAnalysisState
     Analyzing,
     Reporting,
     Completed,
-    Failed
+    Failed,
+    /// <summary>All parts are reviewed; their findings are being merged and checked.</summary>
+    Consolidating
+}
+
+public enum CallFindingKind
+{
+    Mistake,
+    Correct,
+    Strength,
+    Phrase
+}
+
+/// <summary>
+/// Whether the finding's quoted words were found in the transcript.
+/// </summary>
+public enum CallQuoteState
+{
+    NotQuoted,
+    Found,
+    /// <summary>Found with small differences.</summary>
+    Approximate,
+    /// <summary>The two transcriptions disagree on these words.</summary>
+    Possibly,
+    NotFound,
+    OtherSpeaker
+}
+
+public enum CallFindingState
+{
+    Kept,
+    /// <summary>The consolidation decided it should not count.</summary>
+    Dropped,
+    /// <summary>Its quote is not in the right lines of the transcript.</summary>
+    Rejected,
+    /// <summary>The analysis has not finished with it yet.</summary>
+    Pending
+}
+
+public enum CallFindingFeedback
+{
+    None,
+    Useful,
+    NotAMistake
 }
 
 /// <summary>
@@ -33,7 +76,7 @@ public class CallAnalysisSummary
     [Key(6)]
     public double DurationSeconds { get; set; }
     /// <summary>
-    /// Issues the review noted, counted per transcript chunk.
+    /// Mistakes that count in this call.
     /// </summary>
     [Key(7)]
     public int IssueCount { get; set; }
@@ -43,28 +86,77 @@ public class CallAnalysisSummary
     public int ChunkCount { get; set; }
     [Key(10)]
     public string Error { get; set; } = string.Empty;
+    /// <summary>
+    /// The learner's share of the speaking time, when both voices were recorded.
+    /// </summary>
+    [Key(11)]
+    public double? LearnerShare { get; set; }
 
     [IgnoreMember]
     public DateTime Date => RecordedAt ?? CreatedAt;
 }
 
 [MessagePackObject]
-public class CallStruggleExample
+public class CallFindingView
 {
     [Key(0)]
-    public string Said { get; set; } = string.Empty;
+    public string Id { get; set; } = string.Empty;
     [Key(1)]
+    public CallFindingKind Kind { get; set; }
+    /// <summary>
+    /// Where it came from, in words: "review", "measured" or "earlier analysis".
+    /// </summary>
+    [Key(2)]
+    public string Origin { get; set; } = string.Empty;
+    [Key(3)]
+    public string Category { get; set; } = string.Empty;
+    [Key(4)]
+    public string Pattern { get; set; } = string.Empty;
+    /// <summary>
+    /// The quoted words: the learner's, or for a phrase the partner's.
+    /// </summary>
+    [Key(5)]
+    public string Said { get; set; } = string.Empty;
+    /// <summary>
+    /// The natural version, or what a phrase means.
+    /// </summary>
+    [Key(6)]
     public string Better { get; set; } = string.Empty;
+    [Key(7)]
+    public string Explanation { get; set; } = string.Empty;
+    [Key(8)]
+    public int Severity { get; set; }
+    /// <summary>
+    /// Seconds into the call.
+    /// </summary>
+    [Key(9)]
+    public double? Time { get; set; }
+    [Key(10)]
+    public CallQuoteState Quote { get; set; }
+    [Key(11)]
+    public CallFindingState State { get; set; }
+    /// <summary>
+    /// Why it was dropped or rejected.
+    /// </summary>
+    [Key(12)]
+    public string Note { get; set; } = string.Empty;
+    [Key(13)]
+    public CallFindingFeedback Feedback { get; set; }
+    /// <summary>
+    /// For a correct use: the known issue it was about.
+    /// </summary>
+    [Key(14)]
+    public string IssuePattern { get; set; } = string.Empty;
 }
 
 /// <summary>
-/// A struggle area of the Japanese diagnosis with the evidence one call added to it.
+/// One issue of the diagnosis with every finding this call added to it.
 /// </summary>
 [MessagePackObject]
 public class CallStruggle
 {
     [Key(0)]
-    public string Id { get; set; } = string.Empty;
+    public string IssueId { get; set; } = string.Empty;
     /// <summary>
     /// The kind of problem in words, e.g. "Unnatural phrasing".
     /// </summary>
@@ -80,19 +172,22 @@ public class CallStruggle
     [Key(4)]
     public int Severity { get; set; }
     /// <summary>
-    /// Where the struggle stands overall: active, improving or resolved.
+    /// Where the issue stands overall: active, improving or resolved; empty when the diagnosis no longer has it.
     /// </summary>
     [Key(5)]
     public string Status { get; set; } = string.Empty;
     /// <summary>
-    /// Examples kept from this call. The diagnosis keeps only the latest few per struggle, so older calls can lose theirs.
+    /// Findings that count in this call.
     /// </summary>
     [Key(6)]
     public int TimesInCall { get; set; }
+    /// <summary>
+    /// Mistakes across everything the diagnosis has seen; null when it no longer has the issue.
+    /// </summary>
     [Key(7)]
-    public int TimesOverall { get; set; }
+    public int? TimesOverall { get; set; }
     [Key(8)]
-    public CallStruggleExample[] Examples { get; set; } = [];
+    public CallFindingView[] Findings { get; set; } = [];
 }
 
 [MessagePackObject]
@@ -158,6 +253,112 @@ public class CallSpeech
 }
 
 [MessagePackObject]
+public class CallFlowWindow
+{
+    [Key(0)]
+    public double Start { get; set; }
+    [Key(1)]
+    public double LearnerSeconds { get; set; }
+    [Key(2)]
+    public double PartnerSeconds { get; set; }
+}
+
+/// <summary>
+/// Who spoke how much and how the turns went.
+/// </summary>
+[MessagePackObject]
+public class CallFlow
+{
+    /// <summary>
+    /// The learner's lines are known; without that there is no partner side to compare with.
+    /// </summary>
+    [Key(0)]
+    public bool Separated { get; set; }
+    [Key(1)]
+    public bool HasPartner { get; set; }
+    [Key(2)]
+    public double LearnerSeconds { get; set; }
+    [Key(3)]
+    public double PartnerSeconds { get; set; }
+    [Key(4)]
+    public int LearnerCharacters { get; set; }
+    [Key(5)]
+    public int PartnerCharacters { get; set; }
+    [Key(6)]
+    public int LearnerTurns { get; set; }
+    [Key(7)]
+    public int PartnerTurns { get; set; }
+    [Key(8)]
+    public double LearnerCharactersPerTurn { get; set; }
+    [Key(9)]
+    public double PartnerCharactersPerTurn { get; set; }
+    [Key(10)]
+    public double LongestLearnerTurnSeconds { get; set; }
+    [Key(11)]
+    public double? MedianResponseSeconds { get; set; }
+    [Key(12)]
+    public int LearnerOverlaps { get; set; }
+    [Key(13)]
+    public int LongPauses { get; set; }
+    [Key(14)]
+    public CallFlowWindow[] Windows { get; set; } = [];
+
+    [IgnoreMember]
+    public double? LearnerShare => HasPartner && LearnerSeconds + PartnerSeconds > 0 ? LearnerSeconds / (LearnerSeconds + PartnerSeconds) : null;
+
+    [IgnoreMember]
+    public double? LearnerCharacterShare => HasPartner && LearnerCharacters + PartnerCharacters > 0 ? (double)LearnerCharacters / (LearnerCharacters + PartnerCharacters) : null;
+}
+
+[MessagePackObject]
+public class CallWordView
+{
+    [Key(0)]
+    public string Lemma { get; set; } = string.Empty;
+    [Key(1)]
+    public string Reading { get; set; } = string.Empty;
+    /// <summary>
+    /// Noun, Verb, Adjective, AdjectivalNoun, Adverb, Adnominal, Conjunction or Interjection.
+    /// </summary>
+    [Key(2)]
+    public string Class { get; set; } = string.Empty;
+    [Key(3)]
+    public int Learner { get; set; }
+    [Key(4)]
+    public int Partner { get; set; }
+    /// <summary>
+    /// The forms it was said in, to find it in the transcript.
+    /// </summary>
+    [Key(5)]
+    public string[] Surfaces { get; set; } = [];
+    /// <summary>
+    /// The learner used it in this call and in no call before it.
+    /// </summary>
+    [Key(6)]
+    public bool NewForLearner { get; set; }
+}
+
+[MessagePackObject]
+public class CallVocabulary
+{
+    [Key(0)]
+    public int LearnerWords { get; set; }
+    [Key(1)]
+    public int PartnerWords { get; set; }
+    [Key(2)]
+    public int LearnerDistinct { get; set; }
+    [Key(3)]
+    public int PartnerDistinct { get; set; }
+    [Key(4)]
+    public CallWordView[] Words { get; set; } = [];
+    /// <summary>
+    /// The voices are separated, so the learner and partner counts mean something.
+    /// </summary>
+    [Key(5)]
+    public bool Separated { get; set; }
+}
+
+[MessagePackObject]
 public class CallTranscriptLine
 {
     [Key(0)]
@@ -194,13 +395,176 @@ public class CallAnalysisDetail
     public CallStruggle[] Struggles { get; set; } = [];
     [Key(4)]
     public CallSpeech? Speech { get; set; }
-    /// <summary>
-    /// Strengths noted while the call was being analyzed.
-    /// </summary>
     [Key(5)]
-    public string[] Strengths { get; set; } = [];
+    public CallFindingView[] Strengths { get; set; } = [];
     [Key(6)]
     public CallTranscriptLine[] Transcript { get; set; } = [];
     [Key(7)]
     public bool Delivered { get; set; }
+    [Key(8)]
+    public string ReviewSummary { get; set; } = string.Empty;
+    [Key(9)]
+    public string[] Priorities { get; set; } = [];
+    [Key(10)]
+    public CallFindingView[] CorrectUses { get; set; } = [];
+    [Key(11)]
+    public CallFindingView[] Phrases { get; set; } = [];
+    /// <summary>
+    /// Dropped by the consolidation or rejected by the quote check, kept visible so nothing disappears silently.
+    /// </summary>
+    [Key(12)]
+    public CallFindingView[] FilteredOut { get; set; } = [];
+    [Key(13)]
+    public CallFlow? Flow { get; set; }
+    [Key(14)]
+    public CallVocabulary? Vocabulary { get; set; }
+    /// <summary>
+    /// Findings were copied from the diagnosis because this call was analyzed before they were stored on calls, so some
+    /// may already have been lost.
+    /// </summary>
+    [Key(15)]
+    public bool Legacy { get; set; }
+    /// <summary>
+    /// Feedback can be given: the analysis is finished.
+    /// </summary>
+    [Key(16)]
+    public bool CanGiveFeedback { get; set; }
+}
+
+/// <summary>
+/// One call as a point on the trends across calls.
+/// </summary>
+[MessagePackObject]
+public class CallTrendPoint
+{
+    [Key(0)]
+    public string CallId { get; set; } = string.Empty;
+    [Key(1)]
+    public string Name { get; set; } = string.Empty;
+    [Key(2)]
+    public DateTime Date { get; set; }
+    [Key(3)]
+    public double DurationSeconds { get; set; }
+    [Key(4)]
+    public double? LearnerShare { get; set; }
+    [Key(5)]
+    public double? MedianResponseSeconds { get; set; }
+    [Key(6)]
+    public double? FillersPer100 { get; set; }
+    [Key(7)]
+    public int LearnerWords { get; set; }
+    [Key(8)]
+    public int LearnerDistinct { get; set; }
+    /// <summary>
+    /// Words the learner used for the first time in this call.
+    /// </summary>
+    [Key(9)]
+    public int NewWords { get; set; }
+    [Key(10)]
+    public int IssueCount { get; set; }
+    [Key(11)]
+    public double LearnerCharactersPerTurn { get; set; }
+    /// <summary>
+    /// The voices were recorded separately; without that the word and turn numbers include everyone.
+    /// </summary>
+    [Key(12)]
+    public bool Separated { get; set; }
+}
+
+[MessagePackObject]
+public class InsightWord
+{
+    [Key(0)]
+    public string Lemma { get; set; } = string.Empty;
+    [Key(1)]
+    public string Reading { get; set; } = string.Empty;
+    [Key(2)]
+    public string Class { get; set; } = string.Empty;
+    [Key(3)]
+    public int Learner { get; set; }
+    [Key(4)]
+    public int Partner { get; set; }
+    /// <summary>
+    /// Calls the learner used it in.
+    /// </summary>
+    [Key(5)]
+    public int Calls { get; set; }
+    [Key(6)]
+    public DateTime? FirstUsed { get; set; }
+}
+
+[MessagePackObject]
+public class InsightStruggle
+{
+    [Key(0)]
+    public string IssueId { get; set; } = string.Empty;
+    [Key(1)]
+    public string Category { get; set; } = string.Empty;
+    [Key(2)]
+    public string Pattern { get; set; } = string.Empty;
+    /// <summary>
+    /// Findings that count, across all calls.
+    /// </summary>
+    [Key(3)]
+    public int Times { get; set; }
+    [Key(4)]
+    public int Calls { get; set; }
+    [Key(5)]
+    public int Severity { get; set; }
+    [Key(6)]
+    public string Status { get; set; } = string.Empty;
+    [Key(7)]
+    public DateTime LastSeen { get; set; }
+    [Key(8)]
+    public CallFindingView? Example { get; set; }
+    [Key(9)]
+    public int CorrectUses { get; set; }
+}
+
+[MessagePackObject]
+public class InsightPhrase
+{
+    [Key(0)]
+    public string Phrase { get; set; } = string.Empty;
+    [Key(1)]
+    public string Meaning { get; set; } = string.Empty;
+    [Key(2)]
+    public string CallId { get; set; } = string.Empty;
+    [Key(3)]
+    public string CallName { get; set; } = string.Empty;
+    [Key(4)]
+    public DateTime Date { get; set; }
+}
+
+/// <summary>
+/// Everything the calls show together: trends, vocabulary and the struggles that keep coming back.
+/// </summary>
+[MessagePackObject]
+public class CallInsights
+{
+    [Key(0)]
+    public CallTrendPoint[] Calls { get; set; } = [];
+    [Key(1)]
+    public int LearnerWords { get; set; }
+    [Key(2)]
+    public int LearnerDistinct { get; set; }
+    /// <summary>
+    /// The learner's words, most used first.
+    /// </summary>
+    [Key(3)]
+    public InsightWord[] Words { get; set; } = [];
+    /// <summary>
+    /// Words partners used again and again that the learner never said: understood, but not yet their own.
+    /// </summary>
+    [Key(4)]
+    public InsightWord[] HeardNotSaid { get; set; } = [];
+    [Key(5)]
+    public InsightStruggle[] Struggles { get; set; } = [];
+    [Key(6)]
+    public InsightPhrase[] Phrases { get; set; } = [];
+    /// <summary>
+    /// Some calls lack separate voices; they are left out of the vocabulary and have no speaking share.
+    /// </summary>
+    [Key(7)]
+    public int MixedCalls { get; set; }
 }

@@ -1,0 +1,406 @@
+@page "/Learn/Insights"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Pages.Learning.Components
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+@using System.Globalization
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+
+<PageTitle>Speaking Insights - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Learn</div>
+			<h2 class="page-title">Speaking insights</h2>
+			<div class="text-secondary small mt-1">Everything your analyzed calls show together: how you speak, the words you use, and what keeps coming back.</div>
+		</div>
+		@if (_insights != null)
+		{
+			<div class="col-auto ms-auto d-flex gap-2">
+				<a href="Learn/Calls" class="btn btn-outline-secondary">Single calls</a>
+				<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" @onclick="LoadAsync">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Refresh</span>
+				</button>
+			</div>
+		}
+	</div>
+</div>
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert">@_error</div>
+}
+
+@if (_loading)
+{
+	<div class="card">
+		<div class="card-body py-5 text-center">
+			<div class="spinner-border text-primary mb-3" role="status"></div>
+			<div class="text-secondary">Gathering your calls...</div>
+		</div>
+	</div>
+}
+else if (_insights == null && _error == null)
+{
+	<div class="card border-danger">
+		<div class="card-body py-5 text-center">
+			<div class="text-danger mb-2">
+				<Icon IconType="@Icons.AlertCircle" Size="36" />
+			</div>
+			<h3 class="h4 mb-1">Socket Service Offline</h3>
+			<p class="text-secondary mb-3">Unable to reach the Akagi backend. Call analyses are stored there.</p>
+			<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="LoadAsync">
+				<Icon IconType="@Icons.Refresh" Size="16" />
+				<span>Retry Connection</span>
+			</button>
+		</div>
+	</div>
+}
+else if (_insights == null)
+{
+}
+else if (_insights.Calls.Length == 0)
+{
+	<div class="card">
+		<div class="card-body py-5 text-center">
+			<div class="text-secondary mb-2">
+				<Icon IconType="@Icons.Phone" Size="36" />
+			</div>
+			<h3 class="h4 mb-1">No finished calls yet</h3>
+			<p class="text-secondary m-0">Insights appear once a call analysis is done.</p>
+		</div>
+	</div>
+}
+else
+{
+	CallInsights insights = _insights;
+	<div class="row row-cards mb-3">
+		<div class="col-6 col-lg-3">
+			<div class="card"><div class="card-body">
+				<div class="text-secondary small">Calls analyzed</div>
+				<div class="h1 m-0" data-tile="calls">@insights.Calls.Length</div>
+				<div class="text-secondary small">@CallText.Duration(insights.Calls.Sum(c => c.DurationSeconds)) in all</div>
+			</div></div>
+		</div>
+		<div class="col-6 col-lg-3">
+			<div class="card"><div class="card-body">
+				<div class="text-secondary small">Different words you used</div>
+				<div class="h1 m-0" data-tile="distinct">@insights.LearnerDistinct</div>
+				<div class="text-secondary small">@insights.LearnerWords words in all</div>
+			</div></div>
+		</div>
+		<div class="col-6 col-lg-3">
+			<div class="card"><div class="card-body">
+				<div class="text-secondary small">Your share of the speaking</div>
+				<div class="h1 m-0" data-tile="share">@(AverageShare is double averageShare ? CallText.Percent(averageShare) : "-")</div>
+				<div class="text-secondary small">weighted by call length</div>
+			</div></div>
+		</div>
+		<div class="col-6 col-lg-3">
+			<div class="card"><div class="card-body">
+				<div class="text-secondary small">Words heard but not yet said</div>
+				<div class="h1 m-0" data-tile="heard">@insights.HeardNotSaid.Length</div>
+				<div class="text-secondary small">used by partners @CallAnalysisMin+ times</div>
+			</div></div>
+		</div>
+	</div>
+
+	@if (insights.MixedCalls > 0)
+	{
+		<div class="alert alert-info small">
+			@insights.MixedCalls call@(insights.MixedCalls == 1 ? " was" : "s were") recorded without separate voices. They have no speaking share and are left out of the vocabulary, because your partner's words could not be told apart from yours.
+		</div>
+	}
+
+	<h3 class="mt-2">Trends</h3>
+	<div class="row row-cards mb-3">
+		<div class="col-12 col-md-6 col-xl-4">
+			<TrendColumns Title="Your share of the speaking time" Hint="Higher means you carried more of the conversation." Points="Points(c => c.LearnerShare)" Scale="1" Format="CallText.Percent" />
+		</div>
+		<div class="col-12 col-md-6 col-xl-4">
+			<TrendColumns Title="Different words you used" Points="Points(c => c.Separated ? c.LearnerDistinct : null)" Format="Whole" />
+		</div>
+		<div class="col-12 col-md-6 col-xl-4">
+			<TrendColumns Title="Words used for the first time" Hint="Not said in any earlier call." Points="Points(c => c.Separated ? c.NewWords : null)" Format="Whole" />
+		</div>
+		<div class="col-12 col-md-6 col-xl-4">
+			<TrendColumns Title="Fillers per 100 characters" Hint="Lower is smoother." Points="Points(c => c.FillersPer100)" Format="CallText.Number" />
+		</div>
+		<div class="col-12 col-md-6 col-xl-4">
+			<TrendColumns Title="Time until you answer" Hint="Median gap after your partner stops talking." Points="Points(c => c.MedianResponseSeconds)" Format="CallText.Seconds" />
+		</div>
+		<div class="col-12 col-md-6 col-xl-4">
+			<TrendColumns Title="Characters per turn" Hint="How much you say each time you speak." Points="Points(c => c.Separated ? c.LearnerCharactersPerTurn : null)" Format="CallText.Number" />
+		</div>
+	</div>
+
+	<div class="card mb-3">
+		<div class="card-header">
+			<h3 class="card-title m-0">Per call</h3>
+		</div>
+		<div class="table-responsive">
+			<table class="table table-sm table-vcenter card-table mb-0" data-per-call>
+				<thead>
+					<tr>
+						<th>Call</th>
+						<th class="text-end">Length</th>
+						<th class="text-end">Your share</th>
+						<th class="text-end">Different words</th>
+						<th class="text-end">New words</th>
+						<th class="text-end">Fillers / 100</th>
+						<th class="text-end">Answer after</th>
+						<th class="text-end">Issues</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (CallTrendPoint call in insights.Calls.AsEnumerable().Reverse())
+					{
+						<tr>
+							<td><a href="@($"Learn/Calls/{call.CallId}")">@call.Name</a> <span class="text-secondary small">@call.Date.ToLocalTime().ToString("d")</span></td>
+							<td class="text-end">@CallText.Duration(call.DurationSeconds)</td>
+							<td class="text-end">@(call.LearnerShare is double share ? CallText.Percent(share) : "-")</td>
+							<td class="text-end">@(call.Separated ? call.LearnerDistinct.ToString() : "-")</td>
+							<td class="text-end">@(call.Separated ? call.NewWords.ToString() : "-")</td>
+							<td class="text-end">@(call.FillersPer100 is double fillers ? CallText.Number(fillers) : "-")</td>
+							<td class="text-end">@(call.MedianResponseSeconds is double seconds ? CallText.Seconds(seconds) : "-")</td>
+							<td class="text-end">@call.IssueCount</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	<div class="card mb-3">
+		<div class="card-header">
+			<h3 class="card-title m-0">Struggles across calls</h3>
+			<span class="ms-auto text-secondary small">most serious and frequent first</span>
+		</div>
+		@if (insights.Struggles.Length == 0)
+		{
+			<div class="card-body text-secondary small">No struggles recorded in calls yet.</div>
+		}
+		else
+		{
+			<div class="list-group list-group-flush" data-insight-struggles>
+				@foreach (InsightStruggle struggle in insights.Struggles)
+				{
+					<div class="list-group-item">
+						<div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+							<span class="badge bg-purple-lt">@struggle.Category</span>
+							<span class="badge @CallText.SeverityClass(struggle.Severity)">@CallText.SeverityLabel(struggle.Severity)</span>
+							@if (struggle.Status is { Length: > 0 } status && status != "active")
+							{
+								<span class="badge @CallText.StatusClass(status)">@status</span>
+							}
+							<span class="ms-auto text-secondary small">
+								@struggle.Times&times; in @struggle.Calls call@(struggle.Calls == 1 ? "" : "s")@(struggle.CorrectUses > 0 ? $", right {struggle.CorrectUses}×" : ""), last @struggle.LastSeen.ToLocalTime().ToString("d")
+							</span>
+						</div>
+						<div class="fw-medium" lang="ja">@struggle.Pattern</div>
+						@if (struggle.Example is CallFindingView example && !string.IsNullOrWhiteSpace(example.Said))
+						{
+							<div class="small" lang="ja">
+								<span class="text-danger">@example.Said</span>
+								@if (!string.IsNullOrWhiteSpace(example.Better))
+								{
+									<span class="text-secondary mx-1">&rarr;</span><span class="text-success">@example.Better</span>
+								}
+							</div>
+						}
+					</div>
+				}
+			</div>
+		}
+	</div>
+
+	<div class="card mb-3" data-insight-vocabulary>
+		<div class="card-header flex-wrap gap-2">
+			<h3 class="card-title m-0">Vocabulary</h3>
+			<div class="ms-auto d-flex flex-wrap gap-2">
+				<div class="btn-group btn-group-sm" role="group">
+					<button type="button" class="btn @(!_heard ? "btn-primary" : "btn-outline-primary")" data-insight-view="yours" @onclick="() => _heard = false">Your words</button>
+					<button type="button" class="btn @(_heard ? "btn-primary" : "btn-outline-primary")" data-insight-view="heard" @onclick="() => _heard = true">Heard, not said</button>
+				</div>
+				<select class="form-select form-select-sm w-auto" @bind="_class" aria-label="Word class">
+					<option value="">All word classes</option>
+					@foreach (string wordClass in CallText.WordClasses)
+					{
+						<option value="@wordClass">@CallText.ClassLabel(wordClass)</option>
+					}
+				</select>
+				<input type="search" class="form-control form-control-sm w-auto" placeholder="Find a word" lang="ja" @bind="_search" @bind:event="oninput" aria-label="Find a word" />
+			</div>
+		</div>
+		<div class="card-body py-2 text-secondary small border-bottom">
+			@(_heard
+				? "Words your partners used again and again that you never said in a call: you understand them, so they are the easiest to make your own."
+				: "The words you said most, over all calls with separate voices.")
+		</div>
+		@{
+			List<InsightWord> words = ShownWords;
+		}
+		@if (words.Count == 0)
+		{
+			<div class="card-body text-secondary small">No words match.</div>
+		}
+		else
+		{
+			<div class="table-responsive" style="max-height: 32rem; overflow-y: auto;">
+				<table class="table table-sm table-vcenter card-table mb-0">
+					<thead>
+						<tr>
+							<th>Word</th>
+							<th>Class</th>
+							@if (!_heard)
+							{
+								<th class="text-end">You said it</th>
+								<th class="text-end">In calls</th>
+								<th class="text-end">First used</th>
+							}
+							<th class="text-end">Partners said it</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (InsightWord word in words)
+						{
+							<tr data-insight-word="@word.Lemma">
+								<td lang="ja">
+									<span class="fw-medium">@word.Lemma</span>
+									@if (!string.IsNullOrEmpty(word.Reading) && word.Reading != word.Lemma)
+									{
+										<span class="text-secondary small ms-1">@word.Reading</span>
+									}
+								</td>
+								<td class="text-secondary small">@CallText.ClassLabel(word.Class)</td>
+								@if (!_heard)
+								{
+									<td class="text-end">@word.Learner</td>
+									<td class="text-end">@word.Calls</td>
+									<td class="text-end text-secondary small">@word.FirstUsed?.ToLocalTime().ToString("d")</td>
+								}
+								<td class="text-end text-secondary">@word.Partner</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+
+	@if (insights.Phrases.Length > 0)
+	{
+		<div class="card mb-3" data-phrase-book>
+			<div class="card-header">
+				<h3 class="card-title m-0">Phrase book</h3>
+				<span class="ms-auto text-secondary small">natural expressions your partners used</span>
+			</div>
+			<div class="list-group list-group-flush">
+				@foreach (InsightPhrase phrase in insights.Phrases)
+				{
+					<div class="list-group-item">
+						<div class="d-flex justify-content-between gap-2">
+							<span class="fw-medium" lang="ja">@phrase.Phrase</span>
+							<a class="small text-secondary flex-shrink-0" href="@($"Learn/Calls/{phrase.CallId}")">@phrase.CallName, @phrase.Date.ToLocalTime().ToString("d")</a>
+						</div>
+						@if (!string.IsNullOrWhiteSpace(phrase.Meaning))
+						{
+							<div class="text-secondary small">@phrase.Meaning</div>
+						}
+					</div>
+				}
+			</div>
+		</div>
+	}
+}
+
+@code {
+	private const int CallAnalysisMin = 2;
+
+	private CallInsights? _insights;
+	private bool _loading = true;
+	private string? _error;
+	private bool _heard;
+	private string _class = string.Empty;
+	private string _search = string.Empty;
+
+	private double? AverageShare
+	{
+		get
+		{
+			List<CallTrendPoint> measured = [.. _insights!.Calls.Where(c => c.LearnerShare is not null && c.DurationSeconds > 0)];
+			double total = measured.Sum(c => c.DurationSeconds);
+			return total > 0 ? measured.Sum(c => c.LearnerShare!.Value * c.DurationSeconds) / total : null;
+		}
+	}
+
+	private List<InsightWord> ShownWords =>
+	[
+		.. (_heard ? _insights!.HeardNotSaid : _insights!.Words)
+			.Where(w => _class.Length == 0 || w.Class == _class)
+			.Where(w => _search.Trim().Length == 0 || w.Lemma.Contains(_search.Trim(), StringComparison.Ordinal) || w.Reading.Contains(_search.Trim(), StringComparison.Ordinal))
+	];
+
+	private List<TrendColumns.Point> Points(Func<CallTrendPoint, double?> value) =>
+		[.. _insights!.Calls.Select(c => new TrendColumns.Point(c.CallId, c.Name, c.Date, value(c)))];
+
+	private static string Whole(double value) => value.ToString("0", CultureInfo.InvariantCulture);
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override Task OnInitializedAsync() => LoadAsync();
+
+	private async Task LoadAsync()
+	{
+		_loading = true;
+		_error = null;
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			_insights = null;
+			_loading = false;
+			return;
+		}
+
+		try
+		{
+			CallAnalysisResponseTransmission response = await new CallAnalysisRequest(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.Insights })
+				.Get(client, CallAnalysisRequest.Timeout);
+			_error = response.Error;
+			_insights = response.Insights;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Try again in a moment.";
+		}
+		_loading = false;
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_insights == null && !_loading && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+	}
+}
