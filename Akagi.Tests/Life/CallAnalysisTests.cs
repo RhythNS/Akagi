@@ -388,14 +388,14 @@ public class CallJobTests
         (DiagnosisIssue issue, _) = diagnosis.RecordIssue(IssueCategory.Particle, "に vs で", "", null, 2, DateTime.UtcNow);
         CallJob job = new() { Partner = "Yuki", LearnerSpeaker = "Me", Chunks = [new()] };
 
-        string instruction = ToolCallChunkAnalyzer.BuildInstruction(job, diagnosis, DateTime.UtcNow);
+        string instruction = ToolCallReviewer.BuildInstruction(job, diagnosis, DateTime.UtcNow);
 
         Assert.Contains("Lines labeled 'Me' are {{user}}", instruction);
         Assert.Contains($"[{issue.Id}] Particle: に vs で", instruction);
         Assert.Contains("{{character}}", instruction);
         Assert.Contains("between {{user}} and Yuki", instruction);
-        Assert.Contains("RecordCorrectUsage", instruction);
-        Assert.StartsWith("Transcript part 1 of 1", ToolCallChunkAnalyzer.BuildChunkMessage(job, job.Chunks[0]));
+        Assert.Contains("NoteCallCorrectUse", instruction);
+        Assert.StartsWith("Transcript part 1 of 1", ToolCallReviewer.BuildChunkMessage(job, job.Chunks[0]));
     }
 
     [Fact]
@@ -538,14 +538,17 @@ public class CallPipelineTests
     }
 
     /// <summary>
-    /// Stands in for the LLM: records one issue per chunk the way the tutor's tool would.
+    /// Stands in for the LLM: notes one mistake per chunk, plus one whose quote nobody said, and consolidates them into
+    /// one group.
     /// </summary>
-    private sealed class StubAnalyzer(InMemoryJapaneseDiagnosisDatabase diagnoses) : ICallChunkAnalyzer
+    private sealed class StubAnalyzer : ICallChunkAnalyzer, ICallConsolidator
     {
         public List<int> Analyzed { get; } = [];
         public int FailOnChunk { get; set; } = -1;
+        public int Consolidations { get; private set; }
+        public bool ConsolidationGivesNothing { get; set; }
 
-        public async Task<int> AnalyzeAsync(CallJob job, CallChunk chunk, CancellationToken cancellationToken)
+        public Task<ChunkReview> AnalyzeAsync(CallJob job, CallChunk chunk, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken)
         {
             if (chunk.Index == FailOnChunk)
             {
@@ -553,11 +556,24 @@ public class CallPipelineTests
                 throw new HttpRequestException("rate limited");
             }
             Analyzed.Add(chunk.Index);
-            JapaneseDiagnosis diagnosis = await diagnoses.GetOrCreate(job.UserId);
-            diagnosis.RecordIssue(IssueCategory.Register, "too polite with friends", "です/ます with a close friend",
-                new IssueExample { Said = "楽しかったです", Better = "楽しかった", Source = job.SourceLabel }, 2, DateTime.UtcNow);
-            await diagnoses.SaveDocumentAsync(diagnosis);
-            return 1;
+            return Task.FromResult(new ChunkReview(
+            [
+                new CallFinding { Kind = FindingKind.Mistake, Category = IssueCategory.Register, Pattern = "polite with a friend", Said = "楽しかったです", Better = "楽しかった", Explanation = "です/ます with a close friend" },
+                new CallFinding { Kind = FindingKind.Mistake, Category = IssueCategory.Particle, Pattern = "invented", Said = "誰も言っていない言葉です" }
+            ], $"Part {chunk.Index + 1} small talk."));
+        }
+
+        public Task<Consolidation?> ConsolidateAsync(CallJob job, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken)
+        {
+            Consolidations++;
+            if (ConsolidationGivesNothing)
+            {
+                return Task.FromResult<Consolidation?>(null);
+            }
+            Consolidation result = new() { Summary = "A relaxed call.", Priorities = ["Drop です with friends."] };
+            result.Groups.Add(new FindingGroup([.. job.Findings.Where(f => f.State == FindingState.Candidate).Select(f => f.Id)], string.Empty,
+                "Register", "too polite with friends", "です/ます with a close friend", 2));
+            return Task.FromResult<Consolidation?>(result);
         }
     }
 
@@ -573,8 +589,8 @@ public class CallPipelineTests
 
         public Fixture(string storage)
         {
-            Analyzer = new StubAnalyzer(Diagnoses);
-            Pipeline = new CallAnalysisPipeline(Jobs, Diagnoses, Splitter, Transcriber, Analyzer,
+            Analyzer = new StubAnalyzer();
+            Pipeline = new CallAnalysisPipeline(Jobs, Diagnoses, Splitter, Transcriber, Analyzer, Analyzer,
                 job => { Delivered.Add(job); return Task.CompletedTask; },
                 new CallAnalysisOptions { StorageDirectory = storage, ChunkCharacters = 600 }, NullLogger.Instance);
         }
@@ -737,5 +753,118 @@ public class CallPipelineTests
         Assert.Equal(CallJobStatus.Failed, job.Status);
         Assert.Contains("No speech", job.Error);
         Assert.Empty(fixture.Delivered);
+    }
+
+    [Fact]
+    public async Task Run_KeepsEveryFindingOnTheCall_AndOnlyCheckedOnesReachTheDiagnosis()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        CallJob job = await fixture.Queue();
+
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+
+        int chunks = job.Chunks.Count;
+        Assert.Equal(1, fixture.Analyzer.Consolidations);
+        Assert.All(job.Chunks, c => Assert.StartsWith("Part ", c.Summary));
+
+        List<CallFinding> reviewed = [.. job.Findings.Where(f => f.Origin == FindingOrigin.Review)];
+        Assert.Equal(2 * chunks, reviewed.Count);
+        List<CallFinding> invented = [.. reviewed.Where(f => f.Pattern == "invented")];
+        Assert.Equal(chunks, invented.Count);
+        Assert.All(invented, f => Assert.Equal((FindingState.Rejected, QuoteCheck.NotFound, false), (f.State, f.Quote, f.Applied)));
+
+        List<CallFinding> kept = [.. reviewed.Where(f => f.State == FindingState.Kept)];
+        Assert.Equal(chunks, kept.Count);
+        Assert.All(kept, f =>
+        {
+            Assert.Equal("too polite with friends", f.Pattern);
+            Assert.Equal(QuoteCheck.Found, f.Quote);
+            Assert.True(f.Applied);
+            Assert.NotNull(f.Time);
+        });
+        Assert.Single(kept.Select(f => f.IssueId).Distinct());
+
+        JapaneseDiagnosis diagnosis = fixture.Diagnoses.Items.Single();
+        DiagnosisIssue issue = diagnosis.GetIssue(kept[0].IssueId)!;
+        // The local register measurement notices the same politeness problem and counts once more
+        Assert.Contains(job.Findings, f => f.Origin == FindingOrigin.Measurement && f.IssueId == issue.Id);
+        Assert.Equal(job.Findings.Count(f => f.IssueId == issue.Id && f.Applied), issue.Count);
+        Assert.DoesNotContain(diagnosis.Issues, i => i.Pattern == "invented");
+
+        // The local measurements are findings too, so the call keeps all of its evidence
+        Assert.Contains(job.Findings, f => f.Origin == FindingOrigin.Measurement && f.Pattern == "なんか");
+        Assert.Equal("A relaxed call.", job.Review!.Summary);
+        Assert.Contains("Tutor's review: A relaxed call.", job.Report);
+        Assert.Contains("- Drop です with friends.", job.Report);
+        Assert.Contains("filtered out", job.Report);
+
+        Assert.NotNull(job.Stats);
+        Assert.True(job.Stats!.LearnerShare > 0.5);
+        Assert.Contains(job.Stats.Words, w => w.Lemma == "楽しい" && w.Learner > 0);
+        Assert.Contains("Conversation: the learner spoke", job.Report);
+    }
+
+    [Fact]
+    public async Task Run_KeepsCheckedFindingsAsNoted_WhenTheConsolidationGivesNothing()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        fixture.Analyzer.ConsolidationGivesNothing = true;
+        CallJob job = await fixture.Queue();
+
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+
+        Assert.True(job.Review!.Fallback);
+        Assert.All(job.Findings.Where(f => f.Pattern == "polite with a friend"), f => Assert.Equal(FindingState.Kept, f.State));
+        Assert.Equal(job.Chunks.Count, fixture.Diagnoses.Items.Single().Issues.Single(i => i.Pattern == "polite with a friend").Count);
+    }
+
+    [Fact]
+    public async Task Reanalyze_TakesTheEarlierFindingsOutOfTheDiagnosis()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        CallJob job = await fixture.Queue();
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+        JapaneseDiagnosis diagnosis = fixture.Diagnoses.Items.Single();
+        int count = diagnosis.Issues.Single(i => i.Pattern == "too polite with friends").Count;
+
+        Assert.True(CallJobs.Reanalyze(job, diagnosis));
+
+        Assert.DoesNotContain(diagnosis.Issues, i => i.Pattern == "too polite with friends");
+        Assert.DoesNotContain(diagnosis.Issues, i => i.Pattern == "なんか");
+        Assert.Equal(CallJobStatus.Analyzing, job.Status);
+        Assert.Empty(job.Findings);
+        Assert.All(job.Chunks, c => Assert.False(c.Analyzed));
+
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+
+        Assert.Equal(count, diagnosis.Issues.Single(i => i.Pattern == "too polite with friends").Count);
+        Assert.Equal(6, fixture.Transcriber.Transcribed.Count);
+    }
+
+    [Fact]
+    public async Task NotAMistake_TakesExactlyThatFindingBack_AndChangingYourMindRestoresIt()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        CallJob job = await fixture.Queue();
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+        JapaneseDiagnosis diagnosis = fixture.Diagnoses.Items.Single();
+        CallFinding finding = job.KeptMistakes.First(f => f.Origin == FindingOrigin.Review);
+        DiagnosisIssue issue = diagnosis.GetIssue(finding.IssueId)!;
+        int before = issue.Count;
+
+        CallDiagnosis.SetFeedback(diagnosis, job, finding, FindingFeedback.NotAMistake, DateTime.UtcNow);
+
+        Assert.Equal(before - 1, issue.Count);
+        Assert.DoesNotContain(issue.Examples, e => e.FindingId == finding.Id);
+        Assert.False(finding.Counts);
+
+        CallDiagnosis.SetFeedback(diagnosis, job, finding, FindingFeedback.Useful, DateTime.UtcNow);
+
+        Assert.Equal(before, issue.Count);
+        Assert.True(finding.Applied);
     }
 }

@@ -148,8 +148,46 @@ internal static partial class CallJobs
         job.Attempts = 0;
         job.Error = string.Empty;
         job.Status = job.Chunks.Count == 0 ? CallJobStatus.Transcribing
-            : job.Chunks.All(c => c.Analyzed) ? CallJobStatus.Reporting
-            : CallJobStatus.Analyzing;
+            : !job.Chunks.All(c => c.Analyzed) ? CallJobStatus.Analyzing
+            : job.Review == null ? CallJobStatus.Consolidating
+            : CallJobStatus.Reporting;
+        return true;
+    }
+
+    /// <summary>
+    /// Reviews a finished call again from its stored transcript: takes everything the earlier review put into the
+    /// diagnosis back out, then queues the review, consolidation and report. Transcription is not repeated, but the
+    /// review requests are paid again.
+    /// </summary>
+    public static bool Reanalyze(CallJob job, JapaneseDiagnosis? diagnosis)
+    {
+        if (job.Status is not (CallJobStatus.Completed or CallJobStatus.Failed) || job.Chunks.Count == 0)
+        {
+            return false;
+        }
+        if (diagnosis != null)
+        {
+            CallDiagnosis.ImportLegacy(job, diagnosis);
+            foreach (CallFinding finding in job.Findings)
+            {
+                CallDiagnosis.Undo(diagnosis, job, finding);
+            }
+        }
+        job.Findings = [];
+        job.Review = null;
+        job.Stats = null;
+        job.Report = string.Empty;
+        job.Delivered = false;
+        job.LegacyImported = false;
+        foreach (CallChunk chunk in job.Chunks)
+        {
+            chunk.Analyzed = false;
+            chunk.Summary = string.Empty;
+            chunk.IssuesRecorded = 0;
+        }
+        job.Attempts = 0;
+        job.Error = string.Empty;
+        job.Status = CallJobStatus.Analyzing;
         return true;
     }
 

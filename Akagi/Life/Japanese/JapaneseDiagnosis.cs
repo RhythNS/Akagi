@@ -51,6 +51,10 @@ internal class IssueExample
     public string Better { get; set; } = string.Empty;
     public string Source { get; set; } = string.Empty;
     public DateTime Time { get; set; } = DateTime.UtcNow;
+    /// <summary>
+    /// The call finding this example came from, so taking the finding back removes exactly this example.
+    /// </summary>
+    public string FindingId { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -94,6 +98,30 @@ internal class DiagnosisIssue
                 Examples.RemoveAt(0);
             }
         }
+    }
+
+    /// <summary>
+    /// Takes back one recorded mistake, e.g. one the user marked as not a mistake. The example with
+    /// <paramref name="findingId"/> goes, or else the newest one from <paramref name="source"/> saying <paramref name="said"/>.
+    /// </summary>
+    public void UndoMistake(string findingId, string source, string said)
+    {
+        Count = Math.Max(0, Count - 1);
+        int index = findingId.Length > 0 ? Examples.FindIndex(e => e.FindingId == findingId) : -1;
+        if (index < 0)
+        {
+            index = Examples.FindLastIndex(e => e.Source == source && e.Said == said);
+        }
+        if (index >= 0)
+        {
+            Examples.RemoveAt(index);
+        }
+    }
+
+    public void UndoCorrect()
+    {
+        TotalCorrect = Math.Max(0, TotalCorrect - 1);
+        CorrectStreak = Math.Max(0, CorrectStreak - 1);
     }
 
     public void RecordCorrect(DateTime nowUtc)
@@ -234,6 +262,15 @@ internal class JapaneseDiagnosis : Savable
             Issues.Add(issue);
             TrimIssues(nowUtc);
         }
+        RecordOn(issue, explanation, example, severity, nowUtc);
+        return (issue, isNew);
+    }
+
+    /// <summary>
+    /// Records a mistake on a known issue, e.g. one a call review matched by id even though it worded the pattern differently.
+    /// </summary>
+    public void RecordOn(DiagnosisIssue issue, string explanation, IssueExample? example, int severity, DateTime nowUtc)
+    {
         if (!string.IsNullOrWhiteSpace(explanation))
         {
             issue.Explanation = explanation.Trim();
@@ -241,7 +278,36 @@ internal class JapaneseDiagnosis : Savable
         issue.Severity = Math.Clamp(severity, 1, 3);
         issue.RecordMistake(example, nowUtc);
         Dirty = true;
-        return (issue, isNew);
+    }
+
+    public DiagnosisIssue? GetIssue(string id) =>
+        string.IsNullOrWhiteSpace(id) ? null : Issues.FirstOrDefault(i => string.Equals(i.Id, id.Trim().Trim('[', ']'), StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// Drops an issue that has no evidence left: no mistakes and no correct uses.
+    /// </summary>
+    public void RemoveIfEmpty(DiagnosisIssue issue)
+    {
+        if (issue.Count <= 0 && issue.TotalCorrect <= 0)
+        {
+            Issues.Remove(issue);
+        }
+        Dirty = true;
+    }
+
+    public void UndoStrength(string text)
+    {
+        DiagnosisStrength? strength = Strengths.FirstOrDefault(s => string.Equals(s.Text, text.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (strength == null)
+        {
+            return;
+        }
+        strength.Count--;
+        if (strength.Count <= 0)
+        {
+            Strengths.Remove(strength);
+        }
+        Dirty = true;
     }
 
     public DiagnosisIssue? FindIssue(string idOrPattern)

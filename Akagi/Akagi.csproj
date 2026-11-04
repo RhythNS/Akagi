@@ -14,6 +14,8 @@
     <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.13" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.13" />
 	<PackageReference Include="Microsoft.AspNetCore.Authentication.Google" Version="10.0.13" />
+    <PackageReference Include="LibNMeCab" Version="0.10.2" />
+    <PackageReference Include="LibNMeCab.IpaDicBin" Version="0.10.0" />
     <PackageReference Include="MongoDB.Driver" Version="3.13.0" />
     <PackageReference Include="NetCoreServer" Version="8.0.7" />
     <PackageReference Include="Telegram.Bot" Version="22.10.3.3" />

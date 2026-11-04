@@ -36,9 +36,13 @@ public class LiveTranscriptionTests
         public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 
-    private sealed class NoAnalysis : ICallChunkAnalyzer
+    private sealed class NoAnalysis : ICallChunkAnalyzer, ICallConsolidator
     {
-        public Task<int> AnalyzeAsync(CallJob job, CallChunk chunk, CancellationToken cancellationToken) => Task.FromResult(0);
+        public Task<ChunkReview> AnalyzeAsync(CallJob job, CallChunk chunk, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken) =>
+            Task.FromResult(new ChunkReview([], string.Empty));
+
+        public Task<Consolidation?> ConsolidateAsync(CallJob job, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken) =>
+            Task.FromResult<Consolidation?>(null);
     }
 
     [LiveTranscriptionFact]
@@ -58,7 +62,7 @@ public class LiveTranscriptionTests
         CallAnalysisPipeline pipeline = new(jobs, diagnoses,
             new AudioSplitter(Environment.GetEnvironmentVariable("AKAGI_LIVE_FFMPEG")!),
             new OpenRouterTranscriber(http, new Monitor<CallAnalysisOptions>(options), new Monitor<OpenRouterClient.Options>(openRouter)),
-            new NoAnalysis(), _ => Task.CompletedTask, options, NullLogger.Instance);
+            new NoAnalysis(), new NoAnalysis(), _ => Task.CompletedTask, options, NullLogger.Instance);
 
         CallJob job = new()
         {
@@ -85,7 +89,7 @@ public class LiveTranscriptionTests
             {
                 Directory.CreateDirectory(output);
                 await File.WriteAllTextAsync(Path.Combine(output, "transcript.txt"), string.Join('\n', job.Segments.Select(TranscriptChunker.Format)), Encoding.UTF8);
-                await File.WriteAllTextAsync(Path.Combine(output, "instruction.txt"), ToolCallChunkAnalyzer.BuildInstruction(job, null, DateTime.UtcNow), Encoding.UTF8);
+                await File.WriteAllTextAsync(Path.Combine(output, "instruction.txt"), ToolCallReviewer.BuildInstruction(job, null, DateTime.UtcNow), Encoding.UTF8);
                 await File.WriteAllTextAsync(Path.Combine(output, "learner.txt"), job.LearnerText(), Encoding.UTF8);
                 await File.WriteAllTextAsync(Path.Combine(output, "report.txt"), job.Report, Encoding.UTF8);
             }

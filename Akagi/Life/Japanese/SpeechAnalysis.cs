@@ -78,15 +78,23 @@ internal static class SpeechAnalysis
     /// Folds the local findings into the long-term diagnosis: habit words, register mismatches, recurring frames,
     /// N2 pattern use and a measurement snapshot for trends. Returns how many issues were recorded.
     /// </summary>
-    public static int Apply(JapaneseDiagnosis diagnosis, SpeechReport report, string source, DateTime nowUtc)
+    /// <param name="issues">Collects every issue recorded and its example, for callers that keep their own record.</param>
+    public static int Apply(JapaneseDiagnosis diagnosis, SpeechReport report, string source, DateTime nowUtc,
+        List<(DiagnosisIssue Issue, IssueExample? Example)>? issues = null)
     {
         int recorded = 0;
+        void Record(IssueCategory category, string pattern, string explanation, IssueExample? example, int severity)
+        {
+            (DiagnosisIssue issue, _) = diagnosis.RecordIssue(category, pattern, explanation, example, severity, nowUtc);
+            issues?.Add((issue, example));
+            recorded++;
+        }
+
         foreach (FillerCount habit in report.Fillers.Habits)
         {
             IssueCategory category = habit.Kind == FillerKind.Hesitation ? IssueCategory.Hesitation : IssueCategory.CrutchWord;
-            diagnosis.RecordIssue(category, habit.Form, $"Used {habit.Count}x in {source}.",
-                new IssueExample { Said = habit.Example, Source = source, Time = nowUtc }, severity: 1, nowUtc);
-            recorded++;
+            Record(category, habit.Form, $"Used {habit.Count}x in {source}.",
+                new IssueExample { Said = habit.Example, Source = source, Time = nowUtc }, severity: 1);
         }
 
         if (report.RegisterMismatch is string mismatch)
@@ -100,17 +108,15 @@ internal static class SpeechAnalysis
             string said = report.ExpectedRegister == ExpectedRegister.Casual
                 ? report.Register.PoliteExamples.FirstOrDefault() ?? string.Empty
                 : report.Register.PlainExamples.FirstOrDefault() ?? string.Empty;
-            diagnosis.RecordIssue(IssueCategory.Register, pattern, mismatch,
-                new IssueExample { Said = said, Source = source, Time = nowUtc }, severity: 2, nowUtc);
-            recorded++;
+            Record(IssueCategory.Register, pattern, mismatch,
+                new IssueExample { Said = said, Source = source, Time = nowUtc }, severity: 2);
         }
 
         foreach (RepeatedStructure structure in report.Structures.Take(3))
         {
             string pattern = structure.AtStart ? $"{structure.Text}..." : $"...{structure.Text}";
-            diagnosis.RecordIssue(IssueCategory.RecurringStructure, pattern, $"In {source} the user {structure.Describe()}.",
-                null, severity: 1, nowUtc);
-            recorded++;
+            Record(IssueCategory.RecurringStructure, pattern, $"In {source} the user {structure.Describe()}.",
+                null, severity: 1);
         }
 
         foreach (PatternMatch match in report.Patterns)

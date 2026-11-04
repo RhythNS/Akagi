@@ -12,7 +12,12 @@ internal enum CallJobStatus
     Analyzing,
     Reporting,
     Completed,
-    Failed
+    Failed,
+    /// <summary>
+    /// All chunks are reviewed; one more request merges, checks and ranks their findings. Numbered last because
+    /// statuses are stored as numbers.
+    /// </summary>
+    Consolidating
 }
 
 /// <summary>
@@ -47,7 +52,14 @@ internal class CallChunk
     public double End { get; set; }
     public string Text { get; set; } = string.Empty;
     public bool Analyzed { get; set; }
+    /// <summary>
+    /// Findings the review noted in this chunk (before any were merged or filtered out).
+    /// </summary>
     public int IssuesRecorded { get; set; }
+    /// <summary>
+    /// What this stretch of the conversation was about, so later chunks and the consolidation know the story so far.
+    /// </summary>
+    public string Summary { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -188,6 +200,17 @@ internal class CallJob : Savable
 
     public List<TranscriptSegment> Segments { get; set; } = [];
     public List<CallChunk> Chunks { get; set; } = [];
+    /// <summary>
+    /// Everything the analysis found in this call, kept here in full. The diagnosis only keeps a few recent examples per
+    /// issue, so this is the call's own record.
+    /// </summary>
+    public List<CallFinding> Findings { get; set; } = [];
+    public CallReview? Review { get; set; }
+    public CallStats? Stats { get; set; }
+    /// <summary>
+    /// Findings of a call analyzed before they were stored on the call were copied over from the diagnosis.
+    /// </summary>
+    public bool LegacyImported { get; set; }
 
     public bool IsFinished => Status is CallJobStatus.Completed or CallJobStatus.Failed;
 
@@ -227,6 +250,21 @@ internal class CallJob : Savable
             : Segments.Where(s => string.Equals(s.Speaker, LearnerSpeaker, StringComparison.OrdinalIgnoreCase));
         return string.Join(Environment.NewLine, segments.Select(s => s.Text));
     }
+
+    /// <summary>
+    /// Whether a line is the learner's: the labeled learner, or every line when only the learner's channel was transcribed
+    /// or nothing tells the voices apart.
+    /// </summary>
+    public bool IsLearnerLine(TranscriptSegment segment) =>
+        string.IsNullOrWhiteSpace(LearnerSpeaker)
+        || string.Equals(segment.Speaker, LearnerSpeaker, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Mistakes that count: kept by the review and not taken back by the user.
+    /// </summary>
+    public IEnumerable<CallFinding> KeptMistakes => Findings.Where(f => f.Kind == FindingKind.Mistake && f.Counts);
+
+    public int IssueCount => Findings.Count > 0 ? KeptMistakes.Count() : Chunks.Sum(c => c.IssuesRecorded);
 
     public void Touch(DateTime nowUtc)
     {

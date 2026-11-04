@@ -1,5 +1,6 @@
 using Akagi.Characters;
 using Akagi.Flow;
+using Akagi.Life.Japanese;
 using Akagi.Life.Japanese.Calls;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
@@ -61,7 +62,7 @@ internal class CallsCommand : TextCommand
 {
     public override string Name => "/calls";
 
-    public override string Description => "Lists your analyzed calls, shows one report, retries a failed call, or has the companion tell you about a finished one again. Usage: /calls [id] | /calls retry <id> | /calls deliver <id>";
+    public override string Description => "Lists your analyzed calls, shows one report, retries a failed call, or has the companion tell you about a finished one again. Usage: /calls [id] | /calls retry <id> | /calls deliver <id> | /calls reanalyze <id>";
 
     public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
@@ -84,6 +85,36 @@ internal class CallsCommand : TextCommand
             else
             {
                 reply = $"[{failed.ShortId}] has not failed: {CallAnalysisPipeline.DescribeProgress(failed)}";
+            }
+            await Communicator.SendMessage(context.User, reply);
+            return CommandResult.Ok;
+        }
+
+        if (args.Length > 0 && string.Equals(args[0], "reanalyze", StringComparison.OrdinalIgnoreCase))
+        {
+            CallJob? done = args.Length > 1 ? Find(jobs, args[1]) : null;
+            string reply;
+            if (done == null)
+            {
+                reply = args.Length > 1 ? $"No call with id '{args[1]}'." : "Which call? Usage: /calls reanalyze <id>";
+            }
+            else
+            {
+                IJapaneseDiagnosisDatabase diagnoses = context.DatabaseFactory.GetDatabase<IJapaneseDiagnosisDatabase>();
+                JapaneseDiagnosis? diagnosis = await diagnoses.GetForUser(context.User.Id!);
+                if (CallJobs.Reanalyze(done, diagnosis))
+                {
+                    if (diagnosis != null)
+                    {
+                        await diagnoses.SaveDocumentAsync(diagnosis);
+                    }
+                    await context.DatabaseFactory.GetDatabase<ICallJobDatabase>().SaveDocumentAsync(done);
+                    reply = $"[{done.ShortId}] is queued for a new review of its stored transcript. Its earlier findings were taken out of your diagnosis; the review requests are paid again, transcription is not.";
+                }
+                else
+                {
+                    reply = $"[{done.ShortId}] can only be reviewed again once it is finished: {CallAnalysisPipeline.DescribeProgress(done)}";
+                }
             }
             await Communicator.SendMessage(context.User, reply);
             return CommandResult.Ok;

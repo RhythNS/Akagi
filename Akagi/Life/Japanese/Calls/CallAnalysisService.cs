@@ -85,7 +85,7 @@ internal class CallAnalysisService : BackgroundService
     {
         CallAnalysisOptions options = _options.CurrentValue;
         IDatabaseFactory databaseFactory = _services.GetRequiredService<IDatabaseFactory>();
-        ToolCallChunkAnalyzer analyzer = new(databaseFactory, _services.GetRequiredService<ILLMFactory>(),
+        ToolCallReviewer reviewer = new(databaseFactory, _services.GetRequiredService<ILLMFactory>(),
             _services.GetRequiredService<ICommandFactory>(), _logger);
 
         return new CallAnalysisPipeline(
@@ -93,7 +93,8 @@ internal class CallAnalysisService : BackgroundService
             _services.GetRequiredService<IJapaneseDiagnosisDatabase>(),
             new AudioSplitter(options.FfmpegPath),
             _services.GetRequiredService<ITranscriber>(),
-            analyzer,
+            reviewer,
+            reviewer,
             _services.GetRequiredService<ICallDelivery>().DeliverAsync,
             options,
             _logger);

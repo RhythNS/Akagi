@@ -181,7 +181,7 @@ public class ConversationMergerTests
         CallJob job = new() { Partner = "Yuki", LearnerChannel = LearnerChannel.Left, LearnerSpeaker = "Me" };
         job.Segments = [new TranscriptSegment { Speaker = "Yuki", Text = "元気？" }];
 
-        string text = ToolCallChunkAnalyzer.BuildInstruction(job, null, DateTime.UtcNow);
+        string text = ToolCallReviewer.BuildInstruction(job, null, DateTime.UtcNow);
 
         Assert.Contains("Lines labeled 'Me' are {{user}} and lines labeled 'Yuki' are Yuki", text);
         Assert.Contains("Category Comprehension", text);
@@ -208,18 +208,23 @@ public class ConversationMergerTests
 
         public T Create<T>() where T : Command => throw new NotSupportedException();
 
-        public Command Create(string commandName) => commandName == "RecordJapaneseIssue"
-            ? new RecordJapaneseIssueCommand()
-            : commandName == "RecordCorrectUsage" ? new RecordCorrectUsageCommand()
-            : commandName == "RecordJapaneseStrength" ? new RecordJapaneseStrengthCommand()
-            : new StopExecutionCommand();
-
-        private static RecordJapaneseIssueCommand Issue(string pattern)
+        public Command Create(string commandName) => commandName switch
         {
-            RecordJapaneseIssueCommand command = new();
+            "NoteCallMistake" => new NoteCallMistakeCommand(),
+            "NoteCallCorrectUse" => new NoteCallCorrectUseCommand(),
+            "NoteCallStrength" => new NoteCallStrengthCommand(),
+            "NoteCallPhrase" => new NoteCallPhraseCommand(),
+            "NoteCallSummary" => new NoteCallSummaryCommand(),
+            _ => new StopExecutionCommand()
+        };
+
+        private static T With<T>(T command, params (string Name, string Value)[] values) where T : Command
+        {
             Argument[] arguments = command.GetDefaultArguments();
-            arguments.Single(a => a.Name == "Category").Value = "Comprehension";
-            arguments.Single(a => a.Name == "Pattern").Value = pattern;
+            foreach ((string name, string value) in values)
+            {
+                arguments.Single(a => a.Name == name).Value = value;
+            }
             command.Arguments = arguments;
             return command;
         }
@@ -227,7 +232,12 @@ public class ConversationMergerTests
         public Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context)
         {
             Requests++;
-            return Task.FromResult<Command[]>([Issue("heard ちいかわ as ちかわ"), Issue("answered a different question")]);
+            return Task.FromResult<Command[]>(
+            [
+                With(new NoteCallMistakeCommand(), ("Category", "Comprehension"), ("Pattern", "heard ちいかわ as ちかわ"), ("Said", "ちかわ")),
+                With(new NoteCallMistakeCommand(), ("Category", "misheard"), ("Pattern", "answered a different question"), ("Said", "ちかわ"), ("Severity", "3")),
+                With(new NoteCallSummaryCommand(), ("Summary", "Talking about anime."))
+            ]);
         }
 
         public IAsyncEnumerable<LLMStreamEvent> GetNextStepsStreamAsync(SystemProcessor systemProcessor, Context context, CancellationToken cancellationToken = default) =>
@@ -250,16 +260,20 @@ public class ConversationMergerTests
         Character sensei = new() { Name = "Sensei" };
         await characters.SaveDocumentAsync(sensei);
         OneResponseLLM llm = new();
-        ToolCallChunkAnalyzer analyzer = new(database, llm, llm, NullLogger.Instance);
+        ToolCallReviewer analyzer = new(database, llm, llm, NullLogger.Instance);
         CallJob job = new() { UserId = user.Id!, AnalysisCharacterId = sensei.Id!, Partner = "Yuki" };
 
-        int issues = await analyzer.AnalyzeAsync(job, new CallChunk { Text = "[00:00:01] Me: ちかわ。" }, CancellationToken.None);
+        ChunkReview review = await analyzer.AnalyzeAsync(job, new CallChunk { Text = "[00:00:01] Me: ちかわ。" }, null, CancellationToken.None);
 
-        Assert.Equal(2, issues);
+        Assert.Equal(2, review.Findings.Count);
+        Assert.All(review.Findings, f => Assert.Equal(IssueCategory.Comprehension, f.Category));
+        Assert.Equal(3, review.Findings[1].Severity);
+        Assert.Equal("Talking about anime.", review.Summary);
         Assert.Equal(1, llm.Requests);
         // Call reviews run on the model picked for Learning
         Assert.Equal(ILLM.LLMUsage.Learning, llm.Usage);
-        Assert.Equal(2, diagnoses.Items.Single().Issues.Count(i => i.Category == IssueCategory.Comprehension));
+        // Nothing reaches the diagnosis before the quotes are checked and the call is consolidated
+        Assert.Empty(diagnoses.Items);
     }
 
     [Fact]
@@ -267,11 +281,12 @@ public class ConversationMergerTests
     {
         CallJob job = new() { Partner = "Yuki", LearnerChannel = LearnerChannel.Left, LearnerSpeaker = "Me", Segments = [new TranscriptSegment { Speaker = "Yuki", Text = "元気？" }] };
 
-        string text = ToolCallChunkAnalyzer.BuildInstruction(job, null, DateTime.UtcNow);
+        string text = ToolCallReviewer.BuildInstruction(job, null, DateTime.UtcNow);
 
         Assert.Contains("A disputed word alone never shows", text);
         Assert.Contains("first look for comprehension breakdowns", text);
         Assert.Contains("on top of the limit above", text);
+        Assert.Contains("NoteCallPhrase", text);
         Assert.Contains("Make all your calls in this one response", text);
     }
 
@@ -280,7 +295,7 @@ public class ConversationMergerTests
     {
         CallJob stored = new() { LearnerChannel = LearnerChannel.Left, Segments = [new TranscriptSegment { Text = "はい" }] };
 
-        string text = ToolCallChunkAnalyzer.BuildInstruction(stored, null, DateTime.UtcNow);
+        string text = ToolCallReviewer.BuildInstruction(stored, null, DateTime.UtcNow);
 
         Assert.Contains("Only {{user}}'s own audio channel", text);
         Assert.DoesNotContain("Comprehension", text);
