@@ -11,10 +11,10 @@ namespace Akagi.Life.Japanese.Calls;
 /// <summary>
 /// What the user said about a recording: who it was with, which politeness fits, and how to find their own voice.
 /// </summary>
-internal record CallRequest(string Partner, ExpectedRegister Register, LearnerChannel Channel, string LearnerSpeaker)
+internal record CallRequest(string Partner, ExpectedRegister Register, LearnerChannel Channel, string LearnerSpeaker, DateTime? RecordedAt = null)
 {
     /// <summary>
-    /// Reads words such as "Yuki polite left" or "speaker=Me". Unknown words form the partner's name.
+    /// Reads words such as "Yuki polite left 2026-10-21" or "speaker=Me date=20261021". Unknown words form the partner's name.
     /// </summary>
     public static CallRequest Parse(IEnumerable<string> tokens)
     {
@@ -22,6 +22,7 @@ internal record CallRequest(string Partner, ExpectedRegister Register, LearnerCh
         ExpectedRegister register = ExpectedRegister.Casual;
         LearnerChannel channel = LearnerChannel.Mixed;
         string speaker = string.Empty;
+        DateTime? recordedAt = null;
 
         foreach (string raw in tokens)
         {
@@ -34,6 +35,10 @@ internal record CallRequest(string Partner, ExpectedRegister Register, LearnerCh
             if (lower.StartsWith("speaker=", StringComparison.Ordinal) || lower.StartsWith("me=", StringComparison.Ordinal))
             {
                 speaker = token[(token.IndexOf('=') + 1)..];
+            }
+            else if (CallJobs.TryParseDate(lower.StartsWith("date=", StringComparison.Ordinal) ? token[5..] : token) is DateTime date)
+            {
+                recordedAt = date;
             }
             else if (lower is "left" or "right")
             {
@@ -48,7 +53,7 @@ internal record CallRequest(string Partner, ExpectedRegister Register, LearnerCh
                 partner.Add(token);
             }
         }
-        return new CallRequest(string.Join(' ', partner), register, channel, speaker);
+        return new CallRequest(string.Join(' ', partner), register, channel, speaker, recordedAt);
     }
 }
 
@@ -60,20 +65,88 @@ internal static partial class CallJobs
         AudioExtensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase) || TranscriptParser.IsTranscriptFile(fileName);
 
     /// <summary>
-    /// Inbox file names carry the request: "2026-10-27 Yuki [polite] [left].m4a". A leading date becomes the recording date.
+    /// Inbox file names carry the request: "2026-10-27 Yuki [polite] [left].m4a". A date anywhere in the name, also
+    /// written 20261027 or 2026_10_27, becomes the recording date.
     /// </summary>
     public static (CallRequest Request, DateTime? RecordedAt) ParseFileName(string fileName)
     {
         string name = Path.GetFileNameWithoutExtension(fileName);
         DateTime? recordedAt = null;
-        Match date = LeadingDate().Match(name);
-        if (date.Success && DateTime.TryParseExact(date.Groups["date"].Value.Replace('_', '-'), "yyyy-MM-dd", CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime parsed))
+        foreach (Match date in DateInName().Matches(name))
         {
-            recordedAt = parsed;
-            name = name[date.Length..];
+            if (TryParseDate(date.Value) is DateTime parsed)
+            {
+                recordedAt = parsed;
+                name = name.Remove(date.Index, date.Length);
+                break;
+            }
         }
-        return (CallRequest.Parse(name.Split([' ', '_'], StringSplitOptions.RemoveEmptyEntries)), recordedAt);
+        CallRequest request = CallRequest.Parse(name.Split([' ', '_'], StringSplitOptions.RemoveEmptyEntries));
+        return (request, recordedAt ?? request.RecordedAt);
+    }
+
+    /// <summary>
+    /// A calendar date written 2026-10-21, 2026_10_21, 2026.10.21 or 20261021, as midnight UTC.
+    /// </summary>
+    public static DateTime? TryParseDate(string text)
+    {
+        string digits = text.Trim().Trim('[', ']', '(', ')').Replace("-", string.Empty).Replace("_", string.Empty).Replace(".", string.Empty).Replace("/", string.Empty);
+        return digits.Length == 8 && digits.All(char.IsAsciiDigit)
+               && DateTime.TryParseExact(digits, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime date)
+               && date.Year is >= 2000 and < 2100
+            ? date
+            : null;
+    }
+
+    /// <summary>
+    /// Sets the date a call took place. Its label ("call with Rii 2026-10-21") names it in the diagnosis and the people's
+    /// pages, so those follow. Returns whether anything changed.
+    /// </summary>
+    public static async Task<bool> SetDateAsync(CallJob job, DateTime date, JapaneseDiagnosis? diagnosis, IPersonProfileDatabase? people)
+    {
+        DateTime day = DateTime.SpecifyKind(date.Date, DateTimeKind.Utc);
+        if (job.RecordedAt == day)
+        {
+            return false;
+        }
+        // An old call's findings are found in the diagnosis by its label, so they are copied over while it still matches
+        CallDiagnosis.ImportLegacy(job, diagnosis);
+
+        string before = job.SourceLabel;
+        job.RecordedAt = day;
+        string after = job.SourceLabel;
+
+        if (diagnosis != null && before != after)
+        {
+            HashSet<string> findings = [.. job.Findings.Select(f => f.Id)];
+            bool legacy = job.Findings.Any(f => f.Origin == FindingOrigin.Legacy);
+            foreach (IssueExample example in diagnosis.Issues.SelectMany(i => i.Examples).Where(e => e.Source == before))
+            {
+                if (findings.Contains(example.FindingId) || (legacy && example.FindingId.Length == 0))
+                {
+                    example.Source = after;
+                }
+            }
+            foreach (SpeechSnapshot snapshot in diagnosis.Snapshots.Where(s => s.Source == before))
+            {
+                snapshot.Source = after;
+            }
+            diagnosis.Dirty = true;
+        }
+
+        if (people != null && !string.IsNullOrWhiteSpace(job.Partner) && await people.Get(job.UserId, job.Partner) is PersonProfile profile)
+        {
+            foreach (PersonCall call in profile.Calls.Where(c => c.CallId == job.Id))
+            {
+                call.Date = day;
+            }
+            foreach (PersonFact fact in profile.Facts.Where(f => f.CallId == job.Id))
+            {
+                fact.Date = day;
+            }
+            await people.SaveDocumentAsync(profile);
+        }
+        return true;
     }
 
     /// <summary>
@@ -232,6 +305,6 @@ internal static partial class CallJobs
         return text.ToString();
     }
 
-    [GeneratedRegex(@"^(?<date>\d{4}[-_]\d{2}[-_]\d{2})[\s_-]*")]
-    private static partial Regex LeadingDate();
+    [GeneratedRegex(@"(?<!\d)20\d{2}[-_.]?\d{2}[-_.]?\d{2}(?!\d)")]
+    private static partial Regex DateInName();
 }

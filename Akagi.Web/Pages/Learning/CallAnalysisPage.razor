@@ -97,7 +97,7 @@
 									<span class="badge @CallText.StateClass(call.State) flex-shrink-0">@CallText.StateLabel(call.State)</span>
 								</div>
 								<div class="text-secondary small d-flex flex-wrap gap-2">
-									<span>@call.Date.ToLocalTime().ToString("d")</span>
+									<span title="@(call.DateKnown ? "Day of the call" : "Uploaded; the day of the call is unknown")">@(call.DateKnown ? call.Date.ToString("d") : call.Date.ToLocalTime().ToString("d") + "?")</span>
 									@if (call.DurationSeconds > 0)
 									{
 										<span>@CallText.Duration(call.DurationSeconds)</span>
@@ -128,7 +128,7 @@
 				}
 				else if (_detail != null)
 				{
-					<CallAnalysisDetailView Detail="_detail" Busy="_feedbackBusy" OnFeedback="FeedbackAsync" />
+					<CallAnalysisDetailView Detail="_detail" Busy="_feedbackBusy" OnFeedback="FeedbackAsync" OnDateChange="SetDateAsync" />
 				}
 			</div>
 		</div>
@@ -204,6 +204,28 @@
 		if (_selectedId == callId)
 		{
 			_detail = response?.Detail;
+		}
+	}
+
+	private async Task SetDateAsync(DateTime date)
+	{
+		if (_detail == null)
+		{
+			return;
+		}
+		_feedbackBusy = true;
+		CallAnalysisResponseTransmission? response = await SendAsync(new CallAnalysisRequestTransmission
+		{
+			Action = CallAnalysisAction.SetDate,
+			CallId = _detail.Summary.Id,
+			Date = date
+		});
+		_feedbackBusy = false;
+		if (response?.Detail is CallAnalysisDetail updated && updated.Summary.Id == _selectedId)
+		{
+			_detail = updated;
+			// The list is sorted by date
+			_calls = response.Calls.Length > 0 ? response.Calls : _calls;
 		}
 	}
 

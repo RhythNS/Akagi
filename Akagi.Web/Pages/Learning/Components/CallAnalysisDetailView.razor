@@ -1,4 +1,5 @@
 @using Akagi.Bridge.Chat.Models
+@using Akagi.Web.Icons
 
 @{
 	CallAnalysisSummary call = Detail.Summary;
@@ -10,8 +11,27 @@
 		<div class="d-flex flex-wrap align-items-start gap-2">
 			<div class="me-auto">
 				<h3 class="h2 mb-1">@CallText.Name(call)</h3>
-				<div class="text-secondary small d-flex flex-wrap gap-3">
-					<span>@call.Date.ToLocalTime().ToString("D")</span>
+				<div class="text-secondary small d-flex flex-wrap align-items-center gap-3">
+					@if (_editingDate)
+					{
+						<span class="d-inline-flex align-items-center gap-1" data-date-editor>
+							<input type="date" class="form-control form-control-sm w-auto" @bind="_date" aria-label="Day of the call" />
+							<button type="button" class="btn btn-sm btn-primary py-0" data-date-save disabled="@Busy" @onclick="SaveDateAsync">Save</button>
+							<button type="button" class="btn btn-sm btn-ghost-secondary py-0" @onclick="() => _editingDate = false">Cancel</button>
+						</span>
+					}
+					else
+					{
+						<span>
+							@(call.DateKnown ? call.Date.ToString("D") : $"Uploaded {call.Date.ToLocalTime():D}, call date unknown")
+							@if (call.State is CallAnalysisState.Completed or CallAnalysisState.Failed)
+							{
+								<button type="button" class="btn btn-sm btn-ghost-secondary py-0 px-1 ms-1" title="Correct the day of the call" data-date-edit @onclick="EditDate">
+									<Icon IconType="@Icons.Edit" Size="14" />
+								</button>
+							}
+						</span>
+					}
 					@if (call.DurationSeconds > 0)
 					{
 						<span>@CallText.Duration(call.DurationSeconds)</span>
@@ -377,7 +397,25 @@
 	[Parameter]
 	public EventCallback<CallFindingItem.Feedback> OnFeedback { get; set; }
 
+	[Parameter]
+	public EventCallback<DateTime> OnDateChange { get; set; }
+
 	private CallTranscriptCard? _transcript;
+	private bool _editingDate;
+	private DateTime _date;
+
+	private void EditDate()
+	{
+		// A known date is a calendar day; an upload time is shown in local time
+		_date = Detail.Summary.DateKnown ? Detail.Summary.Date.Date : Detail.Summary.Date.ToLocalTime().Date;
+		_editingDate = true;
+	}
+
+	private async Task SaveDateAsync()
+	{
+		_editingDate = false;
+		await OnDateChange.InvokeAsync(DateTime.SpecifyKind(_date.Date, DateTimeKind.Utc));
+	}
 	private string? _category;
 	private bool _showFiltered;
 	private bool _showReport;
@@ -395,6 +433,7 @@
 			_category = null;
 			_showFiltered = false;
 			_showReport = false;
+			_editingDate = false;
 		}
 	}
 

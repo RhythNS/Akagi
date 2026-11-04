@@ -350,6 +350,27 @@ public class CallAnalysisPageTests : BunitContext
     }
 
     [Fact]
+    public void TheDate_CanBeCorrected()
+    {
+        IRenderedComponent<CallAnalysisPage> cut = OpenDone();
+        // The summary has no recording date, so the upload day is shown as such
+        Assert.Contains("call date unknown", cut.Find("[data-call-detail='done']").TextContent);
+
+        cut.Find("[data-date-edit]").Click();
+        cut.Find("[data-date-editor] input").Change("2026-10-21");
+        cut.Find("[data-date-save]").Click();
+
+        CallAnalysisDetail moved = Detail(Summary("done", "Yuki"));
+        moved.Summary.RecordedAt = new DateTime(2026, 10, 21, 0, 0, 0, DateTimeKind.Utc);
+        CallAnalysisRequestTransmission sent = Respond(_ => new CallAnalysisResponseTransmission { Detail = moved, Calls = [moved.Summary] });
+
+        Assert.Equal((CallAnalysisAction.SetDate, "done", new DateTime(2026, 10, 21)), (sent.Action, sent.CallId, sent.Date));
+        Assert.Equal(DateTimeKind.Utc, sent.Date!.Value.Kind);
+        cut.WaitForAssertion(() => Assert.DoesNotContain("call date unknown", cut.Find("[data-call-detail='done']").TextContent));
+        Assert.Contains(new DateTime(2026, 10, 21).ToString("D"), cut.Find("[data-call-detail='done']").TextContent);
+    }
+
+    [Fact]
     public void AnOlderCall_OffersToCatchUp()
     {
         IRenderedComponent<CallAnalysisPage> cut = RenderOnline();

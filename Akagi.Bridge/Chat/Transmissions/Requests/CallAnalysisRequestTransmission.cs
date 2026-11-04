@@ -14,7 +14,9 @@ public enum CallAnalysisAction
     /// <summary>The people the user talked to in calls.</summary>
     People,
     /// <summary>Everything known about one person, by <see cref="CallAnalysisRequestTransmission.Name"/>.</summary>
-    Person
+    Person,
+    /// <summary>Corrects the day a call took place to <see cref="CallAnalysisRequestTransmission.Date"/>.</summary>
+    SetDate
 }
 
 [MessagePackObject]
@@ -37,4 +39,6 @@ public class CallAnalysisRequestTransmission : Transmission
     public CallFindingFeedback Feedback { get; set; }
     [Key(5)]
     public string Name { get; set; } = string.Empty;
+    [Key(6)]
+    public DateTime? Date { get; set; }
 }

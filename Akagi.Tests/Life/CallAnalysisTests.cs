@@ -356,6 +356,94 @@ public class CallJobTests
         Assert.Equal("Me", CallRequest.Parse(["Yuki", "speaker=Me"]).LearnerSpeaker);
     }
 
+    [Theory]
+    [InlineData("20261021output.mp3", "output")]
+    [InlineData("Rii 2026_10_21 [left].m4a", "Rii")]
+    [InlineData("Rii left 2026.10.21.m4a", "Rii")]
+    [InlineData("call-20261021-Rii.mp3", "call--Rii")]
+    public void ParseFileName_FindsADateAnywhere(string file, string partner)
+    {
+        (CallRequest request, DateTime? recordedAt) = CallJobs.ParseFileName(file);
+
+        Assert.Equal(new DateTime(2026, 10, 21, 0, 0, 0, DateTimeKind.Utc), recordedAt);
+        Assert.Equal(partner, request.Partner);
+    }
+
+    [Theory]
+    [InlineData("date=20261021")]
+    [InlineData("2026-10-21")]
+    public void Parse_ReadsADateFromTheCommand(string token)
+    {
+        CallRequest request = CallRequest.Parse(["Rii", "left", token]);
+
+        Assert.Equal(("Rii", new DateTime(2026, 10, 21, 0, 0, 0, DateTimeKind.Utc)), (request.Partner, request.RecordedAt));
+    }
+
+    [Theory]
+    [InlineData("20261321")]
+    [InlineData("19991021")]
+    [InlineData("2026")]
+    [InlineData("12345678")]
+    public void TryParseDate_RefusesWhatIsNoDate(string text)
+    {
+        Assert.Null(CallJobs.TryParseDate(text));
+    }
+
+    [Fact]
+    public void RecordingDate_IsReadFromFfmpegsDescription()
+    {
+        string phone = "Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'call.m4a':\n  Metadata:\n    major_brand     : M4A\n    creation_time   : 2026-10-21T19:03:12.000000Z\n  Duration: 01:01:51.32, start: 0.000000";
+        string converted = "Input #0, mp3, from '20261021output.mp3':\n  Metadata:\n    encoder         : Lavf63.11.101\n  Duration: 01:01:51.32";
+
+        Assert.Equal(new DateTime(2026, 10, 21), AudioSplitter.ParseRecordingDate(phone)!.Value.Date);
+        Assert.Null(AudioSplitter.ParseRecordingDate(converted));
+        Assert.Equal(new DateTime(2026, 10, 20), AudioSplitter.ParseRecordingDate("    date            : 2026-10-20\n")!.Value.Date);
+    }
+
+    [Fact]
+    public async Task SetDate_RelabelsTheCallEverywhere()
+    {
+        CallJob job = new()
+        {
+            Id = ObjectId.GenerateNewId().ToString(),
+            UserId = ObjectId.GenerateNewId().ToString(),
+            Partner = "Rii",
+            Status = CallJobStatus.Completed,
+            CreatedAt = new DateTime(2026, 11, 3, 10, 0, 0, DateTimeKind.Utc),
+            Segments = [new TranscriptSegment { Start = 1, Text = "家に勉強します" }]
+        };
+        string before = job.SourceLabel;
+        JapaneseDiagnosis diagnosis = new() { UserId = job.UserId };
+        // An old call: its examples are found by the label only
+        diagnosis.RecordIssue(IssueCategory.Particle, "に vs で", "", new IssueExample { Said = "家に勉強します", Source = before }, 2, DateTime.UtcNow);
+        diagnosis.RecordIssue(IssueCategory.Particle, "other call", "", new IssueExample { Said = "x", Source = "chat" }, 2, DateTime.UtcNow);
+        diagnosis.AddSnapshot(new SpeechSnapshot { Source = before });
+        InMemoryPersonProfileDatabase people = new();
+        await people.SaveDocumentAsync(new PersonProfile
+        {
+            UserId = job.UserId,
+            Name = "Rii",
+            Calls = [new PersonCall { CallId = job.Id!, Date = job.CreatedAt }],
+            Facts = [new PersonFact { Id = "f", CallId = job.Id!, Date = job.CreatedAt, Text = "Rii plays games." }]
+        });
+
+        Assert.True(await CallJobs.SetDateAsync(job, new DateTime(2026, 10, 21), diagnosis, people));
+
+        Assert.Equal("call with Rii 2026-10-21", job.SourceLabel);
+        Assert.Single(job.Findings);
+        Assert.Equal(job.SourceLabel, diagnosis.Issues[0].Examples.Single().Source);
+        Assert.Equal("chat", diagnosis.Issues[1].Examples.Single().Source);
+        Assert.Equal(job.SourceLabel, diagnosis.Snapshots.Single().Source);
+        PersonProfile profile = people.Items.Single();
+        Assert.Equal(new DateTime(2026, 10, 21), profile.Calls.Single().Date);
+        Assert.Equal(new DateTime(2026, 10, 21), profile.Facts.Single().Date);
+
+        // Taking the copied finding back still finds its example under the new label
+        CallDiagnosis.SetFeedback(diagnosis, job, job.Findings.Single(), FindingFeedback.NotAMistake, DateTime.UtcNow);
+        Assert.DoesNotContain(diagnosis.Issues, i => i.Pattern == "に vs で");
+        Assert.False(await CallJobs.SetDateAsync(job, new DateTime(2026, 10, 21), diagnosis, people));
+    }
+
     [Fact]
     public async Task Create_StoresTheRecordingWithTheJob()
     {
@@ -506,6 +594,10 @@ public class CallPipelineTests
         }
 
         public Task<double[]?> MeasureLoudnessAsync(string audioPath, CancellationToken cancellationToken) => Task.FromResult<double[]?>(null);
+
+        public DateTime? RecordingDate { get; set; }
+
+        public Task<DateTime?> ReadRecordingDateAsync(string audioPath, CancellationToken cancellationToken) => Task.FromResult(RecordingDate);
     }
 
     private sealed class StubTranscriber : ITranscriber
@@ -904,6 +996,23 @@ public class CallPipelineTests
 
         Assert.Equal(before, issue.Count);
         Assert.True(finding.Applied);
+    }
+
+    [Fact]
+    public async Task Run_TakesTheDateFromTheRecording_WhenTheNameHasNone()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        fixture.Splitter.RecordingDate = new DateTime(2026, 10, 21, 0, 0, 0, DateTimeKind.Utc);
+        CallJob named = await fixture.Queue();
+        named.RecordedAt = new DateTime(2026, 10, 20, 0, 0, 0, DateTimeKind.Utc);
+        CallJob unnamed = await fixture.Queue();
+
+        await fixture.Pipeline.RunAsync(unnamed, CancellationToken.None);
+        await fixture.Pipeline.RunAsync(named, CancellationToken.None);
+
+        Assert.Equal("call with Yuki 2026-10-21", unnamed.SourceLabel);
+        Assert.Equal(new DateTime(2026, 10, 20), named.RecordedAt!.Value);
     }
 
     [Fact]

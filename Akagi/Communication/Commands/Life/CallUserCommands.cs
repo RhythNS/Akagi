@@ -14,8 +14,9 @@ internal class AnalyzeCallCommand : DocumentCommand
 
     public override string Description =>
         "Queues a recorded Japanese conversation (audio or SRT/VTT/TXT transcript) for diagnosis. " +
-        "Usage: /analyzeCall [partner] [casual|polite|formal] [left|right] [speaker=Me]. " +
-        "left/right picks your channel in a stereo recording; speaker= names your label in a transcript. " +
+        "Usage: /analyzeCall [partner] [casual|polite|formal] [left|right] [speaker=Me] [date=2026-10-21]. " +
+        "left/right picks your channel in a stereo recording; speaker= names your label in a transcript; the date is when the call was, " +
+        "otherwise it is read from the file name or the recording. " +
         "Telegram only passes files up to 20 MB, so put long recordings in the call inbox folder.";
 
     public override async Task<CommandResult> ExecuteAsync(Context context, Document[] documents, string[] args)
@@ -48,7 +49,8 @@ internal class AnalyzeCallCommand : DocumentCommand
                 continue;
             }
             stream.Position = 0;
-            (_, DateTime? recordedAt) = CallJobs.ParseFileName(document.Name);
+            (_, DateTime? fromName) = CallJobs.ParseFileName(document.Name);
+            DateTime? recordedAt = request.RecordedAt ?? fromName;
             CallJob job = await CallJobs.CreateAsync(jobs, options, context.User.Id!, stream, document.Name, request, recordedAt, characters);
             response.AppendLine($"{document.Name}: queued as [{job.ShortId}]. You will hear back when the analysis is done.");
         }
@@ -62,7 +64,7 @@ internal class CallsCommand : TextCommand
 {
     public override string Name => "/calls";
 
-    public override string Description => "Lists your analyzed calls, shows one report, retries a failed call, or has the companion tell you about a finished one again. Usage: /calls [id] | /calls retry <id> | /calls deliver <id> | /calls reanalyze <id> | /calls catchup <id>";
+    public override string Description => "Lists your analyzed calls, shows one report, retries a failed call, or has the companion tell you about a finished one again. Usage: /calls [id] | /calls retry <id> | /calls deliver <id> | /calls reanalyze <id> | /calls catchup <id> | /calls date <id> <yyyy-mm-dd>";
 
     public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
@@ -115,6 +117,34 @@ internal class CallsCommand : TextCommand
                 {
                     reply = $"[{done.ShortId}] can only be reviewed again once it is finished: {CallAnalysisPipeline.DescribeProgress(done)}";
                 }
+            }
+            await Communicator.SendMessage(context.User, reply);
+            return CommandResult.Ok;
+        }
+
+        if (args.Length > 0 && string.Equals(args[0], "date", StringComparison.OrdinalIgnoreCase))
+        {
+            CallJob? dated = args.Length > 1 ? Find(jobs, args[1]) : null;
+            DateTime? date = args.Length > 2 ? CallJobs.TryParseDate(args[2]) : null;
+            string reply;
+            if (dated == null || date == null)
+            {
+                reply = dated == null && args.Length > 1 ? $"No call with id '{args[1]}'." : "Usage: /calls date <id> <yyyy-mm-dd>";
+            }
+            else
+            {
+                IJapaneseDiagnosisDatabase diagnoses = context.DatabaseFactory.GetDatabase<IJapaneseDiagnosisDatabase>();
+                JapaneseDiagnosis? diagnosis = await diagnoses.GetForUser(context.User.Id!);
+                IPersonProfileDatabase people = context.DatabaseFactory.GetDatabase<IPersonProfileDatabase>();
+                if (await CallJobs.SetDateAsync(dated, date.Value, diagnosis, people))
+                {
+                    if (diagnosis != null)
+                    {
+                        await diagnoses.SaveDocumentAsync(diagnosis);
+                    }
+                    await context.DatabaseFactory.GetDatabase<ICallJobDatabase>().SaveDocumentAsync(dated);
+                }
+                reply = $"[{dated.ShortId}] took place on {date.Value:yyyy-MM-dd}.";
             }
             await Communicator.SendMessage(context.User, reply);
             return CommandResult.Ok;

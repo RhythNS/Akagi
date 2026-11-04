@@ -110,6 +110,13 @@ internal class CallAnalysisPipeline
                 throw new InvalidOperationException("Transcription needs the OpenRouter credentials (OpenRouter:apikey and OpenRouter:baseUrl).");
             }
 
+            // Before anything is labeled with it: a date from the name or the user wins, the recording's own comes next
+            if (job.RecordedAt == null && await _splitter.ReadRecordingDateAsync(job.SourcePath, cancellationToken) is DateTime recorded)
+            {
+                job.RecordedAt = recorded;
+                _logger.LogInformation("Call {JobId}: recorded on {Date:yyyy-MM-dd} according to the file", job.Id, recorded);
+            }
+
             if (job.LearnerChannel == LearnerChannel.Mixed)
             {
                 await TranscribeMixedAsync(job, cancellationToken);

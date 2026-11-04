@@ -100,6 +100,12 @@ public class CallAnalysisSummary
 
     [IgnoreMember]
     public DateTime Date => RecordedAt ?? CreatedAt;
+
+    /// <summary>
+    /// The day the call took place is known; otherwise <see cref="Date"/> is when it was uploaded.
+    /// </summary>
+    [IgnoreMember]
+    public bool DateKnown => RecordedAt != null;
 }
 
 [MessagePackObject]

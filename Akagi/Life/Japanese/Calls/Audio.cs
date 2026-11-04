@@ -28,6 +28,12 @@ internal interface IAudioSplitter
     /// The loudness of a part per <see cref="ConversationMerger.LoudnessWindowSeconds"/>, or null without ffmpeg.
     /// </summary>
     public Task<double[]?> MeasureLoudnessAsync(string audioPath, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The day the recording was made, from its metadata (creation_time, or a full date tag); null when it has none.
+    /// Phones usually write one; files converted with ffmpeg lose it.
+    /// </summary>
+    public Task<DateTime?> ReadRecordingDateAsync(string audioPath, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -129,6 +135,41 @@ internal class AudioSplitter : IAudioSplitter
         {
             throw new InvalidOperationException($"ffmpeg failed ({exitCode}): {errors.Trim()}");
         }
+    }
+
+    public async Task<DateTime?> ReadRecordingDateAsync(string audioPath, CancellationToken cancellationToken)
+    {
+        if (!await IsFfmpegAvailable(cancellationToken))
+        {
+            return null;
+        }
+        // Without an output ffmpeg only prints the input's description, metadata included, and exits with an error
+        (_, string description) = await Run(["-hide_banner", "-i", audioPath], cancellationToken);
+        return ParseRecordingDate(description);
+    }
+
+    internal static DateTime? ParseRecordingDate(string description)
+    {
+        foreach (string line in description.Split('\n'))
+        {
+            string[] parts = line.Split(':', 2, StringSplitOptions.TrimEntries);
+            if (parts.Length < 2)
+            {
+                continue;
+            }
+            string key = parts[0].ToLowerInvariant();
+            if (key == "creation_time" && DateTime.TryParse(parts[1], CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out DateTime created) && created.Year >= 2000)
+            {
+                // The day the call happened where it was recorded
+                return DateTime.SpecifyKind(created.ToLocalTime().Date, DateTimeKind.Utc);
+            }
+            if (key is "date" or "creation_date" && CallJobs.TryParseDate(parts[1].Length >= 10 ? parts[1][..10] : parts[1]) is DateTime tagged)
+            {
+                return tagged;
+            }
+        }
+        return null;
     }
 
     public async Task<double[]?> MeasureLoudnessAsync(string audioPath, CancellationToken cancellationToken)

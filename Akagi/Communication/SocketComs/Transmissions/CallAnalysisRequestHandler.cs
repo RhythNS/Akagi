@@ -84,6 +84,10 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
                     break;
                 }
 
+                case CallAnalysisAction.SetDate:
+                    response.Error = await SetDateAsync(userId, jobs, request, response);
+                    break;
+
                 case CallAnalysisAction.People:
                     response.People = [.. (await _people.GetForUser(userId))
                         .OrderByDescending(p => p.LastTalked ?? DateTime.MinValue)
@@ -160,6 +164,44 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
         _logger.LogInformation("Call {JobId}: finding {FindingId} marked {Feedback}", job.Id, finding.Id, finding.Feedback);
 
         response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs);
+        return null;
+    }
+
+    private async Task<string?> SetDateAsync(string userId, List<CallJob> jobs, CallAnalysisRequestTransmission request, CallAnalysisResponseTransmission response)
+    {
+        CallJob? job = jobs.FirstOrDefault(j => j.Id == request.CallId);
+        if (job == null)
+        {
+            return "That call analysis does not exist.";
+        }
+        if (request.Date is not DateTime date || date.Year is < 2000 or >= 2100)
+        {
+            return "That is not a date.";
+        }
+        if (!job.IsFinished)
+        {
+            // The running analysis labels findings with the date; changing it underneath would split them
+            return "The date can be changed once the analysis is finished.";
+        }
+
+        JapaneseDiagnosis? diagnosis = await _diagnoses.GetForUser(userId);
+        await PrepareAsync(jobs, diagnosis);
+        if (await CallJobs.SetDateAsync(job, date, diagnosis, _people))
+        {
+            if (diagnosis != null)
+            {
+                await _diagnoses.SaveDocumentAsync(diagnosis);
+            }
+            if (job.Status == CallJobStatus.Completed)
+            {
+                job.Report = CallAnalysisPipeline.BuildReport(job, SpeechAnalysis.Analyze(job.LearnerText(), job.Register), diagnosis ?? new JapaneseDiagnosis(), DateTime.UtcNow);
+            }
+            job.Touch(DateTime.UtcNow);
+            await _jobs.SaveDocumentAsync(job);
+            _logger.LogInformation("Call {JobId}: date set to {Date:yyyy-MM-dd}", job.Id, date);
+        }
+        response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs);
+        response.Calls = [.. CallAnalysisViews.Newest(jobs).Select(CallAnalysisViews.Summary)];
         return null;
     }
 

@@ -275,6 +275,30 @@ public class CallAnalysisSocketTests
     }
 
     [Fact]
+    public async Task SetDate_MovesTheCall_AndRefusesARunningOne()
+    {
+        (CallJob job, JapaneseDiagnosis _) = await Analyzed();
+        CallJob later = AddJob(UserId, "Ken", new DateTime(2026, 10, 27, 0, 0, 0, DateTimeKind.Utc));
+        CallJob running = AddJob(UserId, "Ken", new DateTime(2026, 10, 28, 0, 0, 0, DateTimeKind.Utc), CallJobStatus.Analyzing);
+
+        CallAnalysisResponseTransmission response = await _handler.ProcessAsync(UserId,
+            new CallAnalysisRequestTransmission { Action = CallAnalysisAction.SetDate, CallId = job.Id!, Date = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc) });
+
+        Assert.Null(response.Error);
+        Assert.Equal(new DateTime(2026, 11, 1), response.Detail!.Summary.Date);
+        Assert.True(response.Detail.Summary.DateKnown);
+        Assert.Equal(job.Id, response.Calls[0].Id);
+        Assert.Contains("call with Yuki 2026-11-01", _jobs.Items.Single(j => j.Id == job.Id).Report);
+        Assert.All(_diagnoses.Items.Single().Issues.SelectMany(i => i.Examples), e => Assert.Equal("call with Yuki 2026-11-01", e.Source));
+        Assert.Equal(new DateTime(2026, 11, 1), _people.Items.Single().Facts.Single().Date);
+
+        Assert.NotNull((await _handler.ProcessAsync(UserId,
+            new CallAnalysisRequestTransmission { Action = CallAnalysisAction.SetDate, CallId = running.Id!, Date = DateTime.UtcNow })).Error);
+        Assert.NotNull((await _handler.ProcessAsync(UserId,
+            new CallAnalysisRequestTransmission { Action = CallAnalysisAction.SetDate, CallId = later.Id! })).Error);
+    }
+
+    [Fact]
     public async Task Detail_RefusesSomeoneElsesCall()
     {
         CallJob foreign = AddJob(OtherUserId, "Someone", new DateTime(2026, 10, 28, 0, 0, 0, DateTimeKind.Utc));
