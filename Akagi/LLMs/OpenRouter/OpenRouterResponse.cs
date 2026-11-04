@@ -133,6 +133,30 @@ public class ResponseUsage
 
     [JsonPropertyName("total_tokens")]
     public int TotalTokens { get; set; }
+
+    /// <summary>
+    /// What OpenRouter charged for the request, in US dollars.
+    /// </summary>
+    [JsonPropertyName("cost")]
+    public double? Cost { get; set; }
+
+    [JsonPropertyName("prompt_tokens_details")]
+    public PromptTokenDetails? PromptDetails { get; set; }
+
+    [JsonPropertyName("completion_tokens_details")]
+    public CompletionTokenDetails? CompletionDetails { get; set; }
+}
+
+public class PromptTokenDetails
+{
+    [JsonPropertyName("cached_tokens")]
+    public int CachedTokens { get; set; }
+}
+
+public class CompletionTokenDetails
+{
+    [JsonPropertyName("reasoning_tokens")]
+    public int ReasoningTokens { get; set; }
 }
 
 public class ErrorResponse

@@ -1,3 +1,4 @@
+using Akagi.LLMs;
 using Akagi.Receivers.Commands;
 using Akagi.Receivers.Commands.Life;
 using Microsoft.Extensions.Logging;
@@ -6,7 +7,9 @@ using System.Text;
 
 namespace Akagi.Life.Japanese.Calls;
 
-internal record CoachingResult(List<CallFinding> Moments, CallCoaching? Advice);
+internal record CoachingResult(List<CallFinding> Moments, CallCoaching? Advice, IReadOnlyList<LLMCallUsage>? Usage = null);
+
+internal record FactsResult(List<CallFinding> Facts, IReadOnlyList<LLMCallUsage>? Usage = null);
 
 /// <summary>
 /// Passes that read the whole call at once: patterns of a conversation and facts that build up over minutes do not fit
@@ -22,32 +25,37 @@ internal interface ICallWholeReviewer
     /// <summary>
     /// What was learned about the partner and the learner, without repeating what is already known.
     /// </summary>
-    public Task<List<CallFinding>> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner,
+    public Task<FactsResult> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner,
         CancellationToken cancellationToken);
 }
 
 internal partial class ToolCallReviewer
 {
     /// <summary>
-    /// Transcript characters per whole-call request. An hour of conversation is about 60 000, so almost every call is one
-    /// request; longer ones are read in consecutive windows.
+    /// Transcript characters per whole-call request. An hour of conversation is about 20 000 in the compact layout, so
+    /// almost every call is one request; longer ones are read in consecutive windows.
     /// </summary>
     public const int WholeCallCharacters = 150_000;
     public const int MaxMomentsPerWindow = 15;
 
-    public static readonly string[] CoachingTools = ["NoteConversationMoment", "WriteConversationAdvice", "StopExecution"];
-    public static readonly string[] FactTools = ["NotePersonFact", "StopExecution"];
+    /// <summary>
+    /// Both whole-call passes offer the same tools in the same order and open with the same system prompt (the
+    /// transcript), so the second request can be served largely from the provider's prompt cache.
+    /// </summary>
+    public static readonly string[] WholeCallTools = ["NoteConversationMoment", "WriteConversationAdvice", "NotePersonFact", "StopExecution"];
 
     public async Task<CoachingResult> CoachAsync(CallJob job, CancellationToken cancellationToken)
     {
         List<CallFinding> moments = [];
+        List<LLMCallUsage> usage = [];
         CallCoaching? advice = null;
         List<string> windows = WholeCallWindows(job);
         for (int i = 0; i < windows.Count; i++)
         {
             _logger.LogInformation("Call {JobId}: coaching window {Window}/{Windows}", job.Id, i + 1, windows.Count);
-            Command[] calls = await RequestAsync(job, "Conversation Coaching", BuildCoachingInstruction(job),
-                BuildCoachingMessage(job, windows[i], i, windows.Count), CoachingTools, cancellationToken);
+            (Command[] calls, List<LLMCallUsage> used) = await RequestAsync(job, "Conversation Coaching", BuildWholeCallContext(job, windows[i], i, windows.Count),
+                BuildCoachingTask(job), WholeCallTools, _options.CoachingReasoning, cancellationToken);
+            usage.AddRange(used);
             (List<CallFinding> found, CallCoaching? written) = ReadCoaching(calls);
             moments.AddRange(found);
             if (written != null)
@@ -59,13 +67,14 @@ internal partial class ToolCallReviewer
                 };
             }
         }
-        return new CoachingResult(moments, advice);
+        return new CoachingResult(moments, advice, usage);
     }
 
-    public async Task<List<CallFinding>> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner,
+    public async Task<FactsResult> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner,
         CancellationToken cancellationToken)
     {
         List<CallFinding> facts = [];
+        List<LLMCallUsage> usage = [];
         List<string> windows = WholeCallWindows(job);
         for (int i = 0; i < windows.Count; i++)
         {
@@ -73,11 +82,12 @@ internal partial class ToolCallReviewer
             // Facts from an earlier window are known by now
             List<string> partner = [.. knownPartner, .. facts.Where(f => f.Subject == FactSubject.Partner).Select(f => f.Pattern)];
             List<string> learner = [.. knownLearner, .. facts.Where(f => f.Subject == FactSubject.Learner).Select(f => f.Pattern)];
-            Command[] calls = await RequestAsync(job, "Call Facts", BuildFactsInstruction(job),
-                BuildFactsMessage(job, windows[i], i, windows.Count, partner, learner), FactTools, cancellationToken);
+            (Command[] calls, List<LLMCallUsage> used) = await RequestAsync(job, "Call Facts", BuildWholeCallContext(job, windows[i], i, windows.Count),
+                BuildFactsTask(job, partner, learner), WholeCallTools, _options.FactsReasoning, cancellationToken);
+            usage.AddRange(used);
             facts.AddRange(ReadFacts(calls));
         }
-        return facts;
+        return new FactsResult(facts, usage);
     }
 
     internal static (List<CallFinding> Moments, CallCoaching? Advice) ReadCoaching(IEnumerable<Command> calls)
@@ -125,21 +135,20 @@ internal partial class ToolCallReviewer
             })];
 
     /// <summary>
-    /// The whole transcript with labels and times, in windows of <see cref="WholeCallCharacters"/>.
+    /// The whole transcript in the compact layout, in windows of <see cref="WholeCallCharacters"/>.
     /// </summary>
     internal static List<string> WholeCallWindows(CallJob job)
     {
         List<string> windows = [];
         StringBuilder text = new();
-        foreach (TranscriptSegment segment in job.Segments.OrderBy(s => s.Start))
+        foreach (TranscriptLine line in TranscriptChunker.Lines(job.Segments))
         {
-            string line = TranscriptChunker.Format(segment);
-            if (text.Length > 0 && text.Length + line.Length > WholeCallCharacters)
+            if (text.Length > 0 && text.Length + line.Text.Length > WholeCallCharacters)
             {
                 windows.Add(text.ToString().TrimEnd());
                 text.Clear();
             }
-            text.AppendLine(line);
+            text.AppendLine(line.Text);
         }
         if (text.Length > 0)
         {
@@ -148,35 +157,73 @@ internal partial class ToolCallReviewer
         return windows;
     }
 
-    internal static string BuildCoachingInstruction(CallJob job)
+    /// <summary>
+    /// The system prompt both whole-call passes share: who is who, how the transcript is laid out, and the transcript.
+    /// Nothing pass-specific may go in here, or the cache could not serve it to the other pass.
+    /// </summary>
+    internal static string BuildWholeCallContext(CallJob job, string window, int index, int count)
     {
         string partner = string.IsNullOrWhiteSpace(job.Partner) ? "their partner" : job.Partner;
         StringBuilder text = new();
-        text.AppendLine($"You are {{{{character}}}}, {{{{user}}}}'s Japanese tutor and conversation coach. You are reading the whole transcript of a real conversation between {{{{user}}}} and {partner}.");
-        text.AppendLine("Grammar and word choice are reviewed elsewhere. Your job is the conversation itself: how {{user}} keeps it going, shows interest, reacts, asks, and shares.");
+        text.AppendLine($"You are {{{{character}}}}, {{{{user}}}}'s Japanese tutor and conversation coach. Below is a transcript of a real conversation between {{{{user}}}} and {partner}.");
         text.AppendLine(job.HasBothVoices
             ? $"Lines labeled '{job.LearnerSpeaker}' are {{{{user}}}} and lines labeled '{job.PartnerLabel}' are {partner}; each voice was recorded on its own channel."
             : "Infer from the context which lines are {{user}}'s.");
+        text.AppendLine(TranscriptLayout);
+        text.AppendLine("A line ending in (second hearing: A -> B) means a second transcription heard B where the line has A; either may be right.");
+        text.AppendLine("Your task follows after the transcript. Copy every quote character for character from the transcript: quotes are checked, and anything quoting words that are not there is thrown away.");
+        text.AppendLine();
+        text.AppendLine(count == 1 ? "The whole conversation:" : $"Part {index + 1} of {count} of the conversation:");
+        text.Append(window);
+        return text.ToString();
+    }
+
+    internal static string BuildCoachingTask(CallJob job)
+    {
+        string partner = string.IsNullOrWhiteSpace(job.Partner) ? "their partner" : job.Partner;
+        StringBuilder text = new();
+        text.AppendLine("Task: coach the conversation itself. Grammar and word choice are reviewed elsewhere; look at how {{user}} keeps the conversation going, shows interest, reacts, asks and shares. Use only NoteConversationMoment and WriteConversationAdvice.");
         text.AppendLine();
         text.AppendLine("Look at two kinds of things and set Scope accordingly:");
         text.AppendLine("- Japanese: how this is done in Japanese. Variety and fit of aizuchi and reactions (へえ、そうなんだ、マジで、いいね、大変だったね instead of the same そう again and again), softening and hedging that sounds natural, how questions are phrased and ended, picking up the partner's words, keeping the register of the relationship.");
         text.AppendLine("- General: conversation skill in any language. Follow-up questions on what the partner just shared, open questions instead of yes/no ones, sharing something back instead of only answering, taking turns fairly, building on a topic instead of dropping it, noticing feelings, remembering what was said earlier.");
         text.AppendLine();
         text.AppendLine($"Call NoteConversationMoment for the most instructive moments, up to {MaxMomentsPerWindow}. Most should be openings {{{{user}}}} missed or reactions that could be better, each with a natural Japanese alternative in Better. Include at least two moments where {{{{user}}}} did it well (WentWell yes), so the feedback stays fair.");
-        text.AppendLine("Copy Said character for character from one of {{user}}'s lines and PartnerLine from the line they were reacting to. The quotes are checked against the transcript and moments with quotes that are not there are thrown away.");
+        text.AppendLine($"Said is {{{{user}}}}'s words from one of their lines, PartnerLine the words of {partner} they were reacting to.");
         text.AppendLine("Then call WriteConversationAdvice once: the overall picture and up to five tips, each with a ready-to-use Japanese example.");
-        text.AppendLine("Use the measurements you are given as evidence, but judge from the conversation: a high speaking share is fine when the partner asked a lot.");
+        text.AppendLine("Use the measurements as evidence, but judge from the conversation: a high speaking share is fine when the partner asked a lot.");
+        text.AppendLine();
+        text.AppendLine(Evidence(job));
+        text.AppendLine();
         text.Append("Make all your calls in this one response, there is no second turn.");
         return text.ToString();
     }
 
-    internal static string BuildCoachingMessage(CallJob job, string window, int index, int count)
+    internal static string BuildFactsTask(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner)
     {
+        string partner = string.IsNullOrWhiteSpace(job.Partner) ? "the partner" : job.Partner;
         StringBuilder text = new();
-        text.AppendLine(Evidence(job));
+        text.AppendLine("Task: remember what was learned about both people. {{user}} keeps these notes to remember the people they talk to, so be thorough: write down everything specific that was said. Use only NotePersonFact.");
+        text.AppendLine($"Call NotePersonFact once per fact. About is partner for {partner} and learner for {{{{user}}}}. Facts about others they mention go under whoever told them, e.g. '{partner}'s sister Mika is a nurse'.");
+        text.AppendLine("Good facts are specific and lasting or worth following up on: work and study, family and pets with their names, where they live and have been, hobbies, the games, shows and music they like, opinions, plans with their dates, things that happened to them, how they feel about something.");
+        text.AppendLine("Only write what the conversation says; if something is unclear or misheard, write 'seems to' or leave it out. Do not note small talk without content ('it is hot today') or anything about the language lesson itself.");
+        text.AppendLine("Quote is the words of one transcript line that say it.");
+        text.AppendLine("Set AskLater to yes for things worth asking about next time: upcoming events, unfinished stories, problems they were dealing with, recommendations to check.");
+        text.AppendLine("Do not repeat a known fact; if something changed, note the new state ('now works at...').");
         text.AppendLine();
-        text.AppendLine(count == 1 ? "The whole conversation:" : $"Part {index + 1} of {count} of the conversation:");
-        text.Append(window);
+        text.AppendLine(knownPartner.Count == 0 ? $"Nothing is known about {partner} yet." : $"Already known about {partner}:");
+        foreach (string fact in knownPartner)
+        {
+            text.AppendLine("- " + fact);
+        }
+        text.AppendLine();
+        text.AppendLine(knownLearner.Count == 0 ? "Nothing from earlier calls is known about {{user}} yet." : "Already known about {{user}} from earlier calls:");
+        foreach (string fact in knownLearner)
+        {
+            text.AppendLine("- " + fact);
+        }
+        text.AppendLine();
+        text.Append("Make all your calls in this one response, there is no second turn. If nothing new was learned, call StopExecution.");
         return text.ToString();
     }
 
@@ -216,45 +263,5 @@ internal partial class ToolCallReviewer
             text.AppendLine($"- The partner's, for comparison: {theirs}.");
         }
         return text.ToString().TrimEnd();
-    }
-
-    internal static string BuildFactsInstruction(CallJob job)
-    {
-        string partner = string.IsNullOrWhiteSpace(job.Partner) ? "the partner" : job.Partner;
-        StringBuilder text = new();
-        text.AppendLine($"You are {{{{character}}}}. You are reading the whole transcript of a conversation between {{{{user}}}} and {partner}, to remember what was learned about both of them.");
-        text.AppendLine(job.HasBothVoices
-            ? $"Lines labeled '{job.LearnerSpeaker}' are {{{{user}}}} and lines labeled '{job.PartnerLabel}' are {partner}."
-            : "Infer from the context who is speaking.");
-        text.AppendLine("{{user}} keeps these notes to remember the people they talk to, so be thorough: write down everything specific that was said.");
-        text.AppendLine($"Call NotePersonFact once per fact. About is partner for {partner} and learner for {{{{user}}}}. Facts about others they mention go under whoever told them, e.g. '{partner}'s sister Mika is a nurse'.");
-        text.AppendLine("Good facts are specific and lasting or worth following up on: work and study, family and pets with their names, where they live and have been, hobbies, the games, shows and music they like, opinions, plans with their dates, things that happened to them, how they feel about something.");
-        text.AppendLine("Only write what the conversation says; if something is unclear or misheard, write 'seems to' or leave it out. Do not note small talk without content ('it is hot today') or anything about the language lesson itself.");
-        text.AppendLine("Quote must be copied character for character from one line of the transcript that says it. Facts whose quote is not in the transcript are thrown away.");
-        text.AppendLine("Set AskLater to yes for things worth asking about next time: upcoming events, unfinished stories, problems they were dealing with, recommendations to check.");
-        text.AppendLine("You are given what is already known. Do not repeat a known fact; if something changed, note the new state ('now works at...').");
-        text.Append("Make all your calls in this one response, there is no second turn. If nothing new was learned, call StopExecution.");
-        return text.ToString();
-    }
-
-    internal static string BuildFactsMessage(CallJob job, string window, int index, int count, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner)
-    {
-        string partner = string.IsNullOrWhiteSpace(job.Partner) ? "the partner" : job.Partner;
-        StringBuilder text = new();
-        text.AppendLine(knownPartner.Count == 0 ? $"Nothing is known about {partner} yet." : $"Already known about {partner}:");
-        foreach (string fact in knownPartner)
-        {
-            text.AppendLine("- " + fact);
-        }
-        text.AppendLine();
-        text.AppendLine(knownLearner.Count == 0 ? "Nothing from earlier calls is known about {{user}} yet." : "Already known about {{user}} from earlier calls:");
-        foreach (string fact in knownLearner)
-        {
-            text.AppendLine("- " + fact);
-        }
-        text.AppendLine();
-        text.AppendLine(count == 1 ? "The whole conversation:" : $"Part {index + 1} of {count} of the conversation:");
-        text.Append(window);
-        return text.ToString();
     }
 }

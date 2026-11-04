@@ -82,6 +82,13 @@ internal class SystemProcessor : Savable
     [BsonIgnore]
     public Command[] Commands { get; set; } = [];
 
+    /// <summary>
+    /// How much the model may think (none, minimal, low, medium, high); empty leaves it to the model. Set in code for
+    /// processors built on the fly, such as the call review passes.
+    /// </summary>
+    [BsonIgnore]
+    public string? ReasoningEffort { get; set; }
+
     public async Task Init(Command[] commands, IDatabaseFactory databaseFactory)
     {
         if (commands.Length != CommandNames.Length)

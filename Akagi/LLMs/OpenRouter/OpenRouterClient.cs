@@ -250,7 +250,10 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
             Messages = [.. input],
             Tools = [.. tools],
             ToolChoice = systemProcessor.RunMode.ToToolChoiceEnum(),
-            Model = Model
+            Model = Model,
+            Reasoning = string.IsNullOrWhiteSpace(systemProcessor.ReasoningEffort)
+                ? null
+                : new OpenRouterPayload.ReasoningOptions { Effort = systemProcessor.ReasoningEffort.Trim().ToLowerInvariant() }
         };
 
         return payload;
@@ -444,6 +447,15 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         if (openRouterResponse == null)
         {
             throw new Exception("Failed to deserialize OpenRouter response.");
+        }
+
+        if (openRouterResponse.Usage is ResponseUsage usage)
+        {
+            LLMCallUsage used = new(model, usage.PromptTokens, usage.PromptDetails?.CachedTokens ?? 0, usage.CompletionTokens,
+                usage.CompletionDetails?.ReasoningTokens ?? 0, usage.Cost);
+            context.UsageLog?.Add(used);
+            _logger.LogDebug("OpenRouter {Model}: {Prompt} prompt tokens ({Cached} cached), {Completion} completion ({Reasoning} reasoning), ${Cost}",
+                model, used.PromptTokens, used.CachedTokens, used.CompletionTokens, used.ReasoningTokens, used.Cost);
         }
 
         return HandleResponse(systemProcessor, openRouterResponse, context);

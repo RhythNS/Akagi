@@ -58,6 +58,20 @@ internal class OpenRouterPayload
     public string? User { get; set; } = null;
     [JsonPropertyName("debug")]
     public DebugOptions? Debug { get; set; } = null;
+    [JsonPropertyName("reasoning")]
+    public ReasoningOptions? Reasoning { get; set; } = null;
+
+    /// <summary>
+    /// How much the model may think before answering; thinking is billed as output.
+    /// </summary>
+    internal class ReasoningOptions
+    {
+        /// <summary>
+        /// none, minimal, low, medium or high. OpenRouter maps it to the provider's own setting (Gemini's thinking level).
+        /// </summary>
+        [JsonPropertyName("effort")]
+        public string? Effort { get; set; }
+    }
 
     internal class ResponseFormat
     {

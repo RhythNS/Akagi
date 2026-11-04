@@ -110,6 +110,10 @@
 									{
 										<span>you spoke @CallText.Percent(share)</span>
 									}
+									@if (call.Cost is double cost)
+									{
+										<span title="What the analysis cost">@CallCostCard.Dollars(cost)</span>
+									}
 								</div>
 							</a>
 						}

@@ -1,0 +1,71 @@
+@using Akagi.Bridge.Chat.Models
+@using System.Globalization
+
+<div class="card mb-3" data-costs>
+	<div class="card-header">
+		<h3 class="card-title m-0">What this analysis cost</h3>
+		<span class="ms-auto h3 m-0" data-cost-total>@Dollars(Costs.Sum(c => c.Cost))</span>
+	</div>
+	<div class="table-responsive">
+		<table class="table table-sm table-vcenter card-table mb-0">
+			<thead>
+				<tr>
+					<th>Pass</th>
+					<th class="text-end">Requests</th>
+					<th class="text-end" title="Input tokens, and how many of them the provider served from its cache at a fraction of the price">Input (cached)</th>
+					<th class="text-end" title="Output tokens, and how many of them the model spent thinking">Output (thinking)</th>
+					<th class="text-end">Cost</th>
+				</tr>
+			</thead>
+			<tbody>
+				@foreach (CallCostView cost in Costs)
+				{
+					<tr data-cost="@cost.Pass">
+						<td>@Label(cost.Pass)</td>
+						<td class="text-end">@cost.Requests</td>
+						@if (cost.Pass == "transcription")
+						{
+							<td class="text-end text-secondary" colspan="2">@Minutes(cost.AudioSeconds) of audio</td>
+						}
+						else
+						{
+							<td class="text-end">@Tokens(cost.InputTokens) <span class="text-secondary">(@Share(cost.CachedTokens, cost.InputTokens))</span></td>
+							<td class="text-end">@Tokens(cost.OutputTokens) <span class="text-secondary">(@Share(cost.ReasoningTokens, cost.OutputTokens))</span></td>
+						}
+						<td class="text-end">@Dollars(cost.Cost)@(cost.Estimated ? "*" : "")</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+	<div class="card-footer small text-secondary">
+		As reported by OpenRouter. Re-analyses and catch-ups add to it.
+		@if (Costs.Any(c => c.Estimated))
+		{
+			<span>* worked out from the price, because the provider did not report it.</span>
+		}
+	</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public CallCostView[] Costs { get; set; } = [];
+
+	private static string Label(string pass) => pass switch
+	{
+		"transcription" => "Transcription",
+		"review" => "Part reviews",
+		"coaching" => "Conversation coaching",
+		"facts" => "People and facts",
+		"merge" => "Merging findings",
+		_ => pass
+	};
+
+	public static string Dollars(double cost) => "$" + cost.ToString(cost < 0.1 ? "0.000" : "0.00", CultureInfo.InvariantCulture);
+
+	private static string Tokens(long tokens) => tokens >= 1000 ? (tokens / 1000.0).ToString("0.#", CultureInfo.InvariantCulture) + "k" : tokens.ToString(CultureInfo.InvariantCulture);
+
+	private static string Share(long part, long whole) => whole == 0 ? "0%" : (part * 100.0 / whole).ToString("0", CultureInfo.InvariantCulture) + "%";
+
+	private static string Minutes(double seconds) => (seconds / 60).ToString("0", CultureInfo.InvariantCulture) + " min";
+}

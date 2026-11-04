@@ -217,6 +217,15 @@ internal class CallJob : Savable
     public bool FactsChecked { get; set; }
     public CallStats? Stats { get; set; }
     /// <summary>
+    /// What each pass of the analysis cost, as reported by the provider.
+    /// </summary>
+    public List<CallCost> Costs { get; set; } = [];
+    /// <summary>
+    /// The layout of <see cref="Chunks"/> (<see cref="TranscriptChunker.Version"/>); chunks no review has read yet are cut
+    /// again when it is older.
+    /// </summary>
+    public int ChunkFormat { get; set; }
+    /// <summary>
     /// Findings of a call analyzed before they were stored on the call were copied over from the diagnosis.
     /// </summary>
     public bool LegacyImported { get; set; }

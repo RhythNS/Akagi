@@ -86,7 +86,7 @@ internal class CallAnalysisService : BackgroundService
         CallAnalysisOptions options = _options.CurrentValue;
         IDatabaseFactory databaseFactory = _services.GetRequiredService<IDatabaseFactory>();
         ToolCallReviewer reviewer = new(databaseFactory, _services.GetRequiredService<ILLMFactory>(),
-            _services.GetRequiredService<ICommandFactory>(), _logger);
+            _services.GetRequiredService<ICommandFactory>(), _logger, options);
 
         return new CallAnalysisPipeline(
             _services.GetRequiredService<ICallJobDatabase>(),

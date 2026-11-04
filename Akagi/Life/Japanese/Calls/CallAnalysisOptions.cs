@@ -21,9 +21,22 @@ internal class CallAnalysisOptions
     /// </summary>
     public int PartMinutes { get; set; } = 10;
     /// <summary>
-    /// Transcript characters per analysis call.
+    /// Transcript characters per review request, in the compact layout of turns (about ten minutes of conversation).
+    /// Fewer, larger parts repeat the instructions less often.
     /// </summary>
-    public int ChunkCharacters { get; set; } = 2500;
+    public int ChunkCharacters { get; set; } = 6000;
+    /// <summary>
+    /// How much the model may think in each pass: none, minimal, low, medium or high; empty leaves it to the model.
+    /// Thinking is billed as output, the most expensive part of a review.
+    /// </summary>
+    public string ReviewReasoning { get; set; } = "low";
+    public string CoachingReasoning { get; set; } = "low";
+    public string FactsReasoning { get; set; } = "low";
+    public string ConsolidationReasoning { get; set; } = "medium";
+    /// <summary>
+    /// US dollars per hour of audio, to estimate a transcription's cost when the provider does not report it.
+    /// </summary>
+    public double TranscriptionPricePerHour { get; set; } = 0.10;
     /// <summary>
     /// OpenRouter speech-to-text model; requests use the credentials of the "OpenRouter" section.
     /// </summary>

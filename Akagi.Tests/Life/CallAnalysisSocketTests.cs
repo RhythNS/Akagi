@@ -88,6 +88,8 @@ public class CallAnalysisSocketTests
         job.DeliveryCharacterId = "6ae1ebfa5a533276d716f834";
         job.Coaching = new CallCoaching { Summary = "You answer well but rarely ask back.", Tips = ["Ask back with ～は？"] };
         job.FactsChecked = true;
+        job.Costs = [new CallCost { Pass = CallCost.Review, Requests = 3, PromptTokens = 20000, CachedTokens = 8000, CompletionTokens = 6000, ReasoningTokens = 2000, Cost = 0.05 },
+                     new CallCost { Pass = CallCost.Transcription, Requests = 3, AudioSeconds = 1800, Cost = 0.05, Estimated = true }];
         foreach (CallFinding finding in job.Findings)
         {
             CallDiagnosis.Apply(diagnosis, job, finding, DateTime.UtcNow);
@@ -226,6 +228,9 @@ public class CallAnalysisSocketTests
         CallAnalysisDetail detail = (await Send(CallAnalysisAction.Detail, job.Id!)).Detail!;
 
         Assert.True(detail.CoachingDone && detail.FactsDone);
+        Assert.Equal([CallCost.Transcription, CallCost.Review], detail.Costs.Select(c => c.Pass));
+        Assert.Equal(0.10, detail.Summary.Cost!.Value, 6);
+        Assert.Equal((8000L, 2000L, true), (detail.Costs[1].CachedTokens, detail.Costs[1].ReasoningTokens, detail.Costs[0].Estimated));
         Assert.Equal(("You answer well but rarely ask back.", "Ask back with ～は？"), (detail.CoachingSummary, detail.CoachingTips.Single()));
         // What to improve comes first
         Assert.Equal(["follow-up", "reaction"], detail.Conversation.Select(c => c.Aspect));

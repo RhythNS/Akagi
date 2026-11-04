@@ -1,6 +1,7 @@
 using Akagi.Characters.Companions;
 using Akagi.Characters.Memories;
 using Akagi.Life.Japanese;
+using Akagi.LLMs;
 using Akagi.Tests.Characters;
 using Microsoft.Extensions.Logging;
 using Akagi.Life.Japanese.Calls;
@@ -68,7 +69,7 @@ public class TranscriptTests
     }
 
     [Fact]
-    public void Chunk_KeepsSegmentsWholeAndTimestamped()
+    public void Chunk_KeepsTurnsWholeAndOpensWithTheTime()
     {
         List<TranscriptSegment> segments = [.. Enumerable.Range(0, 10).Select(i => new TranscriptSegment
         {
@@ -82,10 +83,47 @@ public class TranscriptTests
 
         Assert.True(chunks.Count > 1);
         Assert.All(chunks, c => Assert.True(c.Text.Length <= 200 + 60));
-        Assert.Equal(segments.Count, chunks.Sum(c => c.Text.Split('\n').Length));
-        Assert.StartsWith("[00:00:00] Me: ", chunks[0].Text);
+        Assert.All(chunks, c => Assert.Matches(@"^\[\d\d:\d\d\]", c.Text));
+        Assert.Equal(segments.Count, chunks.Sum(c => c.Text.Split('\n').Count(l => !l.StartsWith('['))));
+        Assert.StartsWith("[00:00]\r\nMe: ", chunks[0].Text.Replace("\r\n", "\n").Replace("\n", "\r\n"));
         Assert.Equal(99, chunks[^1].End);
         Assert.Equal([.. Enumerable.Range(0, chunks.Count)], chunks.Select(c => c.Index));
+    }
+
+    [Fact]
+    public void Lines_JoinTurnsAndMarkTheTimeAboutOnceAMinute()
+    {
+        List<TranscriptSegment> segments =
+        [
+            new() { Start = 0, End = 1, Speaker = "Rii", Text = "最近どう？" },
+            new() { Start = 2, End = 3, Speaker = "Me", Text = "うん。" },
+            new() { Start = 3, End = 4, Speaker = "Me", Text = "まあ、忙しい。", Disputed = "忙しい -> 忙しく" },
+            new() { Start = 30, End = 31, Speaker = "Rii", Text = "そっか。" },
+            new() { Start = 65, End = 66, Speaker = "Me", Text = "でも楽しい。" },
+            new() { Start = 3700, End = 3701, Speaker = "Rii", Text = "またね。" }
+        ];
+
+        List<string> lines = [.. TranscriptChunker.Lines(segments).Select(l => l.Text)];
+
+        Assert.Equal(
+        [
+            "[00:00]",
+            "Rii: 最近どう？",
+            "Me: うん。 まあ、忙しい。 (second hearing: 忙しい -> 忙しく)",
+            "Rii: そっか。",
+            "[01:05]",
+            "Me: でも楽しい。",
+            "[1:01:40]",
+            "Rii: またね。"
+        ], lines);
+    }
+
+    [Fact]
+    public void Lines_KeepUnlabeledLinesApart()
+    {
+        List<string> lines = [.. TranscriptChunker.Lines([new() { Start = 0, Text = "一" }, new() { Start = 1, Text = "二" }]).Select(l => l.Text)];
+
+        Assert.Equal(["[00:00]", "一", "二"], lines);
     }
 
     [Fact]
@@ -651,19 +689,24 @@ public class CallPipelineTests
                 new CallFinding { Kind = FindingKind.Conversation, Aspect = "follow-up", Context = "最近どう？", Said = "楽しかったです", Better = "楽しかった！ユキは？", Explanation = "Ask back." },
                 new CallFinding { Kind = FindingKind.Conversation, Aspect = "reaction", WentWell = true, Japanese = true, Said = "疲れました", Explanation = "Honest." },
                 new CallFinding { Kind = FindingKind.Conversation, Aspect = "question", Context = "誰も言っていない", Said = "楽しかったです", Explanation = "Invented context." }
-            ], new CallCoaching { Summary = "You answer but rarely ask back.", Tips = ["Ask back: ユキは？"] }));
+            ], new CallCoaching { Summary = "You answer but rarely ask back.", Tips = ["Ask back: ユキは？"] }, [Used]));
         }
 
-        public Task<List<CallFinding>> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner, CancellationToken cancellationToken)
+        /// <summary>
+        /// What every stub request reports as used: 1000 input tokens (400 cached), 200 output (150 thinking), a cent.
+        /// </summary>
+        public static readonly LLMCallUsage Used = new("stub", 1000, 400, 200, 150, 0.01);
+
+        public Task<FactsResult> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner, CancellationToken cancellationToken)
         {
             FactChecks++;
             KnownPartner = knownPartner;
-            return Task.FromResult(new List<CallFinding>
+            return Task.FromResult(new FactsResult(new List<CallFinding>
             {
                 new() { Kind = FindingKind.Fact, Subject = FactSubject.Partner, Aspect = "personality", Pattern = "Yuki likes to check in on friends.", Said = "最近どう？", FollowUp = true },
                 new() { Kind = FindingKind.Fact, Subject = FactSubject.Learner, Aspect = "events", Pattern = "The learner had a fun but tiring day.", Said = "疲れました" },
                 new() { Kind = FindingKind.Fact, Subject = FactSubject.Partner, Aspect = "work", Pattern = "Yuki is a pilot.", Said = "パイロットです" }
-            });
+            }, [Used]));
         }
 
         public List<int> Analyzed { get; } = [];
@@ -683,7 +726,7 @@ public class CallPipelineTests
             [
                 new CallFinding { Kind = FindingKind.Mistake, Category = IssueCategory.Register, Pattern = "polite with a friend", Said = "楽しかったです", Better = "楽しかった", Explanation = "です/ます with a close friend" },
                 new CallFinding { Kind = FindingKind.Mistake, Category = IssueCategory.Particle, Pattern = "invented", Said = "誰も言っていない言葉です" }
-            ], $"Part {chunk.Index + 1} small talk."));
+            ], $"Part {chunk.Index + 1} small talk.", [Used]));
         }
 
         public Task<Consolidation?> ConsolidateAsync(CallJob job, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken)
@@ -693,7 +736,7 @@ public class CallPipelineTests
             {
                 return Task.FromResult<Consolidation?>(null);
             }
-            Consolidation result = new() { Summary = "A relaxed call.", Priorities = ["Drop です with friends."] };
+            Consolidation result = new() { Summary = "A relaxed call.", Priorities = ["Drop です with friends."], Usage = [Used] };
             result.Groups.Add(new FindingGroup([.. job.Findings.Where(f => f.State == FindingState.Candidate).Select(f => f.Id)], string.Empty,
                 "Register", "too polite with friends", "です/ます with a close friend", 2));
             return Task.FromResult<Consolidation?>(result);
@@ -722,7 +765,7 @@ public class CallPipelineTests
             Memory = new CallMemory(People, Memories, Companions, null, Microsoft.Extensions.Logging.Abstractions.NullLogger<CallMemory>.Instance);
             Pipeline = new CallAnalysisPipeline(Jobs, Diagnoses, Splitter, Transcriber, Analyzer, Analyzer, Analyzer, Memory,
                 job => { Delivered.Add(job); return Task.CompletedTask; },
-                new CallAnalysisOptions { StorageDirectory = storage, ChunkCharacters = 600 }, NullLogger.Instance);
+                new CallAnalysisOptions { StorageDirectory = storage, ChunkCharacters = 150 }, NullLogger.Instance);
         }
 
         public async Task<CallJob> Queue(LearnerChannel channel = LearnerChannel.Left)
@@ -1085,5 +1128,47 @@ public class CallPipelineTests
         // What the first run learned is known to the second
         Assert.Contains("Yuki likes to check in on friends.", fixture.Analyzer.KnownPartner);
         Assert.Single(fixture.People.Items.Single().Calls);
+    }
+
+    [Fact]
+    public async Task Run_RecordsWhatEveryPassCost()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        CallJob job = await fixture.Queue();
+
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+
+        Assert.Equal([CallCost.Transcription, CallCost.Review, CallCost.Coaching, CallCost.Facts, CallCost.Merge], job.Costs.Select(c => c.Pass));
+        CallCost review = job.Costs.Single(c => c.Pass == CallCost.Review);
+        Assert.Equal((job.Chunks.Count, 1000L * job.Chunks.Count, 400L * job.Chunks.Count, 150L * job.Chunks.Count), (review.Requests, review.PromptTokens, review.CachedTokens, review.ReasoningTokens));
+        Assert.Equal(0.01 * job.Chunks.Count, review.Cost, 6);
+        // The stub transcriber reports no usage, so the six paid passes are priced from their audio length
+        CallCost transcription = job.Costs.Single(c => c.Pass == CallCost.Transcription);
+        Assert.Equal(6, transcription.Requests);
+        Assert.True(transcription.Estimated);
+        Assert.Equal(transcription.AudioSeconds / 3600 * 0.10, transcription.Cost, 6);
+        Assert.Equal(job.Costs.Sum(c => c.Cost), CallCosts.Total(job), 6);
+    }
+
+    [Fact]
+    public async Task Run_CutsOldChunksAgainInTheCompactLayout_BeforeReviewingThem()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        CallJob job = await fixture.Queue();
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+        Assert.Equal(TranscriptChunker.Version, job.ChunkFormat);
+
+        // As if analyzed with the old layout and then queued for a new review
+        Assert.True(await CallJobs.ReanalyzeAsync(job, fixture.Diagnoses.Items.Single(), fixture.Memory));
+        job.ChunkFormat = 0;
+        job.Chunks = [new CallChunk { Index = 0, Start = 0, End = 1, Text = "[00:00:00] Me: old layout" }];
+
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+
+        Assert.Equal(TranscriptChunker.Version, job.ChunkFormat);
+        Assert.True(job.Chunks.Count > 1);
+        Assert.DoesNotContain(job.Chunks, c => c.Text.Contains("old layout"));
     }
 }

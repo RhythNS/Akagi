@@ -46,8 +46,8 @@ public class LiveTranscriptionTests
 
         public Task<CoachingResult> CoachAsync(CallJob job, CancellationToken cancellationToken) => Task.FromResult(new CoachingResult([], null));
 
-        public Task<List<CallFinding>> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner, CancellationToken cancellationToken) =>
-            Task.FromResult(new List<CallFinding>());
+        public Task<FactsResult> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner, CancellationToken cancellationToken) =>
+            Task.FromResult(new FactsResult([]));
 
         public Task<(List<string> Partner, List<string> Learner)> KnownAsync(CallJob job) => Task.FromResult<(List<string>, List<string>)>(([], []));
 

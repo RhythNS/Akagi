@@ -18,7 +18,7 @@ namespace Akagi.Life.Japanese.Calls;
 /// <summary>
 /// What one chunk's review noted. Nothing in it has reached the diagnosis yet.
 /// </summary>
-internal record ChunkReview(List<CallFinding> Findings, string Summary);
+internal record ChunkReview(List<CallFinding> Findings, string Summary, IReadOnlyList<LLMCallUsage>? Usage = null);
 
 internal record FindingGroup(string[] FindingIds, string IssueId, string Category, string Pattern, string Explanation, int Severity);
 
@@ -31,6 +31,8 @@ internal class Consolidation
     public List<(string[] FindingIds, string Reason)> Drops { get; } = [];
     public string Summary { get; set; } = string.Empty;
     public List<string> Priorities { get; set; } = [];
+
+    public List<LLMCallUsage> Usage { get; set; } = [];
 
     public bool IsEmpty => Groups.Count == 0 && Drops.Count == 0 && Summary.Length == 0;
 }
@@ -46,7 +48,8 @@ internal interface ICallChunkAnalyzer
 internal interface ICallConsolidator
 {
     /// <summary>
-    /// Looks at every finding of the call at once. Null when the request gave nothing usable.
+    /// Looks at every finding of the call at once. Null or <see cref="Consolidation.IsEmpty"/> when the request gave
+    /// nothing usable; its usage is reported either way.
     /// </summary>
     public Task<Consolidation?> ConsolidateAsync(CallJob job, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken);
 }
@@ -57,9 +60,10 @@ internal interface ICallConsolidator
 /// </summary>
 internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator, ICallWholeReviewer
 {
-    public const int MaxMistakesPerChunk = 12;
-    public const int MaxComprehensionIssuesPerChunk = 3;
-    public const int MaxPhrasesPerChunk = 3;
+    // Parts are about ten minutes of conversation
+    public const int MaxMistakesPerChunk = 20;
+    public const int MaxComprehensionIssuesPerChunk = 4;
+    public const int MaxPhrasesPerChunk = 5;
     public const int MaxKnownIssues = 60;
     public const int ContextLines = 6;
 
@@ -80,6 +84,9 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
         "WriteCallReview"
     ];
 
+    internal const string TranscriptLayout =
+        "Consecutive lines of one speaker are joined into one turn, and a [mm:ss] line marks the time about once a minute.";
+
     internal const string SeverityScale =
         "Severity: 3 = a native would misunderstand, be confused, or find it rude; 2 = understood, but clearly not how a native says it; " +
         "1 = small polish a native might not even notice.";
@@ -88,9 +95,12 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
     private readonly ILLMFactory _llmFactory;
     private readonly ICommandFactory _commandFactory;
     private readonly ILogger _logger;
+    private readonly CallAnalysisOptions _options;
 
-    public ToolCallReviewer(IDatabaseFactory databaseFactory, ILLMFactory llmFactory, ICommandFactory commandFactory, ILogger logger)
+    public ToolCallReviewer(IDatabaseFactory databaseFactory, ILLMFactory llmFactory, ICommandFactory commandFactory, ILogger logger,
+        CallAnalysisOptions? options = null)
     {
+        _options = options ?? new CallAnalysisOptions();
         _databaseFactory = databaseFactory;
         _llmFactory = llmFactory;
         _commandFactory = commandFactory;
@@ -100,22 +110,23 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
     public async Task<ChunkReview> AnalyzeAsync(CallJob job, CallChunk chunk, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Call {JobId}: chunk {Chunk} goes to the tutor on the Learning model", job.Id, chunk.Index + 1);
-        Command[] calls = await RequestAsync(job, "Call Review", BuildInstruction(job, diagnosis, DateTime.UtcNow), BuildChunkMessage(job, chunk),
-            ChunkTools, cancellationToken);
+        (Command[] calls, List<LLMCallUsage> usage) = await RequestAsync(job, "Call Review", BuildInstruction(job, diagnosis, DateTime.UtcNow),
+            BuildChunkMessage(job, chunk), ChunkTools, _options.ReviewReasoning, cancellationToken);
         if (calls.Length == 0)
         {
             _logger.LogWarning("Review of chunk {Chunk} of call {JobId} returned no tool calls", chunk.Index, job.Id);
         }
-        return ReadChunk(calls, chunk.Index);
+        return ReadChunk(calls, chunk.Index) with { Usage = usage };
     }
 
     public async Task<Consolidation?> ConsolidateAsync(CallJob job, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Call {JobId}: consolidating {Findings} findings", job.Id, job.Findings.Count);
-        Command[] calls = await RequestAsync(job, "Call Consolidation", BuildConsolidationInstruction(job), BuildConsolidationMessage(job, diagnosis),
-            ConsolidationTools, cancellationToken);
+        (Command[] calls, List<LLMCallUsage> usage) = await RequestAsync(job, "Call Consolidation", BuildConsolidationInstruction(job),
+            BuildConsolidationMessage(job, diagnosis), ConsolidationTools, _options.ConsolidationReasoning, cancellationToken);
         Consolidation result = ReadConsolidation(calls);
-        return result.IsEmpty ? null : result;
+        result.Usage = usage;
+        return result;
     }
 
     internal static ChunkReview ReadChunk(IEnumerable<Command> calls, int chunkIndex)
@@ -183,7 +194,12 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
         return result;
     }
 
-    private async Task<Command[]> RequestAsync(CallJob job, string name, string instruction, string message, string[] tools, CancellationToken cancellationToken)
+    /// <summary>
+    /// One request: <paramref name="instruction"/> becomes the system prompt and comes first, so requests that share it
+    /// (and the tools) share a prefix the provider can serve from its cache; <paramref name="message"/> is what differs.
+    /// </summary>
+    private async Task<(Command[] Calls, List<LLMCallUsage> Usage)> RequestAsync(CallJob job, string name, string instruction, string message, string[] tools,
+        string reasoningEffort, CancellationToken cancellationToken)
     {
         User user = await _databaseFactory.GetDatabase<IUserDatabase>().GetDocumentByIdAsync(job.UserId)
             ?? throw new InvalidOperationException($"User {job.UserId} not found.");
@@ -211,6 +227,7 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
             Output = Message.Type.System,
             MessageCompiler = new ContextOnlyConversationCompiler(),
             SystemInstruction = instruction,
+            ReasoningEffort = reasoningEffort,
             CommandNames = tools
         };
         await processor.Init([.. tools.Select(_commandFactory.Create)], _databaseFactory);
@@ -222,7 +239,8 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
             User = user,
             Communicator = new SilentCommunicator(),
             LLMFactory = _llmFactory,
-            DatabaseFactory = _databaseFactory
+            DatabaseFactory = _databaseFactory,
+            UsageLog = []
         };
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -230,7 +248,13 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
         // One request holding every call: Gemini 3 models reject a replayed tool call unless its reasoning details are
         // sent back, which conversations do not store, so this must not continue a tool exchange
         ILLM llm = await _llmFactory.Create(user, processor.SpecificLLM, processor.Usage);
-        return await llm.GetNextSteps(processor, context);
+        Command[] calls = await llm.GetNextSteps(processor, context);
+        foreach (LLMCallUsage used in context.UsageLog)
+        {
+            _logger.LogInformation("Call {JobId}: {Pass} used {Prompt} input tokens ({Cached} cached) and {Completion} output ({Reasoning} thinking), ${Cost:0.0000}",
+                job.Id, name, used.PromptTokens, used.CachedTokens, used.CompletionTokens, used.ReasoningTokens, used.Cost ?? 0);
+        }
+        return (calls, context.UsageLog);
     }
 
     internal static string BuildChunkMessage(CallJob job, CallChunk chunk)
@@ -281,6 +305,7 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
             _ => "Speakers are not labeled. Infer which lines are {{user}}'s (non-native phrasing, being addressed by name, context) and judge only those."
         });
         text.AppendLine($"Expected register for this relationship: {job.Register.ToString().ToLowerInvariant()}.");
+        text.AppendLine(TranscriptLayout);
         text.AppendLine();
         text.AppendLine("Look for, in {{user}}'s lines only:");
         text.AppendLine("- unnatural phrasing, textbook stiffness and odd collocations a native would not use");

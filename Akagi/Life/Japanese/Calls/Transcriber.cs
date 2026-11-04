@@ -11,6 +11,11 @@ namespace Akagi.Life.Japanese.Calls;
 /// </summary>
 internal record TranscriptWord(string Text, double Start, double End);
 
+/// <summary>
+/// What a transcription request billed: the audio length, and the cost when the provider reports it.
+/// </summary>
+internal record TranscriptionUsage(double Seconds, double? Cost);
+
 internal interface ITranscriber
 {
     public bool IsConfigured { get; }
@@ -25,6 +30,11 @@ internal interface ITranscriber
     /// to merge channels: MAI-Transcribe can return a whole channel as a few segments minutes long.
     /// </summary>
     public Task<List<TranscriptWord>> TranscribeWordsAsync(string audioPath, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// What the latest successful request billed; null when unknown.
+    /// </summary>
+    public TranscriptionUsage? LastUsage => null;
 }
 
 /// <summary>
@@ -60,11 +70,43 @@ internal class OpenRouterTranscriber : ITranscriber
     public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(_openRouter.CurrentValue.ApiKey) && !string.IsNullOrWhiteSpace(_openRouter.CurrentValue.BaseUrl);
 
-    public async Task<List<TranscriptSegment>> TranscribeAsync(string audioPath, CancellationToken cancellationToken) =>
-        ParseResponse(await PostAsync(audioPath, wordTimestamps: false, cancellationToken));
+    public TranscriptionUsage? LastUsage { get; private set; }
 
-    public async Task<List<TranscriptWord>> TranscribeWordsAsync(string audioPath, CancellationToken cancellationToken) =>
-        ParseWords(await PostAsync(audioPath, wordTimestamps: true, cancellationToken));
+    public async Task<List<TranscriptSegment>> TranscribeAsync(string audioPath, CancellationToken cancellationToken)
+    {
+        string body = await PostAsync(audioPath, wordTimestamps: false, cancellationToken);
+        LastUsage = ReadUsage(body);
+        return ParseResponse(body);
+    }
+
+    public async Task<List<TranscriptWord>> TranscribeWordsAsync(string audioPath, CancellationToken cancellationToken)
+    {
+        string body = await PostAsync(audioPath, wordTimestamps: true, cancellationToken);
+        LastUsage = ReadUsage(body);
+        return ParseWords(body);
+    }
+
+    /// <summary>
+    /// The billed audio length (usage.seconds, else duration) and cost (usage.cost) of a response.
+    /// </summary>
+    internal static TranscriptionUsage? ReadUsage(string body)
+    {
+        try
+        {
+            using JsonDocument document = JsonDocument.Parse(body);
+            JsonElement root = document.RootElement;
+            double seconds = ReadDuration(root);
+            double? cost = root.TryGetProperty("usage", out JsonElement usage) && usage.ValueKind == JsonValueKind.Object
+                           && usage.TryGetProperty("cost", out JsonElement value) && value.ValueKind == JsonValueKind.Number
+                ? value.GetDouble()
+                : null;
+            return seconds > 0 || cost != null ? new TranscriptionUsage(seconds, cost) : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>
     /// Waits and tries again when throttled (429) or when the provider is briefly unavailable (5xx).

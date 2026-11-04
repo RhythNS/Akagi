@@ -100,6 +100,11 @@ public class CallAnalysisPageTests : BunitContext
         CanGiveFeedback = summary.State == CallAnalysisState.Completed,
         ReviewSummary = "A relaxed call with good listening.",
         CoachingDone = true,
+        Costs =
+        [
+            new CallCostView { Pass = "transcription", Requests = 9, AudioSeconds = 3600, Cost = 0.30 },
+            new CallCostView { Pass = "review", Requests = 4, InputTokens = 40000, CachedTokens = 16000, OutputTokens = 12000, ReasoningTokens = 3000, Cost = 0.08 }
+        ],
         FactsDone = true,
         CoachingSummary = "You answer fully but rarely ask back.",
         CoachingTips = ["Ask back: ユキは？"],
@@ -396,5 +401,18 @@ public class CallAnalysisPageTests : BunitContext
         Respond(_ => new CallAnalysisResponseTransmission { Detail = Detail(Summary("done", "Yuki")) });
 
         cut.WaitForAssertion(() => Assert.Equal("2", cut.Find(".call-line-target").GetAttribute("data-line")));
+    }
+
+    [Fact]
+    public void Costs_ArePerPassWithTheTotal()
+    {
+        IRenderedComponent<CallAnalysisPage> cut = OpenDone();
+
+        Assert.Equal("$0.38", cut.Find("[data-cost-total]").TextContent.Trim());
+        Assert.Contains("60 min of audio", cut.Find("[data-cost='transcription']").TextContent);
+        string review = cut.Find("[data-cost='review']").TextContent;
+        Assert.Contains("40k (40%)", review);
+        Assert.Contains("12k (25%)", review);
+        Assert.Contains("$0.080", review);
     }
 }

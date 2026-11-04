@@ -365,6 +365,11 @@
 	</div>
 }
 
+@if (Detail.Costs.Length > 0)
+{
+	<CallCostCard Costs="Detail.Costs" />
+}
+
 @if (!string.IsNullOrWhiteSpace(Detail.Report))
 {
 	<div class="card mb-3">

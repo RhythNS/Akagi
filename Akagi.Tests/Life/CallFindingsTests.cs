@@ -177,15 +177,20 @@ public class CallConsolidationTests
             ]
         };
 
-        string coaching = ToolCallReviewer.BuildCoachingMessage(job, ToolCallReviewer.WholeCallWindows(job).Single(), 0, 1);
-        string facts = ToolCallReviewer.BuildFactsMessage(job, "...", 0, 1, ["Rii lives in Osaka."], []);
+        string context = ToolCallReviewer.BuildWholeCallContext(job, ToolCallReviewer.WholeCallWindows(job).Single(), 0, 1);
+        string coaching = ToolCallReviewer.BuildCoachingTask(job);
+        string facts = ToolCallReviewer.BuildFactsTask(job, ["Rii lives in Osaka."], []);
 
         Assert.Contains("Questions asked: {{user}} 0, the partner 1.", coaching);
         Assert.Contains("うん 1x", coaching);
-        Assert.Contains("[00:00:00] Rii: 週末なにした？", coaching);
+        Assert.Contains("Japanese: how this is done in Japanese", coaching);
+        Assert.Contains("[00:00]\nRii: 週末なにした？", context.Replace("\r\n", "\n"));
         Assert.Contains("Already known about Rii:\n- Rii lives in Osaka.", facts.Replace("\r\n", "\n"));
-        Assert.Contains("Japanese: how this is done in Japanese", ToolCallReviewer.BuildCoachingInstruction(job));
-        Assert.Contains("be thorough", ToolCallReviewer.BuildFactsInstruction(job));
+        Assert.Contains("be thorough", facts);
+        // The transcript opens both requests, and nothing pass-specific is in it, so the second can come from the cache
+        Assert.DoesNotContain("Task:", context);
+        Assert.StartsWith("Task:", coaching);
+        Assert.StartsWith("Task:", facts);
     }
 
     [Fact]

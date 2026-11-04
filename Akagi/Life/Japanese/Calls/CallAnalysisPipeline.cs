@@ -135,7 +135,8 @@ internal class CallAnalysisPipeline
             return;
         }
 
-        job.Chunks = TranscriptChunker.Chunk(job.Segments, Math.Max(500, _options.ChunkCharacters));
+        job.Chunks = TranscriptChunker.Chunk(job.Segments, Math.Max(100, _options.ChunkCharacters));
+        job.ChunkFormat = TranscriptChunker.Version;
         job.Status = CallJobStatus.Analyzing;
         await SaveAsync(job);
         _logger.LogInformation("Call {JobId}: transcript has {Lines} lines, {Characters} characters, cut into {Chunks} chunks for analysis",
@@ -151,6 +152,7 @@ internal class CallAnalysisPipeline
         {
             cancellationToken.ThrowIfCancellationRequested();
             List<TranscriptSegment> segments = await _transcriber.TranscribeAsync(parts[i].Path, cancellationToken);
+            CallCosts.AddTranscription(job, _transcriber.LastUsage, segments.Count == 0 ? 0 : segments.Max(s => s.End), _options.TranscriptionPricePerHour);
             await AddPartAsync(job, segments, parts[i].OffsetSeconds, i, parts.Count);
         }
     }
@@ -213,6 +215,8 @@ internal class CallAnalysisPipeline
         }
 
         List<TranscriptWord> words = await _transcriber.TranscribeWordsAsync(part.Path, cancellationToken);
+        // Only paid passes count; one read back from disk above cost nothing
+        CallCosts.AddTranscription(job, _transcriber.LastUsage, words.Count == 0 ? 0 : words.Max(w => w.End), _options.TranscriptionPricePerHour);
         Directory.CreateDirectory(Path.GetDirectoryName(cachePath)!);
         await File.WriteAllTextAsync(cachePath, JsonSerializer.Serialize(words), cancellationToken);
         return words;
@@ -233,6 +237,14 @@ internal class CallAnalysisPipeline
 
     private async Task AnalyzeAsync(CallJob job, CancellationToken cancellationToken)
     {
+        // Chunks cut in an older layout that no review has read yet are cut again: the compact one costs far less
+        if (job.ChunkFormat < TranscriptChunker.Version && job.Segments.Count > 0 && job.Chunks.All(c => !c.Analyzed))
+        {
+            job.Chunks = TranscriptChunker.Chunk(job.Segments, Math.Max(100, _options.ChunkCharacters));
+            job.ChunkFormat = TranscriptChunker.Version;
+            await SaveAsync(job);
+            _logger.LogInformation("Call {JobId}: cut again into {Chunks} chunks in the compact layout", job.Id, job.Chunks.Count);
+        }
         _logger.LogInformation("Call {JobId}: analyzing {Pending} of {Chunks} chunks", job.Id, job.Chunks.Count(c => !c.Analyzed), job.Chunks.Count);
         foreach (CallChunk chunk in job.Chunks.Where(c => !c.Analyzed).OrderBy(c => c.Index))
         {
@@ -243,6 +255,7 @@ internal class CallAnalysisPipeline
             // Read fresh for every chunk: a chat may have changed it meanwhile, and the review should see the known issues
             JapaneseDiagnosis? diagnosis = await _diagnoses.GetForUser(job.UserId);
             ChunkReview review = await _analyzer.AnalyzeAsync(job, chunk, diagnosis, cancellationToken);
+            CallCosts.Add(job, CallCost.Review, review.Usage ?? []);
 
             // A finding from an interrupted earlier attempt at this chunk is replaced, not doubled
             job.Findings.RemoveAll(f => f.ChunkIndex == chunk.Index && f.Origin == FindingOrigin.Review);
@@ -280,6 +293,7 @@ internal class CallAnalysisPipeline
         if (job.Coaching == null)
         {
             CoachingResult result = await _whole.CoachAsync(job, cancellationToken);
+            CallCosts.Add(job, CallCost.Coaching, result.Usage ?? []);
             job.Findings.RemoveAll(f => f.Kind == FindingKind.Conversation);
             foreach (CallFinding moment in result.Moments)
             {
@@ -307,7 +321,9 @@ internal class CallAnalysisPipeline
         if (!job.FactsChecked)
         {
             (List<string> partner, List<string> learner) = await _memory.KnownAsync(job);
-            List<CallFinding> facts = await _whole.FactsAsync(job, partner, learner, cancellationToken);
+            FactsResult result = await _whole.FactsAsync(job, partner, learner, cancellationToken);
+            CallCosts.Add(job, CallCost.Facts, result.Usage ?? []);
+            List<CallFinding> facts = result.Facts;
             job.Findings.RemoveAll(f => f.Kind == FindingKind.Fact && !f.Applied);
             foreach (CallFinding fact in facts)
             {
@@ -339,7 +355,11 @@ internal class CallAnalysisPipeline
             Consolidation? consolidation = job.Findings.Count == 0 && job.Chunks.All(c => c.Summary.Length == 0)
                 ? null
                 : await _consolidator.ConsolidateAsync(job, diagnosis, cancellationToken);
-            job.Review = ApplyConsolidation(job, consolidation, diagnosis);
+            if (consolidation != null)
+            {
+                CallCosts.Add(job, CallCost.Merge, consolidation.Usage);
+            }
+            job.Review = ApplyConsolidation(job, consolidation is { IsEmpty: false } ? consolidation : null, diagnosis);
             _logger.LogInformation("Call {JobId}: consolidated into {Kept} kept and {Dropped} dropped finding(s){Fallback}",
                 job.Id, job.Findings.Count(f => f.State == FindingState.Kept), job.Findings.Count(f => f.State == FindingState.Dropped),
                 job.Review.Fallback ? " (kept as noted, the consolidation gave nothing usable)" : string.Empty);

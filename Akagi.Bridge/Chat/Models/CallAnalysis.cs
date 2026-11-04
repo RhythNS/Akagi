@@ -97,6 +97,11 @@ public class CallAnalysisSummary
     /// </summary>
     [Key(11)]
     public double? LearnerShare { get; set; }
+    /// <summary>
+    /// What the analysis cost in US dollars; null for calls analyzed before costs were recorded.
+    /// </summary>
+    [Key(12)]
+    public double? Cost { get; set; }
 
     [IgnoreMember]
     public DateTime Date => RecordedAt ?? CreatedAt;
@@ -489,6 +494,46 @@ public class CallAnalysisDetail
     public bool CoachingDone { get; set; }
     [Key(23)]
     public bool FactsDone { get; set; }
+    /// <summary>
+    /// What each pass cost, in pipeline order; empty for calls analyzed before costs were recorded.
+    /// </summary>
+    [Key(24)]
+    public CallCostView[] Costs { get; set; } = [];
+}
+
+[MessagePackObject]
+public class CallCostView
+{
+    /// <summary>
+    /// transcription, review, coaching, facts or merge.
+    /// </summary>
+    [Key(0)]
+    public string Pass { get; set; } = string.Empty;
+    [Key(1)]
+    public int Requests { get; set; }
+    [Key(2)]
+    public long InputTokens { get; set; }
+    /// <summary>
+    /// Input tokens served from the provider's prompt cache, at a fraction of the price.
+    /// </summary>
+    [Key(3)]
+    public long CachedTokens { get; set; }
+    [Key(4)]
+    public long OutputTokens { get; set; }
+    /// <summary>
+    /// Output tokens spent thinking.
+    /// </summary>
+    [Key(5)]
+    public long ReasoningTokens { get; set; }
+    [Key(6)]
+    public double AudioSeconds { get; set; }
+    [Key(7)]
+    public double Cost { get; set; }
+    /// <summary>
+    /// Worked out from the price because the provider did not report it.
+    /// </summary>
+    [Key(8)]
+    public bool Estimated { get; set; }
 }
 
 /// <summary>

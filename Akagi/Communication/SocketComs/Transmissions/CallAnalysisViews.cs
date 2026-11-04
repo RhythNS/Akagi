@@ -41,7 +41,8 @@ internal static partial class CallAnalysisViews
         ChunksAnalyzed = job.Chunks.Count(c => c.Analyzed),
         ChunkCount = job.Chunks.Count,
         Error = job.Error,
-        LearnerShare = job.Stats?.Separated == true ? job.Stats.LearnerShare : null
+        LearnerShare = job.Stats?.Separated == true ? job.Stats.LearnerShare : null,
+        Cost = job.Costs.Count > 0 ? CallCosts.Total(job) : null
     };
 
     public static CallAnalysisDetail Detail(CallJob job, JapaneseDiagnosis? diagnosis, IReadOnlyCollection<CallJob> allJobs)
@@ -70,6 +71,20 @@ internal static partial class CallAnalysisViews
         detail.CorrectUses = [.. Visible(job, FindingKind.Correct).Select(f => View(f, diagnosis))];
         detail.Strengths = [.. Visible(job, FindingKind.Strength).Select(f => View(f, diagnosis))];
         detail.Phrases = [.. Visible(job, FindingKind.Phrase).Select(f => View(f, diagnosis))];
+        detail.Costs = [.. job.Costs
+            .OrderBy(c => Array.IndexOf(CallCost.Order, c.Pass) is int index and >= 0 ? index : int.MaxValue)
+            .Select(c => new CallCostView
+            {
+                Pass = c.Pass,
+                Requests = c.Requests,
+                InputTokens = c.PromptTokens,
+                CachedTokens = c.CachedTokens,
+                OutputTokens = c.CompletionTokens,
+                ReasoningTokens = c.ReasoningTokens,
+                AudioSeconds = c.AudioSeconds,
+                Cost = c.Cost,
+                Estimated = c.Estimated
+            })];
         detail.CoachingDone = job.Coaching != null;
         detail.FactsDone = job.FactsChecked;
         detail.CoachingSummary = job.Coaching?.Summary ?? string.Empty;
