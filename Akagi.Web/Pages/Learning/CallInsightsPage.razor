@@ -138,6 +138,9 @@ else
 			<TrendColumns Title="Time until you answer" Hint="Median gap after your partner stops talking." Points="Points(c => c.MedianResponseSeconds)" Format="CallText.Seconds" />
 		</div>
 		<div class="col-12 col-md-6 col-xl-4">
+			<TrendColumns Title="Questions you asked" Hint="Asking back keeps a conversation going." Points="Points(c => c.Separated ? c.LearnerQuestions : null)" Format="Whole" />
+		</div>
+		<div class="col-12 col-md-6 col-xl-4">
 			<TrendColumns Title="Characters per turn" Hint="How much you say each time you speak." Points="Points(c => c.Separated ? c.LearnerCharactersPerTurn : null)" Format="CallText.Number" />
 		</div>
 	</div>
@@ -157,6 +160,7 @@ else
 						<th class="text-end">New words</th>
 						<th class="text-end">Fillers / 100</th>
 						<th class="text-end">Answer after</th>
+						<th class="text-end">Questions</th>
 						<th class="text-end">Issues</th>
 					</tr>
 				</thead>
@@ -171,6 +175,7 @@ else
 							<td class="text-end">@(call.Separated ? call.NewWords.ToString() : "-")</td>
 							<td class="text-end">@(call.FillersPer100 is double fillers ? CallText.Number(fillers) : "-")</td>
 							<td class="text-end">@(call.MedianResponseSeconds is double seconds ? CallText.Seconds(seconds) : "-")</td>
+							<td class="text-end">@(call.Separated ? call.LearnerQuestions.ToString() : "-")</td>
 							<td class="text-end">@call.IssueCount</td>
 						</tr>
 					}

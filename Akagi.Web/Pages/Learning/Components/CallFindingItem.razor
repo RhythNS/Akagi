@@ -22,31 +22,47 @@
 		{
 			<span class="badge bg-azure-lt">not yet checked</span>
 		}
+		@if (Finding.Kind == CallFindingKind.Conversation)
+		{
+			<span class="badge @(Finding.Japanese ? "bg-red-lt" : "bg-blue-lt")">@(Finding.Japanese ? "Japanese" : "general")</span>
+			<span class="badge bg-secondary-lt">@Finding.Aspect</span>
+		}
+		@if (Finding.Kind == CallFindingKind.Fact)
+		{
+			<span class="badge bg-secondary-lt">@Finding.Aspect</span>
+			@if (Finding.FollowUp)
+			{
+				<span class="badge bg-green-lt">ask next time</span>
+			}
+		}
 		@if (Finding.Feedback == CallFindingFeedback.NotAMistake)
 		{
-			<span class="badge bg-secondary-lt">you said: not a mistake</span>
+			<span class="badge bg-secondary-lt">@CallText.RejectedBadge(Finding.Kind)</span>
 		}
 		@if (CanGiveFeedback && Finding.State == CallFindingState.Kept)
 		{
 			<span class="ms-auto d-inline-flex gap-1">
-				<button type="button"
-						class="btn btn-sm py-0 px-2 @(Finding.Feedback == CallFindingFeedback.Useful ? "btn-success" : "btn-outline-secondary")"
-						title="This one helps"
-						data-feedback="useful"
-						disabled="@Busy"
-						@onclick="() => Send(CallFindingFeedback.Useful)">
-					<Icon IconType="@Icons.Check" Size="14" />
-					<span class="ms-1">Useful</span>
-				</button>
-				@if (Finding.Kind is CallFindingKind.Mistake)
+				@if (Finding.Kind != CallFindingKind.Fact)
+				{
+					<button type="button"
+							class="btn btn-sm py-0 px-2 @(Finding.Feedback == CallFindingFeedback.Useful ? "btn-success" : "btn-outline-secondary")"
+							title="This one helps"
+							data-feedback="useful"
+							disabled="@Busy"
+							@onclick="() => Send(CallFindingFeedback.Useful)">
+						<Icon IconType="@Icons.Check" Size="14" />
+						<span class="ms-1">Useful</span>
+					</button>
+				}
+				@if (Finding.Kind is CallFindingKind.Mistake or CallFindingKind.Conversation or CallFindingKind.Fact)
 				{
 					<button type="button"
 							class="btn btn-sm py-0 px-2 @(Finding.Feedback == CallFindingFeedback.NotAMistake ? "btn-secondary" : "btn-outline-secondary")"
-							title="@(Finding.Feedback == CallFindingFeedback.NotAMistake ? "Count it again" : "Take it out of your diagnosis")"
+							title="@RejectTitle"
 							data-feedback="not-a-mistake"
 							disabled="@Busy"
 							@onclick="() => Send(CallFindingFeedback.NotAMistake)">
-						Not a mistake
+						@CallText.RejectLabel(Finding.Kind)
 					</button>
 				}
 			</span>
@@ -68,6 +84,30 @@
 			@if (!string.IsNullOrWhiteSpace(Finding.Said))
 			{
 				<div lang="ja"><span class="text-secondary">Said:</span> @Finding.Said</div>
+			}
+			break;
+
+		case CallFindingKind.Conversation:
+			@if (!string.IsNullOrWhiteSpace(Finding.Context))
+			{
+				<div lang="ja"><span class="text-secondary">@PartnerName:</span> @Finding.Context</div>
+			}
+			<div lang="ja"><span class="text-secondary">You:</span> <span class="@(Finding.WentWell ? "text-success" : "")">@Finding.Said</span></div>
+			@if (!string.IsNullOrWhiteSpace(Finding.Better))
+			{
+				<div lang="ja"><span class="text-secondary">Try:</span> <span class="text-success">@Finding.Better</span></div>
+			}
+			@if (!string.IsNullOrWhiteSpace(Finding.Explanation))
+			{
+				<div class="text-secondary">@Finding.Explanation</div>
+			}
+			break;
+
+		case CallFindingKind.Fact:
+			<div class="fw-medium">@Finding.Pattern</div>
+			@if (!string.IsNullOrWhiteSpace(Finding.Said))
+			{
+				<div class="text-secondary" lang="ja">&ldquo;@Finding.Said&rdquo;</div>
 			}
 			break;
 
@@ -123,6 +163,12 @@
 	[Parameter]
 	public bool ShowPattern { get; set; }
 
+	/// <summary>
+	/// How the partner's lines are labeled in conversation moments.
+	/// </summary>
+	[Parameter]
+	public string PartnerName { get; set; } = "Partner";
+
 	[Parameter]
 	public EventCallback<double> OnJump { get; set; }
 
@@ -130,6 +176,15 @@
 	public EventCallback<Feedback> OnFeedback { get; set; }
 
 	private bool Muted => Finding.Feedback == CallFindingFeedback.NotAMistake;
+
+	private string RejectTitle => Finding.Feedback == CallFindingFeedback.NotAMistake
+		? "Count it again"
+		: Finding.Kind switch
+		{
+			CallFindingKind.Fact => "Remove it from the person's page and Akagi's memory",
+			CallFindingKind.Conversation => "This advice does not fit",
+			_ => "Take it out of your diagnosis"
+		};
 
 	/// <summary>
 	/// Clicking the active choice again takes it back.

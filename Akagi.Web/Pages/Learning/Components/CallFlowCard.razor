@@ -62,6 +62,10 @@
 			</div>
 		</div>
 		<div class="text-secondary small text-center">
+			@if (Flow.HasPartner)
+			{
+				<span data-questions>You asked @Flow.LearnerQuestions question@(Flow.LearnerQuestions == 1 ? "" : "s"), @PartnerName @Flow.PartnerQuestions &middot;&nbsp;</span>
+			}
 			Longest turn @CallText.Seconds(Flow.LongestLearnerTurnSeconds)
 			@if (Flow.HasPartner)
 			{

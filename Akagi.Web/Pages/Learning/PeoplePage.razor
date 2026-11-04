@@ -1,0 +1,420 @@
+@page "/Learn/People"
+@page "/Learn/People/{Name}"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Pages.Learning.Components
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+
+<PageTitle>People - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Learn</div>
+			<h2 class="page-title">People</h2>
+			<div class="text-secondary small mt-1">What your calls taught you about the people you talk to, to read before the next call.</div>
+		</div>
+		@if (_state == State.Ready)
+		{
+			<div class="col-auto ms-auto">
+				<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" @onclick="LoadAsync">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Refresh</span>
+				</button>
+			</div>
+		}
+	</div>
+</div>
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert">@_error</div>
+}
+
+@switch (_state)
+{
+	case State.Loading:
+		<div class="card">
+			<div class="card-body py-5 text-center">
+				<div class="spinner-border text-primary mb-3" role="status"></div>
+				<div class="text-secondary">Loading the people you talked to...</div>
+			</div>
+		</div>
+		break;
+
+	case State.Offline:
+		<div class="card border-danger">
+			<div class="card-body py-5 text-center">
+				<div class="text-danger mb-2">
+					<Icon IconType="@Icons.AlertCircle" Size="36" />
+				</div>
+				<h3 class="h4 mb-1">Socket Service Offline</h3>
+				<p class="text-secondary mb-3">Unable to reach the Akagi backend. What your calls taught you is stored there.</p>
+				<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="LoadAsync">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Retry Connection</span>
+				</button>
+			</div>
+		</div>
+		break;
+
+	case State.Ready when _people.Length == 0:
+		<div class="card">
+			<div class="card-body py-5 text-center">
+				<div class="text-secondary mb-2">
+					<Icon IconType="@Icons.User" Size="36" />
+				</div>
+				<h3 class="h4 mb-1">Nobody here yet</h3>
+				<p class="text-secondary m-0">People appear once a call with a named partner is analyzed, e.g. a recording named <code>2026-11-04 Rii [left].m4a</code>.</p>
+			</div>
+		</div>
+		break;
+
+	case State.Ready:
+		<div class="row row-cards">
+			<div class="col-12 col-lg-4">
+				<div class="card">
+					<div class="card-header">
+						<h3 class="card-title m-0">People</h3>
+						<span class="badge bg-secondary-lt ms-auto">@_people.Length</span>
+					</div>
+					<div class="list-group list-group-flush">
+						@foreach (PersonSummary person in _people)
+						{
+							<a href="@CallText.PersonUri(person.Name)"
+							   class="list-group-item list-group-item-action @(IsSelected(person) ? "active" : "")"
+							   data-person="@person.Name">
+								<div class="d-flex justify-content-between gap-2">
+									<span class="fw-medium text-truncate">@person.Name</span>
+									@if (person.OpenThreads > 0)
+									{
+										<span class="badge bg-green-lt flex-shrink-0" title="Things to ask about next time">@person.OpenThreads to ask</span>
+									}
+								</div>
+								<div class="text-secondary small d-flex flex-wrap gap-2">
+									@if (person.LastTalked is DateTime last)
+									{
+										<span>talked @CallText.Ago(last, DateTime.UtcNow)</span>
+									}
+									<span>@person.Calls call@(person.Calls == 1 ? "" : "s")</span>
+									<span>@person.Facts fact@(person.Facts == 1 ? "" : "s")</span>
+								</div>
+							</a>
+						}
+					</div>
+				</div>
+			</div>
+			<div class="col-12 col-lg-8">
+				@if (_personLoading)
+				{
+					<div class="card">
+						<div class="card-body py-5 text-center">
+							<div class="spinner-border text-primary mb-3" role="status"></div>
+						</div>
+					</div>
+				}
+				else if (_person is PersonDetail person)
+				{
+					<div class="card mb-3" data-person-detail="@person.Summary.Name">
+						<div class="card-body">
+							<h3 class="h2 mb-1">@person.Summary.Name</h3>
+							<div class="text-secondary small d-flex flex-wrap gap-3">
+								@if (person.Summary.LastTalked is DateTime last)
+								{
+									<span>Last talked @CallText.Ago(last, DateTime.UtcNow) (@last.ToLocalTime().ToString("d"))</span>
+								}
+								<span>@person.Summary.Calls call@(person.Summary.Calls == 1 ? "" : "s"), @CallText.Duration(person.Summary.TotalSeconds) together</span>
+								@if (person.Summary.FirstTalked is DateTime first)
+								{
+									<span>since @first.ToLocalTime().ToString("d")</span>
+								}
+							</div>
+						</div>
+					</div>
+
+					List<PersonFactView> open = [.. person.Facts.Where(f => f.FollowUp)];
+					@if (open.Count > 0)
+					{
+						<div class="card mb-3" data-open-threads>
+							<div class="card-header">
+								<h3 class="card-title m-0">Ask about next time</h3>
+							</div>
+							<div class="list-group list-group-flush">
+								@foreach (PersonFactView fact in open)
+								{
+									<div class="list-group-item" data-fact="@fact.Id">
+										<div class="fw-medium">@fact.Text</div>
+										<div class="text-secondary small">@FactSource(fact)</div>
+									</div>
+								}
+							</div>
+						</div>
+					}
+
+					<div class="card mb-3" data-person-facts>
+						<div class="card-header flex-wrap gap-2">
+							<h3 class="card-title m-0">Everything you know</h3>
+							<input type="search" class="form-control form-control-sm w-auto ms-auto" placeholder="Search" @bind="_search" @bind:event="oninput" aria-label="Search facts" />
+						</div>
+						@if (Topics(person).Count > 1)
+						{
+							<div class="card-body py-2 border-bottom d-flex flex-wrap gap-1">
+								<button type="button" class="btn btn-sm @(_topic == null ? "btn-primary" : "btn-outline-secondary")" @onclick="() => _topic = null">All</button>
+								@foreach ((string topic, int count) in Topics(person))
+								{
+									<button type="button" class="btn btn-sm @(_topic == topic ? "btn-primary" : "btn-outline-secondary")" data-topic="@topic" @onclick="() => _topic = topic">
+										@topic <span class="ms-1 opacity-75">@count</span>
+									</button>
+								}
+							</div>
+						}
+						@{
+							List<PersonFactView> facts = [.. person.Facts
+								.Where(f => _topic == null || f.Topic == _topic)
+								.Where(f => _search.Trim().Length == 0 || f.Text.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase) || f.Quote.Contains(_search.Trim(), StringComparison.Ordinal))];
+						}
+						@if (facts.Count == 0)
+						{
+							<div class="card-body text-secondary small">No facts match.</div>
+						}
+						else
+						{
+							<div class="list-group list-group-flush">
+								@foreach (PersonFactView fact in facts)
+								{
+									<div class="list-group-item" data-fact="@fact.Id">
+										<div class="d-flex gap-2 align-items-start">
+											<div class="me-auto">
+												<div>
+													<span class="badge bg-secondary-lt me-1">@fact.Topic</span>
+													@fact.Text
+												</div>
+												@if (!string.IsNullOrWhiteSpace(fact.Quote))
+												{
+													<div class="text-secondary small" lang="ja">&ldquo;@fact.Quote&rdquo;</div>
+												}
+												<div class="text-secondary small">@FactSource(fact)</div>
+											</div>
+											<button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 flex-shrink-0"
+													title="Remove it from this page and Akagi's memory"
+													data-fact-wrong="@fact.Id"
+													disabled="@_busy"
+													@onclick="() => WrongAsync(fact)">
+												Wrong
+											</button>
+										</div>
+									</div>
+								}
+							</div>
+						}
+					</div>
+
+					<div class="row row-cards">
+						<div class="col-12 col-md-6">
+							<div class="card mb-3">
+								<div class="card-header">
+									<h3 class="card-title m-0">Calls</h3>
+								</div>
+								<div class="list-group list-group-flush">
+									@foreach (PersonCallView call in person.Calls)
+									{
+										<a class="list-group-item list-group-item-action" href="@($"Learn/Calls/{call.CallId}")">
+											<div class="d-flex justify-content-between">
+												<span>@call.Date.ToLocalTime().ToString("d")</span>
+												<span class="text-secondary small">@CallText.Duration(call.DurationSeconds)</span>
+											</div>
+											<div class="text-secondary small d-flex flex-wrap gap-2">
+												<span>@call.Facts fact@(call.Facts == 1 ? "" : "s")</span>
+												<span>@call.IssueCount issue@(call.IssueCount == 1 ? "" : "s")</span>
+												@if (call.LearnerShare is double share)
+												{
+													<span>you spoke @CallText.Percent(share)</span>
+												}
+											</div>
+										</a>
+									}
+								</div>
+							</div>
+						</div>
+						<div class="col-12 col-md-6">
+							<div class="card mb-3">
+								<div class="card-header">
+									<h3 class="card-title m-0">Phrases they used</h3>
+								</div>
+								@if (person.Phrases.Length == 0)
+								{
+									<div class="card-body text-secondary small">None noted yet.</div>
+								}
+								else
+								{
+									<div class="list-group list-group-flush">
+										@foreach (InsightPhrase phrase in person.Phrases)
+										{
+											<div class="list-group-item">
+												<div class="fw-medium" lang="ja">@phrase.Phrase</div>
+												<div class="text-secondary small">@phrase.Meaning</div>
+											</div>
+										}
+									</div>
+								}
+							</div>
+						</div>
+					</div>
+				}
+			</div>
+		</div>
+		break;
+}
+
+@code {
+	private enum State
+	{
+		Loading,
+		Offline,
+		Ready
+	}
+
+	[Parameter]
+	public string? Name { get; set; }
+
+	private State _state = State.Loading;
+	private PersonSummary[] _people = [];
+	private PersonDetail? _person;
+	private string? _selected;
+	private bool _personLoading;
+	private bool _busy;
+	private string? _error;
+	private string? _topic;
+	private string _search = string.Empty;
+	private bool _loaded;
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override async Task OnParametersSetAsync()
+	{
+		if (!_loaded)
+		{
+			_loaded = true;
+			await LoadAsync();
+		}
+		else if (_state == State.Ready && Name != null && !string.Equals(Name, _selected, StringComparison.OrdinalIgnoreCase))
+		{
+			await SelectAsync(Name);
+		}
+	}
+
+	private bool IsSelected(PersonSummary person) => string.Equals(person.Name, _selected, StringComparison.OrdinalIgnoreCase);
+
+	private static List<(string Topic, int Count)> Topics(PersonDetail person) =>
+		[.. person.Facts.GroupBy(f => f.Topic).OrderByDescending(g => g.Count()).Select(g => (g.Key, g.Count()))];
+
+	private static string FactSource(PersonFactView fact) =>
+		$"{fact.CallName}, {fact.Date.ToLocalTime():d}" + (fact.Time is double time ? $", {CallText.Timestamp(time)} into the call" : string.Empty);
+
+	private async Task LoadAsync()
+	{
+		_error = null;
+		_state = State.Loading;
+		CallAnalysisResponseTransmission? response = await SendAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.People });
+		if (response == null)
+		{
+			_state = State.Offline;
+			return;
+		}
+		_people = response.People;
+		_state = State.Ready;
+		string? pick = Name ?? _selected ?? _people.FirstOrDefault()?.Name;
+		if (pick != null)
+		{
+			await SelectAsync(pick);
+		}
+	}
+
+	private async Task SelectAsync(string name)
+	{
+		_selected = name;
+		_topic = null;
+		_search = string.Empty;
+		_personLoading = true;
+		StateHasChanged();
+		CallAnalysisResponseTransmission? response = await SendAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.Person, Name = name });
+		_personLoading = false;
+		if (string.Equals(_selected, name, StringComparison.OrdinalIgnoreCase))
+		{
+			_person = response?.Person;
+		}
+	}
+
+	/// <summary>
+	/// A wrong fact is taken back where it came from: its call. The person is then loaded again.
+	/// </summary>
+	private async Task WrongAsync(PersonFactView fact)
+	{
+		_busy = true;
+		CallAnalysisResponseTransmission? response = await SendAsync(new CallAnalysisRequestTransmission
+		{
+			Action = CallAnalysisAction.Feedback,
+			CallId = fact.CallId,
+			FindingId = fact.Id,
+			Feedback = CallFindingFeedback.NotAMistake
+		});
+		_busy = false;
+		if (response != null && response.Error == null && _selected != null)
+		{
+			CallAnalysisResponseTransmission? people = await SendAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.People });
+			_people = people?.People ?? _people;
+			await SelectAsync(_selected);
+		}
+	}
+
+	/// <summary>
+	/// Failures end up in <see cref="_error"/>; null means there is no response to work with.
+	/// </summary>
+	private async Task<CallAnalysisResponseTransmission?> SendAsync(CallAnalysisRequestTransmission transmission)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return null;
+		}
+
+		try
+		{
+			CallAnalysisResponseTransmission response = await new CallAnalysisRequest(transmission).Get(client, CallAnalysisRequest.Timeout);
+			_error = response.Error;
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Try again in a moment.";
+			return null;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_state == State.Offline && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+	}
+}

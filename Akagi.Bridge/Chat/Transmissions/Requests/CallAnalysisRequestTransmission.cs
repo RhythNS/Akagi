@@ -10,7 +10,11 @@ public enum CallAnalysisAction
     /// <summary>The user's say on one finding: useful, not a mistake, or neither.</summary>
     Feedback,
     /// <summary>Trends, vocabulary and recurring struggles across all calls.</summary>
-    Insights
+    Insights,
+    /// <summary>The people the user talked to in calls.</summary>
+    People,
+    /// <summary>Everything known about one person, by <see cref="CallAnalysisRequestTransmission.Name"/>.</summary>
+    Person
 }
 
 [MessagePackObject]
@@ -31,4 +35,6 @@ public class CallAnalysisRequestTransmission : Transmission
     public string FindingId { get; set; } = string.Empty;
     [Key(4)]
     public CallFindingFeedback Feedback { get; set; }
+    [Key(5)]
+    public string Name { get; set; } = string.Empty;
 }

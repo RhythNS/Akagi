@@ -1,0 +1,70 @@
+@using Akagi.Bridge.Chat.Models
+
+<div class="card mb-3" data-coaching>
+	<div class="card-header flex-wrap gap-2">
+		<h3 class="card-title m-0">Conversation coaching</h3>
+		<div class="ms-auto btn-group btn-group-sm" role="group">
+			<button type="button" class="btn @(_scope == null ? "btn-primary" : "btn-outline-primary")" data-scope="all" @onclick="() => _scope = null">All</button>
+			<button type="button" class="btn @(_scope == true ? "btn-primary" : "btn-outline-primary")" data-scope="japanese" @onclick="() => _scope = true">
+				Japanese <span class="ms-1 opacity-75">@Detail.Conversation.Count(c => c.Japanese)</span>
+			</button>
+			<button type="button" class="btn @(_scope == false ? "btn-primary" : "btn-outline-primary")" data-scope="general" @onclick="() => _scope = false">
+				General <span class="ms-1 opacity-75">@Detail.Conversation.Count(c => !c.Japanese)</span>
+			</button>
+		</div>
+	</div>
+	<div class="card-body">
+		@if (!string.IsNullOrWhiteSpace(Detail.CoachingSummary))
+		{
+			<p class="mb-2">@Detail.CoachingSummary</p>
+		}
+		@if (Detail.CoachingTips.Length > 0)
+		{
+			<ul class="mb-3 ps-3" lang="ja">
+				@foreach (string tip in Detail.CoachingTips)
+				{
+					<li class="mb-1">@tip</li>
+				}
+			</ul>
+		}
+
+		@foreach ((string title, bool wentWell) in new[] { ("Could be better", false), ("Went well", true) })
+		{
+			List<CallFindingView> moments = [.. Detail.Conversation.Where(c => c.WentWell == wentWell && (_scope == null || c.Japanese == _scope))];
+			@if (moments.Count > 0)
+			{
+				<div class="form-label mt-3 mb-0">@title</div>
+				@foreach (CallFindingView moment in moments)
+				{
+					<CallFindingItem Finding="moment" PartnerName="@PartnerName" CanGiveFeedback="Detail.CanGiveFeedback" Busy="Busy" OnJump="OnJump" OnFeedback="OnFeedback" />
+				}
+			}
+		}
+		@if (Detail.Conversation.Length == 0)
+		{
+			<div class="text-secondary small">No moments were noted.</div>
+		}
+	</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public CallAnalysisDetail Detail { get; set; } = default!;
+
+	[Parameter]
+	public string PartnerName { get; set; } = "Partner";
+
+	[Parameter]
+	public bool Busy { get; set; }
+
+	[Parameter]
+	public EventCallback<double> OnJump { get; set; }
+
+	[Parameter]
+	public EventCallback<CallFindingItem.Feedback> OnFeedback { get; set; }
+
+	/// <summary>
+	/// Null for all moments, true for Japanese-specific ones, false for general conversation skill.
+	/// </summary>
+	private bool? _scope;
+}

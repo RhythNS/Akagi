@@ -24,4 +24,8 @@ public class CallAnalysisResponseTransmission : Transmission
     public string? Error { get; set; }
     [Key(4)]
     public CallInsights? Insights { get; set; }
+    [Key(5)]
+    public PersonSummary[] People { get; set; } = [];
+    [Key(6)]
+    public PersonDetail? Person { get; set; }
 }

@@ -76,6 +76,14 @@
 	</div>
 }
 
+@if (call.State == CallAnalysisState.Completed && (!Detail.CoachingDone || !Detail.FactsDone))
+{
+	<div class="alert alert-secondary small" data-catchup>
+		This call was analyzed before conversation coaching and notes about the people existed.
+		<code>/calls catchup @ShortId(call.Id)</code> adds them from the stored transcript (two requests; nothing else is paid again).
+	</div>
+}
+
 @if (!string.IsNullOrWhiteSpace(Detail.ReviewSummary) || Detail.Priorities.Length > 0)
 {
 	<div class="card mb-3" data-review>
@@ -162,6 +170,11 @@
 	}
 </div>
 
+@if (Detail.CoachingDone)
+{
+	<CallCoachingCard Detail="Detail" PartnerName="@partner" Busy="Busy" OnJump="Jump" OnFeedback="OnFeedback" />
+}
+
 @if (Detail.CorrectUses.Length > 0 || Detail.Strengths.Length > 0)
 {
 	<div class="card mb-3" data-went-well>
@@ -203,6 +216,11 @@
 			}
 		</div>
 	</div>
+}
+
+@if (Detail.FactsDone)
+{
+	<CallFactsCard Detail="Detail" PartnerName="@partner" HasPartnerName="!string.IsNullOrWhiteSpace(call.Partner)" Busy="Busy" OnJump="Jump" OnFeedback="OnFeedback" />
 }
 
 @if (Detail.FilteredOut.Length > 0)
@@ -397,6 +415,8 @@
 		CallAnalysisState.Transcribing => "Transcribing the recording.",
 		CallAnalysisState.Analyzing => $"Reviewed {call.ChunksAnalyzed} of {call.ChunkCount} parts.",
 		CallAnalysisState.Consolidating => "Merging and checking the findings.",
+		CallAnalysisState.Coaching => "Reading the whole conversation for coaching.",
+		CallAnalysisState.Remembering => "Noting what you learned about each other.",
 		_ => "Writing the report."
 	};
 }

@@ -2,7 +2,9 @@ using Akagi.Bridge.Chat.Models;
 using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Communication.SocketComs.Transmissions;
+using Akagi.Characters.Companions;
 using Akagi.Life.Japanese;
+using Akagi.Tests.Characters;
 using Akagi.Life.Japanese.Calls;
 using Akagi.Tests.Support;
 using MessagePack;
@@ -21,11 +23,16 @@ public class CallAnalysisSocketTests
 
     private readonly InMemoryCallJobDatabase _jobs = new();
     private readonly InMemoryJapaneseDiagnosisDatabase _diagnoses = new();
+    private readonly InMemoryPersonProfileDatabase _people = new();
+    private readonly InMemoryMemoryDatabase _memories = new();
+    private readonly InMemoryCompanionStateDatabase _companions = new();
+    private readonly CallMemory _memory;
     private readonly CallAnalysisRequestHandler _handler;
 
     public CallAnalysisSocketTests()
     {
-        _handler = new CallAnalysisRequestHandler(_jobs, _diagnoses, NullLogger<CallAnalysisRequestHandler>.Instance);
+        _memory = new CallMemory(_people, _memories, _companions, null, NullLogger<CallMemory>.Instance);
+        _handler = new CallAnalysisRequestHandler(_jobs, _diagnoses, _people, _memory, NullLogger<CallAnalysisRequestHandler>.Instance);
     }
 
     private CallJob AddJob(string userId, string partner, DateTime recordedAt, CallJobStatus status = CallJobStatus.Completed, string learnerText = "えーと、仕事がすごく忙しいです。えーと、毎日残業です。")
@@ -57,8 +64,8 @@ public class CallAnalysisSocketTests
     }
 
     private Task<CallAnalysisResponseTransmission> Send(CallAnalysisAction action, string callId = "", string userId = UserId,
-        string findingId = "", CallFindingFeedback feedback = CallFindingFeedback.None) =>
-        _handler.ProcessAsync(userId, new CallAnalysisRequestTransmission { RequestId = "r1", Action = action, CallId = callId, FindingId = findingId, Feedback = feedback });
+        string findingId = "", CallFindingFeedback feedback = CallFindingFeedback.None, string name = "") =>
+        _handler.ProcessAsync(userId, new CallAnalysisRequestTransmission { RequestId = "r1", Action = action, CallId = callId, FindingId = findingId, Feedback = feedback, Name = name });
 
     /// <summary>
     /// A call analyzed the current way: findings on the call, counted in the diagnosis.
@@ -73,10 +80,18 @@ public class CallAnalysisSocketTests
         CallFinding dropped = new() { Kind = FindingKind.Mistake, Category = IssueCategory.Particle, Pattern = "は vs が", Said = "仕事が", State = FindingState.Dropped, Note = "natives say this too" };
         CallFinding phrase = new() { Kind = FindingKind.Phrase, Said = "無理しないでね", Better = "take it easy", State = FindingState.Kept, Time = 15 };
         CallFinding strength = new() { Kind = FindingKind.Strength, Pattern = "uses ～に越したことはない", Said = "休むに越したことはない", State = FindingState.Kept };
-        job.Findings = [first, second, dropped, phrase, strength];
+        CallFinding missed = new() { Kind = FindingKind.Conversation, Aspect = "follow-up", Context = "仕事は大変？", Said = "すごく忙しいです", Better = "うん、Yukiは？", State = FindingState.Kept, Time = 5 };
+        CallFinding good = new() { Kind = FindingKind.Conversation, Aspect = "reaction", Japanese = true, WentWell = true, Said = "休むに越したことはない", State = FindingState.Kept, Time = 10 };
+        CallFinding exam = new() { Kind = FindingKind.Fact, Subject = FactSubject.Partner, Aspect = "plans", Pattern = "Yuki has an exam on Friday.", Said = "無理しないでね", FollowUp = true, State = FindingState.Kept, Time = 15 };
+        CallFinding overtime = new() { Kind = FindingKind.Fact, Subject = FactSubject.Learner, Aspect = "work", Pattern = "Works overtime every day.", Said = "毎日残業です", State = FindingState.Kept };
+        job.Findings = [first, second, dropped, phrase, strength, missed, good, exam, overtime];
+        job.DeliveryCharacterId = "6ae1ebfa5a533276d716f834";
+        job.Coaching = new CallCoaching { Summary = "You answer well but rarely ask back.", Tips = ["Ask back with ～は？"] };
+        job.FactsChecked = true;
         foreach (CallFinding finding in job.Findings)
         {
             CallDiagnosis.Apply(diagnosis, job, finding, DateTime.UtcNow);
+            await _memory.ApplyAsync(job, finding, DateTime.UtcNow);
         }
         await _diagnoses.SaveDocumentAsync(diagnosis);
         await _jobs.SaveDocumentAsync(job);
@@ -201,6 +216,62 @@ public class CallAnalysisSocketTests
         InsightStruggle struggle = Assert.Single(insights.Struggles);
         Assert.Equal((2, 1), (struggle.Times, struggle.Calls));
         Assert.Equal("無理しないでね", Assert.Single(insights.Phrases).Phrase);
+    }
+
+    [Fact]
+    public async Task Detail_ShowsCoachingAndFacts()
+    {
+        (CallJob job, _) = await Analyzed();
+
+        CallAnalysisDetail detail = (await Send(CallAnalysisAction.Detail, job.Id!)).Detail!;
+
+        Assert.True(detail.CoachingDone && detail.FactsDone);
+        Assert.Equal(("You answer well but rarely ask back.", "Ask back with ～は？"), (detail.CoachingSummary, detail.CoachingTips.Single()));
+        // What to improve comes first
+        Assert.Equal(["follow-up", "reaction"], detail.Conversation.Select(c => c.Aspect));
+        Assert.Equal(("仕事は大変？", false), (detail.Conversation[0].Context, detail.Conversation[0].Japanese));
+        Assert.True(detail.Conversation[1].Japanese && detail.Conversation[1].WentWell);
+        CallFindingView exam = Assert.Single(detail.PartnerFacts);
+        Assert.True(exam.AboutPartner && exam.FollowUp);
+        Assert.Equal("Works overtime every day.", Assert.Single(detail.LearnerFacts).Pattern);
+        Assert.Equal(2, detail.Flow!.PartnerQuestions);
+    }
+
+    [Fact]
+    public async Task People_ListThePartners_AndTheirPageHoldsEverything()
+    {
+        (CallJob job, _) = await Analyzed();
+
+        PersonSummary person = Assert.Single((await Send(CallAnalysisAction.People)).People);
+        Assert.Equal(("Yuki", 1, 1, 1), (person.Name, person.Calls, person.Facts, person.OpenThreads));
+
+        PersonDetail detail = (await Send(CallAnalysisAction.Person, name: "yuki")).Person!;
+        PersonFactView fact = Assert.Single(detail.Facts);
+        Assert.Equal(("Yuki has an exam on Friday.", "plans", job.Id, "Call with Yuki", 15.0), (fact.Text, fact.Topic, fact.CallId, fact.CallName, fact.Time));
+        Assert.Equal(job.Id, Assert.Single(detail.Calls).CallId);
+        Assert.Equal("無理しないでね", Assert.Single(detail.Phrases).Phrase);
+        Assert.NotNull((await Send(CallAnalysisAction.Person, name: "Nobody")).Error);
+    }
+
+    [Fact]
+    public async Task AWrongFact_LeavesThePersonAndTheMemories()
+    {
+        (CallJob job, _) = await Analyzed();
+        CallFinding exam = job.Findings.Single(f => f.Pattern == "Yuki has an exam on Friday.");
+        CallFinding overtime = job.Findings.Single(f => f.Pattern == "Works overtime every day.");
+        Assert.Single(_memories.Items);
+        Assert.Contains("Yuki has an exam on Friday.", _companions.Items.Single().FindPerson("Yuki")!.Notes);
+
+        await Send(CallAnalysisAction.Feedback, job.Id!, findingId: exam.Id, feedback: CallFindingFeedback.NotAMistake);
+        await Send(CallAnalysisAction.Feedback, job.Id!, findingId: overtime.Id, feedback: CallFindingFeedback.NotAMistake);
+
+        Assert.Empty(_people.Items.Single().Facts);
+        Assert.Empty(_memories.Items);
+        Assert.Empty(_companions.Items.Single().FindPerson("Yuki")!.Notes);
+
+        CallAnalysisDetail detail = (await Send(CallAnalysisAction.Feedback, job.Id!, findingId: exam.Id, feedback: CallFindingFeedback.None)).Detail!;
+        Assert.Single(_people.Items.Single().Facts);
+        Assert.Equal(CallFindingFeedback.None, detail.PartnerFacts.Single().Feedback);
     }
 
     [Fact]

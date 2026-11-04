@@ -70,6 +70,14 @@ internal static partial class CallAnalysisViews
         detail.CorrectUses = [.. Visible(job, FindingKind.Correct).Select(f => View(f, diagnosis))];
         detail.Strengths = [.. Visible(job, FindingKind.Strength).Select(f => View(f, diagnosis))];
         detail.Phrases = [.. Visible(job, FindingKind.Phrase).Select(f => View(f, diagnosis))];
+        detail.CoachingDone = job.Coaching != null;
+        detail.FactsDone = job.FactsChecked;
+        detail.CoachingSummary = job.Coaching?.Summary ?? string.Empty;
+        detail.CoachingTips = [.. job.Coaching?.Tips ?? []];
+        // Things to improve first, then what went well, each in call order
+        detail.Conversation = [.. Visible(job, FindingKind.Conversation).OrderBy(f => f.WentWell).ThenBy(f => f.Time ?? double.MaxValue).Select(f => View(f, diagnosis))];
+        detail.PartnerFacts = [.. Visible(job, FindingKind.Fact).Where(f => f.Subject == FactSubject.Partner).Select(f => View(f, diagnosis))];
+        detail.LearnerFacts = [.. Visible(job, FindingKind.Fact).Where(f => f.Subject == FactSubject.Learner).Select(f => View(f, diagnosis))];
         detail.FilteredOut = [.. job.Findings
             .Where(f => f.State is FindingState.Dropped or FindingState.Rejected)
             .OrderBy(f => f.Time ?? double.MaxValue)
@@ -159,7 +167,13 @@ internal static partial class CallAnalysisViews
         },
         Note = finding.Note,
         Feedback = (CallFindingFeedback)(int)finding.Feedback,
-        IssuePattern = finding.Kind == FindingKind.Correct ? diagnosis?.GetIssue(finding.IssueId)?.Pattern ?? string.Empty : string.Empty
+        IssuePattern = finding.Kind == FindingKind.Correct ? diagnosis?.GetIssue(finding.IssueId)?.Pattern ?? string.Empty : string.Empty,
+        Aspect = finding.Aspect,
+        Japanese = finding.Japanese,
+        WentWell = finding.WentWell,
+        Context = finding.Context,
+        AboutPartner = finding.Subject == FactSubject.Partner,
+        FollowUp = finding.FollowUp
     };
 
     private static CallSpeech Speech(SpeechReport report, bool learnerOnly)
@@ -197,7 +211,9 @@ internal static partial class CallAnalysisViews
         MedianResponseSeconds = stats.MedianResponseSeconds,
         LearnerOverlaps = stats.LearnerOverlaps,
         LongPauses = stats.LongPauses,
-        Windows = [.. stats.Windows.Select(w => new CallFlowWindow { Start = w.Start, LearnerSeconds = w.LearnerSeconds, PartnerSeconds = w.PartnerSeconds })]
+        Windows = [.. stats.Windows.Select(w => new CallFlowWindow { Start = w.Start, LearnerSeconds = w.LearnerSeconds, PartnerSeconds = w.PartnerSeconds })],
+        LearnerQuestions = stats.LearnerQuestions,
+        PartnerQuestions = stats.PartnerQuestions
     };
 
     private static CallVocabulary Vocabulary(CallStats stats, HashSet<string> earlier) => new()
@@ -275,7 +291,8 @@ internal static partial class CallAnalysisViews
                 NewWords = fresh,
                 IssueCount = job.IssueCount,
                 LearnerCharactersPerTurn = Math.Round(stats.LearnerCharactersPerTurn, 1),
-                Separated = stats.Separated
+                Separated = stats.Separated,
+                LearnerQuestions = stats.LearnerQuestions
             });
         }
 
@@ -347,6 +364,58 @@ internal static partial class CallAnalysisViews
             .OrderByDescending(s => s.Severity * s.Times)
             .ThenByDescending(s => s.LastSeen)
             .Take(MaxInsightStruggles);
+    }
+
+    public static PersonSummary Person(PersonProfile profile) => new()
+    {
+        Name = profile.Name,
+        Calls = profile.Calls.Count,
+        FirstTalked = profile.Calls.Count == 0 ? null : profile.Calls.Min(c => c.Date),
+        LastTalked = profile.LastTalked,
+        Facts = profile.Facts.Count,
+        OpenThreads = profile.Facts.Count(f => f.FollowUp),
+        TotalSeconds = profile.Calls.Sum(c => c.DurationSeconds)
+    };
+
+    public static PersonDetail Person(PersonProfile profile, IReadOnlyCollection<CallJob> jobs)
+    {
+        Dictionary<string, CallJob> byId = jobs.Where(j => j.Id != null).ToDictionary(j => j.Id!);
+        List<CallJob> theirs = [.. jobs.Where(j => string.Equals(j.Partner.Trim(), profile.Name, StringComparison.OrdinalIgnoreCase))];
+        return new PersonDetail
+        {
+            Summary = Person(profile),
+            Facts = [.. profile.Facts
+                .OrderByDescending(f => f.Date)
+                .ThenBy(f => f.Time ?? 0)
+                .Select(f => new PersonFactView
+                {
+                    Id = f.Id,
+                    CallId = f.CallId,
+                    CallName = byId.TryGetValue(f.CallId, out CallJob? job) ? Name(job) : "Call",
+                    Date = f.Date,
+                    Topic = f.Topic,
+                    Text = f.Text,
+                    Quote = f.Quote,
+                    Time = f.Time,
+                    FollowUp = f.FollowUp
+                })],
+            Calls = [.. profile.Calls
+                .OrderByDescending(c => c.Date)
+                .Select(c => new PersonCallView
+                {
+                    CallId = c.CallId,
+                    Date = c.Date,
+                    DurationSeconds = c.DurationSeconds,
+                    IssueCount = byId.TryGetValue(c.CallId, out CallJob? job) ? job.IssueCount : 0,
+                    LearnerShare = byId.TryGetValue(c.CallId, out CallJob? measured) && measured.Stats?.Separated == true ? measured.Stats.LearnerShare : null,
+                    Facts = profile.Facts.Count(f => f.CallId == c.CallId)
+                })],
+            Phrases = [.. theirs
+                .SelectMany(j => j.Findings.Where(f => f.Kind == FindingKind.Phrase && f.Counts).Select(f => (Job: j, Finding: f)))
+                .OrderByDescending(p => Date(p.Job))
+                .DistinctBy(p => CallQuotes.Normalize(p.Finding.Said))
+                .Select(p => new InsightPhrase { Phrase = p.Finding.Said, Meaning = p.Finding.Better, CallId = p.Job.Id!, CallName = Name(p.Job), Date = Date(p.Job) })]
+        };
     }
 
     internal static string Humanize(string name)

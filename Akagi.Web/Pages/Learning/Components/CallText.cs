@@ -31,6 +31,8 @@ public static class CallText
         CallAnalysisState.Analyzing => "Analyzing",
         CallAnalysisState.Reporting => "Reporting",
         CallAnalysisState.Consolidating => "Merging",
+        CallAnalysisState.Coaching => "Coaching",
+        CallAnalysisState.Remembering => "Remembering",
         CallAnalysisState.Completed => "Done",
         _ => "Failed"
     };
@@ -120,6 +122,39 @@ public static class CallText
     public static readonly string[] WordClasses = ["Noun", "Verb", "Adjective", "AdjectivalNoun", "Adverb", "Adnominal", "Conjunction", "Interjection"];
 
     public static string Seconds(double seconds) => seconds.ToString(seconds < 10 ? "0.0" : "0", CultureInfo.InvariantCulture) + " s";
+
+    /// <summary>
+    /// What saying "this does not count" is called for a kind of finding.
+    /// </summary>
+    public static string RejectLabel(CallFindingKind kind) => kind switch
+    {
+        CallFindingKind.Conversation => "Not helpful",
+        CallFindingKind.Fact => "Wrong",
+        _ => "Not a mistake"
+    };
+
+    public static string RejectedBadge(CallFindingKind kind) => kind switch
+    {
+        CallFindingKind.Conversation => "you said: not helpful",
+        CallFindingKind.Fact => "you said: wrong",
+        _ => "you said: not a mistake"
+    };
+
+    public static string Ago(DateTime date, DateTime nowUtc)
+    {
+        int days = (int)Math.Floor((nowUtc - date).TotalDays);
+        return days switch
+        {
+            < 1 => "today",
+            1 => "yesterday",
+            < 14 => $"{days} days ago",
+            < 60 => $"{days / 7} weeks ago",
+            < 730 => $"{days / 30} months ago",
+            _ => $"{days / 365} years ago"
+        };
+    }
+
+    public static string PersonUri(string name) => "Learn/People/" + Uri.EscapeDataString(name);
 
     public static string Percent(double ratio) => (ratio * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
 

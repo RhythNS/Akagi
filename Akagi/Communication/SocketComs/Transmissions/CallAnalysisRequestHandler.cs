@@ -19,12 +19,17 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
 
     private readonly ICallJobDatabase _jobs;
     private readonly IJapaneseDiagnosisDatabase _diagnoses;
+    private readonly IPersonProfileDatabase _people;
+    private readonly ICallMemory _memory;
     private readonly ILogger<CallAnalysisRequestHandler> _logger;
 
-    public CallAnalysisRequestHandler(ICallJobDatabase jobs, IJapaneseDiagnosisDatabase diagnoses, ILogger<CallAnalysisRequestHandler> logger)
+    public CallAnalysisRequestHandler(ICallJobDatabase jobs, IJapaneseDiagnosisDatabase diagnoses, IPersonProfileDatabase people, ICallMemory memory,
+        ILogger<CallAnalysisRequestHandler> logger)
     {
         _jobs = jobs;
         _diagnoses = diagnoses;
+        _people = people;
+        _memory = memory;
         _logger = logger;
     }
 
@@ -79,6 +84,23 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
                     break;
                 }
 
+                case CallAnalysisAction.People:
+                    response.People = [.. (await _people.GetForUser(userId))
+                        .OrderByDescending(p => p.LastTalked ?? DateTime.MinValue)
+                        .Select(CallAnalysisViews.Person)];
+                    break;
+
+                case CallAnalysisAction.Person:
+                    if (await _people.Get(userId, request.Name) is PersonProfile profile)
+                    {
+                        response.Person = CallAnalysisViews.Person(profile, jobs);
+                    }
+                    else
+                    {
+                        response.Error = $"Nothing is known about {request.Name} yet.";
+                    }
+                    break;
+
                 default:
                     response.Error = "Unknown call analysis request.";
                     break;
@@ -112,7 +134,24 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
         }
 
         DateTime now = DateTime.UtcNow;
-        CallDiagnosis.SetFeedback(diagnosis, job, finding, (FindingFeedback)(int)request.Feedback, now);
+        FindingFeedback feedback = (FindingFeedback)(int)request.Feedback;
+        if (finding.Kind == FindingKind.Fact)
+        {
+            // A wrong fact leaves the person's page, the companion's people and her memories
+            finding.Feedback = feedback;
+            if (feedback == FindingFeedback.NotAMistake)
+            {
+                await _memory.UndoAsync(job, finding);
+            }
+            else
+            {
+                await _memory.ApplyAsync(job, finding, now);
+            }
+        }
+        else
+        {
+            CallDiagnosis.SetFeedback(diagnosis, job, finding, feedback, now);
+        }
         await _diagnoses.SaveDocumentAsync(diagnosis);
         // The report the companion and /calls show follows what the user said
         job.Report = CallAnalysisPipeline.BuildReport(job, SpeechAnalysis.Analyze(job.LearnerText(), job.Register), diagnosis, now);

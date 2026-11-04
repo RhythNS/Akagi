@@ -110,6 +110,7 @@ public class CallInsightsPageTests : BunitContext
         IRenderedComponent<CallInsightsPage> cut = Render<CallInsightsPage>();
         Respond(new CallAnalysisResponseTransmission { Insights = Insights() });
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-trend]")));
+        cut.Settled();
 
         cut.Find("[data-trend='Fillers per 100 characters'] [data-point='b']").MouseEnter();
         Assert.Contains("Call with Ken", cut.Find("[data-trend='Fillers per 100 characters']").TextContent);

@@ -1,0 +1,53 @@
+@using Akagi.Bridge.Chat.Models
+
+<div class="card mb-3" data-facts>
+	<div class="card-header">
+		<h3 class="card-title m-0">What you learned</h3>
+		@if (HasPartnerName && Detail.PartnerFacts.Length > 0)
+		{
+			<a class="ms-auto btn btn-sm btn-outline-primary" href="@CallText.PersonUri(PartnerName)" data-person-link>Everything about @PartnerName</a>
+		}
+	</div>
+	<div class="card-body pt-2">
+		@if (Detail.PartnerFacts.Length == 0 && Detail.LearnerFacts.Length == 0)
+		{
+			<div class="text-secondary small mt-2">Nothing new about the people in this call.</div>
+		}
+		@if (Detail.PartnerFacts.Length > 0)
+		{
+			<div class="form-label mt-2 mb-0">About @PartnerName</div>
+			@foreach (CallFindingView fact in Detail.PartnerFacts.OrderByDescending(f => f.FollowUp))
+			{
+				<CallFindingItem Finding="fact" CanGiveFeedback="Detail.CanGiveFeedback" Busy="Busy" OnJump="OnJump" OnFeedback="OnFeedback" />
+			}
+		}
+		@if (Detail.LearnerFacts.Length > 0)
+		{
+			<div class="form-label mt-3 mb-0">About you <span class="text-secondary fw-normal small">(Akagi remembers these)</span></div>
+			@foreach (CallFindingView fact in Detail.LearnerFacts)
+			{
+				<CallFindingItem Finding="fact" CanGiveFeedback="Detail.CanGiveFeedback" Busy="Busy" OnJump="OnJump" OnFeedback="OnFeedback" />
+			}
+		}
+	</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public CallAnalysisDetail Detail { get; set; } = default!;
+
+	[Parameter]
+	public string PartnerName { get; set; } = "Partner";
+
+	[Parameter]
+	public bool HasPartnerName { get; set; }
+
+	[Parameter]
+	public bool Busy { get; set; }
+
+	[Parameter]
+	public EventCallback<double> OnJump { get; set; }
+
+	[Parameter]
+	public EventCallback<CallFindingItem.Feedback> OnFeedback { get; set; }
+}

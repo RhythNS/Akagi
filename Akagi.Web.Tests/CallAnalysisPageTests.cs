@@ -99,6 +99,17 @@ public class CallAnalysisPageTests : BunitContext
         Report = "Call analysis: the whole report.",
         CanGiveFeedback = summary.State == CallAnalysisState.Completed,
         ReviewSummary = "A relaxed call with good listening.",
+        CoachingDone = true,
+        FactsDone = true,
+        CoachingSummary = "You answer fully but rarely ask back.",
+        CoachingTips = ["Ask back: ユキは？"],
+        Conversation =
+        [
+            new CallFindingView { Id = "m1", Kind = CallFindingKind.Conversation, Origin = "review", Aspect = "follow-up", Context = "最近どう？", Said = "えーと、忙しいです。", Better = "忙しいよ！ユキは？", Explanation = "Ask back.", State = CallFindingState.Kept, Time = 65 },
+            new CallFindingView { Id = "m2", Kind = CallFindingKind.Conversation, Origin = "review", Aspect = "reaction", Japanese = true, WentWell = true, Said = "毎日残業です。", Explanation = "Natural.", State = CallFindingState.Kept, Time = 70 }
+        ],
+        PartnerFacts = [new CallFindingView { Id = "pf1", Kind = CallFindingKind.Fact, Origin = "review", Aspect = "plans", Pattern = "Yuki has an exam on Friday.", Said = "無理しないでね", AboutPartner = true, FollowUp = true, State = CallFindingState.Kept, Time = 0 }],
+        LearnerFacts = [new CallFindingView { Id = "lf1", Kind = CallFindingKind.Fact, Origin = "review", Aspect = "work", Pattern = "Works overtime every day.", Said = "毎日残業です", State = CallFindingState.Kept, Time = 70 }],
         Priorities = ["Drop です with friends", "Vary 思う"],
         Struggles =
         [
@@ -231,7 +242,7 @@ public class CallAnalysisPageTests : BunitContext
         Respond(_ => new CallAnalysisResponseTransmission { Calls = [Summary("done", "Yuki")] });
         Respond(_ => new CallAnalysisResponseTransmission { Detail = Detail(Summary("done", "Yuki")) });
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-call-detail='done']")));
-        return cut;
+        return cut.Settled();
     }
 
     [Fact]
@@ -312,5 +323,44 @@ public class CallAnalysisPageTests : BunitContext
 
         Assert.Equal("run", asked.CallId);
         cut.WaitForAssertion(() => Assert.Contains("Reviewed 3 of 3 parts.", cut.Markup));
+    }
+
+    [Fact]
+    public void Coaching_FiltersByScope_AndFactsLinkToThePerson()
+    {
+        IRenderedComponent<CallAnalysisPage> cut = OpenDone();
+
+        Assert.Contains("You answer fully but rarely ask back.", cut.Find("[data-coaching]").TextContent);
+        Assert.Contains("忙しいよ！ユキは？", cut.Find("[data-finding='m1']").TextContent);
+        Assert.Contains("Yuki:", cut.Find("[data-finding='m1']").TextContent);
+        Assert.Contains("Not helpful", cut.Find("[data-finding='m1']").TextContent);
+        cut.Find("[data-scope='japanese']").Click();
+        Assert.Empty(cut.FindAll("[data-finding='m1']"));
+        Assert.NotEmpty(cut.FindAll("[data-finding='m2']"));
+
+        Assert.Equal("Learn/People/Yuki", cut.Find("[data-person-link]").GetAttribute("href"));
+        Assert.Contains("ask next time", cut.Find("[data-finding='pf1']").TextContent);
+        Assert.Contains("Akagi remembers these", cut.Find("[data-facts]").TextContent);
+        Assert.Empty(cut.FindAll("[data-finding='pf1'] [data-feedback='useful']"));
+        Assert.Empty(cut.FindAll("[data-catchup]"));
+
+        cut.Find("[data-finding='pf1'] [data-feedback='not-a-mistake']").Click();
+        CallAnalysisRequestTransmission sent = Respond(_ => new CallAnalysisResponseTransmission { Detail = Detail(Summary("done", "Yuki")) });
+        Assert.Equal(("pf1", CallFindingFeedback.NotAMistake), (sent.FindingId, sent.Feedback));
+    }
+
+    [Fact]
+    public void AnOlderCall_OffersToCatchUp()
+    {
+        IRenderedComponent<CallAnalysisPage> cut = RenderOnline();
+        CallAnalysisDetail older = Detail(Summary("done", "Yuki"));
+        older.CoachingDone = false;
+        older.FactsDone = false;
+        Respond(_ => new CallAnalysisResponseTransmission { Calls = [Summary("done", "Yuki")] });
+        Respond(_ => new CallAnalysisResponseTransmission { Detail = older });
+
+        cut.WaitForAssertion(() => Assert.Contains("/calls catchup done", cut.Find("[data-catchup]").TextContent));
+        Assert.Empty(cut.FindAll("[data-coaching]"));
+        Assert.Empty(cut.FindAll("[data-facts]"));
     }
 }

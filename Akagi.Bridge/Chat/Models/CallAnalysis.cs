@@ -11,7 +11,11 @@ public enum CallAnalysisState
     Completed,
     Failed,
     /// <summary>All parts are reviewed; their findings are being merged and checked.</summary>
-    Consolidating
+    Consolidating,
+    /// <summary>The whole conversation is read for coaching.</summary>
+    Coaching,
+    /// <summary>The whole conversation is read for facts about the people in it.</summary>
+    Remembering
 }
 
 public enum CallFindingKind
@@ -19,7 +23,9 @@ public enum CallFindingKind
     Mistake,
     Correct,
     Strength,
-    Phrase
+    Phrase,
+    Conversation,
+    Fact
 }
 
 /// <summary>
@@ -147,6 +153,33 @@ public class CallFindingView
     /// </summary>
     [Key(14)]
     public string IssuePattern { get; set; } = string.Empty;
+    /// <summary>
+    /// Conversation: the skill (follow-up, reaction...). Fact: the topic (work, plans...).
+    /// </summary>
+    [Key(15)]
+    public string Aspect { get; set; } = string.Empty;
+    /// <summary>
+    /// Conversation: advice on how this is done in Japanese rather than general conversation skill.
+    /// </summary>
+    [Key(16)]
+    public bool Japanese { get; set; }
+    [Key(17)]
+    public bool WentWell { get; set; }
+    /// <summary>
+    /// Conversation: the partner's line the learner reacted to.
+    /// </summary>
+    [Key(18)]
+    public string Context { get; set; } = string.Empty;
+    /// <summary>
+    /// Fact: about the partner rather than the learner.
+    /// </summary>
+    [Key(19)]
+    public bool AboutPartner { get; set; }
+    /// <summary>
+    /// Fact: worth asking about next time.
+    /// </summary>
+    [Key(20)]
+    public bool FollowUp { get; set; }
 }
 
 /// <summary>
@@ -302,6 +335,10 @@ public class CallFlow
     public int LongPauses { get; set; }
     [Key(14)]
     public CallFlowWindow[] Windows { get; set; } = [];
+    [Key(15)]
+    public int LearnerQuestions { get; set; }
+    [Key(16)]
+    public int PartnerQuestions { get; set; }
 
     [IgnoreMember]
     public double? LearnerShare => HasPartner && LearnerSeconds + PartnerSeconds > 0 ? LearnerSeconds / (LearnerSeconds + PartnerSeconds) : null;
@@ -429,6 +466,23 @@ public class CallAnalysisDetail
     /// </summary>
     [Key(16)]
     public bool CanGiveFeedback { get; set; }
+    [Key(17)]
+    public string CoachingSummary { get; set; } = string.Empty;
+    [Key(18)]
+    public string[] CoachingTips { get; set; } = [];
+    [Key(19)]
+    public CallFindingView[] Conversation { get; set; } = [];
+    [Key(20)]
+    public CallFindingView[] PartnerFacts { get; set; } = [];
+    [Key(21)]
+    public CallFindingView[] LearnerFacts { get; set; } = [];
+    /// <summary>
+    /// The coaching and facts passes ran; a call analyzed before they existed can catch up with /calls catchup.
+    /// </summary>
+    [Key(22)]
+    public bool CoachingDone { get; set; }
+    [Key(23)]
+    public bool FactsDone { get; set; }
 }
 
 /// <summary>
@@ -469,6 +523,8 @@ public class CallTrendPoint
     /// </summary>
     [Key(12)]
     public bool Separated { get; set; }
+    [Key(13)]
+    public int LearnerQuestions { get; set; }
 }
 
 [MessagePackObject]
@@ -567,4 +623,91 @@ public class CallInsights
     /// </summary>
     [Key(7)]
     public int MixedCalls { get; set; }
+}
+
+[MessagePackObject]
+public class PersonSummary
+{
+    [Key(0)]
+    public string Name { get; set; } = string.Empty;
+    [Key(1)]
+    public int Calls { get; set; }
+    [Key(2)]
+    public DateTime? FirstTalked { get; set; }
+    [Key(3)]
+    public DateTime? LastTalked { get; set; }
+    [Key(4)]
+    public int Facts { get; set; }
+    /// <summary>
+    /// Facts worth asking about next time.
+    /// </summary>
+    [Key(5)]
+    public int OpenThreads { get; set; }
+    [Key(6)]
+    public double TotalSeconds { get; set; }
+}
+
+[MessagePackObject]
+public class PersonFactView
+{
+    /// <summary>
+    /// The call finding it came from, for feedback.
+    /// </summary>
+    [Key(0)]
+    public string Id { get; set; } = string.Empty;
+    [Key(1)]
+    public string CallId { get; set; } = string.Empty;
+    [Key(2)]
+    public string CallName { get; set; } = string.Empty;
+    [Key(3)]
+    public DateTime Date { get; set; }
+    [Key(4)]
+    public string Topic { get; set; } = string.Empty;
+    [Key(5)]
+    public string Text { get; set; } = string.Empty;
+    [Key(6)]
+    public string Quote { get; set; } = string.Empty;
+    [Key(7)]
+    public double? Time { get; set; }
+    [Key(8)]
+    public bool FollowUp { get; set; }
+}
+
+[MessagePackObject]
+public class PersonCallView
+{
+    [Key(0)]
+    public string CallId { get; set; } = string.Empty;
+    [Key(1)]
+    public DateTime Date { get; set; }
+    [Key(2)]
+    public double DurationSeconds { get; set; }
+    [Key(3)]
+    public int IssueCount { get; set; }
+    [Key(4)]
+    public double? LearnerShare { get; set; }
+    [Key(5)]
+    public int Facts { get; set; }
+}
+
+/// <summary>
+/// Everything the calls taught about one person, to read before talking to them again.
+/// </summary>
+[MessagePackObject]
+public class PersonDetail
+{
+    [Key(0)]
+    public PersonSummary Summary { get; set; } = new();
+    /// <summary>
+    /// Newest first.
+    /// </summary>
+    [Key(1)]
+    public PersonFactView[] Facts { get; set; } = [];
+    [Key(2)]
+    public PersonCallView[] Calls { get; set; } = [];
+    /// <summary>
+    /// Natural expressions they used.
+    /// </summary>
+    [Key(3)]
+    public InsightPhrase[] Phrases { get; set; } = [];
 }
