@@ -1,0 +1,244 @@
+@page "/Learn/Calls"
+@page "/Learn/Calls/{CallId}"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Pages.Learning.Components
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+
+<PageTitle>Call Analysis - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Learn</div>
+			<h2 class="page-title">Call analysis</h2>
+			<div class="text-secondary small mt-1">What your recorded calls revealed: struggles, speech habits and the full transcript.</div>
+		</div>
+		@if (_state == State.Ready)
+		{
+			<div class="col-auto ms-auto">
+				<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" data-calls-refresh @onclick="LoadAsync">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Refresh</span>
+				</button>
+			</div>
+		}
+	</div>
+</div>
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert">@_error</div>
+}
+
+@switch (_state)
+{
+	case State.Loading:
+		<div class="card">
+			<div class="card-body py-5 text-center">
+				<div class="spinner-border text-primary mb-3" role="status"></div>
+				<div class="text-secondary">Loading your calls...</div>
+			</div>
+		</div>
+		break;
+
+	case State.Offline:
+		<div class="card border-danger">
+			<div class="card-body py-5 text-center">
+				<div class="text-danger mb-2">
+					<Icon IconType="@Icons.AlertCircle" Size="36" />
+				</div>
+				<h3 class="h4 mb-1">Socket Service Offline</h3>
+				<p class="text-secondary mb-3">Unable to reach the Akagi backend. Call analyses are stored there.</p>
+				<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="LoadAsync">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Retry Connection</span>
+				</button>
+			</div>
+		</div>
+		break;
+
+	case State.Ready when _calls.Length == 0:
+		<div class="card">
+			<div class="card-body py-5 text-center">
+				<div class="text-secondary mb-2">
+					<Icon IconType="@Icons.Phone" Size="36" />
+				</div>
+				<h3 class="h4 mb-1">No calls analyzed yet</h3>
+				<p class="text-secondary m-0">Send a recording of a call in Japanese to your companion, or use <code>/calls</code>, and the review shows up here.</p>
+			</div>
+		</div>
+		break;
+
+	case State.Ready:
+		<div class="row row-cards">
+			<div class="col-12 col-lg-4">
+				<div class="card">
+					<div class="card-header">
+						<h3 class="card-title m-0">Calls</h3>
+						<span class="badge bg-secondary-lt ms-auto">@_calls.Length</span>
+					</div>
+					<div class="list-group list-group-flush">
+						@foreach (CallAnalysisSummary call in _calls)
+						{
+							<a href="@($"Learn/Calls/{call.Id}")"
+							   class="list-group-item list-group-item-action @(call.Id == _selectedId ? "active" : "")"
+							   data-call="@call.Id">
+								<div class="d-flex justify-content-between gap-2">
+									<span class="fw-medium text-truncate">@CallText.Name(call)</span>
+									<span class="badge @CallText.StateClass(call.State) flex-shrink-0">@CallText.StateLabel(call.State)</span>
+								</div>
+								<div class="text-secondary small d-flex flex-wrap gap-2">
+									<span>@call.Date.ToLocalTime().ToString("d")</span>
+									@if (call.DurationSeconds > 0)
+									{
+										<span>@CallText.Duration(call.DurationSeconds)</span>
+									}
+									@if (call.State == CallAnalysisState.Completed)
+									{
+										<span>@call.IssueCount issue@(call.IssueCount == 1 ? "" : "s")</span>
+									}
+								</div>
+							</a>
+						}
+					</div>
+				</div>
+			</div>
+			<div class="col-12 col-lg-8">
+				@if (_detailLoading)
+				{
+					<div class="card">
+						<div class="card-body py-5 text-center">
+							<div class="spinner-border text-primary mb-3" role="status"></div>
+							<div class="text-secondary">Loading the analysis...</div>
+						</div>
+					</div>
+				}
+				else if (_detail != null)
+				{
+					<CallAnalysisDetailView Detail="_detail" />
+				}
+			</div>
+		</div>
+		break;
+}
+
+@code {
+	private enum State
+	{
+		Loading,
+		Offline,
+		Ready
+	}
+
+	[Parameter]
+	public string? CallId { get; set; }
+
+	private State _state = State.Loading;
+	private CallAnalysisSummary[] _calls = [];
+	private CallAnalysisDetail? _detail;
+	private string? _selectedId;
+	private bool _detailLoading;
+	private string? _error;
+	private bool _loaded;
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override async Task OnParametersSetAsync()
+	{
+		if (!_loaded)
+		{
+			_loaded = true;
+			await LoadAsync();
+		}
+		else if (_state == State.Ready && CallId != null && CallId != _selectedId)
+		{
+			await SelectAsync(CallId);
+		}
+	}
+
+	private async Task LoadAsync()
+	{
+		_error = null;
+		_state = State.Loading;
+		CallAnalysisResponseTransmission? response = await SendAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.List });
+		if (response == null)
+		{
+			_state = State.Offline;
+			return;
+		}
+
+		_calls = response.Calls;
+		_state = State.Ready;
+		string? pick = CallId ?? _selectedId ?? (_calls.FirstOrDefault(c => c.State == CallAnalysisState.Completed) ?? _calls.FirstOrDefault())?.Id;
+		if (pick != null)
+		{
+			await SelectAsync(pick);
+		}
+	}
+
+	private async Task SelectAsync(string callId)
+	{
+		_selectedId = callId;
+		_detailLoading = true;
+		StateHasChanged();
+		CallAnalysisResponseTransmission? response = await SendAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.Detail, CallId = callId });
+		_detailLoading = false;
+		// The user may have picked another call while this one loaded
+		if (_selectedId == callId)
+		{
+			_detail = response?.Detail;
+		}
+	}
+
+	/// <summary>
+	/// Failures end up in <see cref="_error"/>; null means there is no response to work with.
+	/// </summary>
+	private async Task<CallAnalysisResponseTransmission?> SendAsync(CallAnalysisRequestTransmission transmission)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return null;
+		}
+
+		try
+		{
+			CallAnalysisResponseTransmission response = await new CallAnalysisRequest(transmission).Get(client, CallAnalysisRequest.Timeout);
+			_error = response.Error;
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Try again in a moment.";
+			return null;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_state == State.Offline && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+	}
+}

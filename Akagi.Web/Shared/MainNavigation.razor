@@ -69,13 +69,29 @@
 			</li>
 
 			<!-- Learn -->
-			<li class="nav-item @(IsLearnActive ? "active" : "")">
-				<NavLink class="nav-link d-flex align-items-center" href="Learn" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+			<li class="nav-item dropdown @(IsLearnActive ? "active" : "")">
+				<a class="nav-link dropdown-toggle @(_learnExpanded ? "show" : "")"
+				   href="javascript:void(0)"
+				   role="button"
+				   aria-expanded="@(_learnExpanded ? "true" : "false")"
+				   @onclick="ToggleLearnMenu">
 					<span class="nav-link-icon d-md-none d-lg-inline-block">
 						<Icon class="icon" IconType="@Icons.School" />
 					</span>
 					<span class="nav-link-title">Learn</span>
-				</NavLink>
+				</a>
+				<div class="dropdown-menu @(_learnExpanded ? "show" : "")">
+					<div class="dropdown-menu-columns">
+						<div class="dropdown-menu-column">
+							<NavLink class="dropdown-item" href="Learn" Match="NavLinkMatch.All" @onclick="CloseMobileMenu">
+								Lessons
+							</NavLink>
+							<NavLink class="dropdown-item" href="Learn/Calls" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+								Call Analysis
+							</NavLink>
+						</div>
+					</div>
+				</div>
 			</li>
 
 			<!-- Settings -->
@@ -145,6 +161,7 @@
 
 	private bool _mobileMenuOpen = false;
 	private bool _chatExpanded = true;
+	private bool _learnExpanded = true;
 	private bool _timeTrackingExpanded = true;
 	private string _currentPath = string.Empty;
 
@@ -199,6 +216,11 @@
 	private void ToggleChatMenu()
 	{
 		_chatExpanded = !_chatExpanded;
+	}
+
+	private void ToggleLearnMenu()
+	{
+		_learnExpanded = !_learnExpanded;
 	}
 
 	private void ToggleTimeTrackingMenu()

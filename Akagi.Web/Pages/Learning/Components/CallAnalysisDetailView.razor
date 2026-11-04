@@ -1,0 +1,329 @@
+@using Akagi.Bridge.Chat.Models
+
+@{
+	CallAnalysisSummary call = Detail.Summary;
+}
+
+<div class="card mb-3" data-call-detail="@call.Id">
+	<div class="card-body">
+		<div class="d-flex flex-wrap align-items-start gap-2">
+			<div class="me-auto">
+				<h3 class="h2 mb-1">@CallText.Name(call)</h3>
+				<div class="text-secondary small d-flex flex-wrap gap-3">
+					<span>@call.Date.ToLocalTime().ToString("D")</span>
+					@if (call.DurationSeconds > 0)
+					{
+						<span>@CallText.Duration(call.DurationSeconds)</span>
+					}
+					<span>Expected: @Detail.Register</span>
+					@if (!string.IsNullOrWhiteSpace(call.Partner) && !string.IsNullOrWhiteSpace(call.Title))
+					{
+						<span class="text-truncate">@call.Title</span>
+					}
+				</div>
+			</div>
+			<span class="badge @CallText.StateClass(call.State)">@CallText.StateLabel(call.State)</span>
+		</div>
+
+		@if (call.State == CallAnalysisState.Failed && !string.IsNullOrWhiteSpace(call.Error))
+		{
+			<div class="alert alert-danger mt-3 mb-0">
+				@call.Error
+				<div class="small mt-1">Use <code>/calls retry @ShortId(call.Id)</code> to resume it without paying again for finished parts.</div>
+			</div>
+		}
+		else if (call.State is not CallAnalysisState.Completed and not CallAnalysisState.Failed)
+		{
+			<div class="mt-3">
+				<div class="small text-secondary mb-1">@Progress(call)</div>
+				<div class="progress progress-sm">
+					<div class="progress-bar @(call.ChunkCount == 0 ? "progress-bar-indeterminate" : "")"
+						 style="width: @(call.ChunkCount == 0 ? 100 : call.ChunksAnalyzed * 100 / call.ChunkCount)%"></div>
+				</div>
+			</div>
+		}
+	</div>
+
+	<div class="card-body border-top">
+		<div class="row g-3 text-center">
+			<div class="col-6 col-md-3">
+				<div class="h2 m-0" data-stat="struggles">@Detail.Struggles.Length</div>
+				<div class="text-secondary small">struggle areas</div>
+			</div>
+			<div class="col-6 col-md-3">
+				<div class="h2 m-0">@call.IssueCount</div>
+				<div class="text-secondary small">issues noted</div>
+			</div>
+			<div class="col-6 col-md-3">
+				<div class="h2 m-0">@(Detail.Speech == null ? "-" : CallText.Number(Detail.Speech.FillersPer100))</div>
+				<div class="text-secondary small">fillers per 100 chars</div>
+			</div>
+			<div class="col-6 col-md-3">
+				<div class="h2 m-0">@(Detail.Speech == null ? "-" : Detail.Speech.Grammar.Sum(g => g.Count).ToString())</div>
+				<div class="text-secondary small">N2 grammar uses</div>
+			</div>
+		</div>
+	</div>
+</div>
+
+<div class="card mb-3">
+	<div class="card-header flex-wrap gap-2">
+		<h3 class="card-title m-0">Struggles in this call</h3>
+		@if (Categories.Count > 1)
+		{
+			<div class="ms-auto d-flex flex-wrap gap-1">
+				<button type="button" class="btn btn-sm @(_category == null ? "btn-primary" : "btn-outline-secondary")" @onclick="() => _category = null">
+					All
+				</button>
+				@foreach ((string category, int count) in Categories)
+				{
+					<button type="button"
+							class="btn btn-sm @(_category == category ? "btn-primary" : "btn-outline-secondary")"
+							data-category="@category"
+							@onclick="() => _category = category">
+						@category <span class="ms-1 opacity-75">@count</span>
+					</button>
+				}
+			</div>
+		}
+	</div>
+	@if (Detail.Struggles.Length == 0)
+	{
+		<div class="card-body text-secondary">
+			@(call.State == CallAnalysisState.Completed
+				? "No struggles were recorded from this call."
+				: "Struggles appear here as the review works through the call.")
+		</div>
+	}
+	else
+	{
+		<div class="list-group list-group-flush">
+			@foreach (CallStruggle struggle in Detail.Struggles.Where(s => _category == null || s.Category == _category))
+			{
+				<div class="list-group-item" data-struggle="@struggle.Id">
+					<div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+						<span class="badge bg-purple-lt">@struggle.Category</span>
+						<span class="badge @CallText.SeverityClass(struggle.Severity)">@CallText.SeverityLabel(struggle.Severity)</span>
+						@if (struggle.Status != "active")
+						{
+							<span class="badge @CallText.StatusClass(struggle.Status)">@struggle.Status</span>
+						}
+						<span class="ms-auto text-secondary small">
+							@struggle.TimesInCall&times; here, @struggle.TimesOverall&times; overall
+						</span>
+					</div>
+					<div class="fw-medium" lang="ja">@struggle.Pattern</div>
+					@if (!string.IsNullOrWhiteSpace(struggle.Explanation))
+					{
+						<div class="text-secondary small">@struggle.Explanation</div>
+					}
+					@foreach (CallStruggleExample example in struggle.Examples)
+					{
+						<div class="mt-2 ps-2 border-start border-2 small" lang="ja">
+							@if (!string.IsNullOrWhiteSpace(example.Said))
+							{
+								<div><span class="text-secondary">Said:</span> <span class="text-danger">@example.Said</span></div>
+							}
+							@if (!string.IsNullOrWhiteSpace(example.Better))
+							{
+								<div><span class="text-secondary">Better:</span> <span class="text-success">@example.Better</span></div>
+							}
+						</div>
+					}
+				</div>
+			}
+		</div>
+	}
+</div>
+
+@if (Detail.Speech is CallSpeech speech)
+{
+	<div class="card mb-3">
+		<div class="card-header">
+			<h3 class="card-title m-0">Speech measurements</h3>
+			<span class="ms-auto text-secondary small">
+				@(speech.LearnerOnly ? "Your own speech" : "All speakers, so only rough")
+			</span>
+		</div>
+		<div class="card-body">
+			<div class="text-secondary small mb-3">@speech.JapaneseCharacters Japanese characters in @speech.Sentences sentences.</div>
+
+			<div class="row g-4">
+				<div class="col-12 col-md-6">
+					<div class="form-label">Fillers and hedges</div>
+					@if (speech.Fillers.Length == 0)
+					{
+						<div class="text-secondary small">None found.</div>
+					}
+					else
+					{
+						<table class="table table-sm table-vcenter mb-0">
+							<tbody>
+								@foreach (CallFiller filler in speech.Fillers)
+								{
+									<tr data-filler="@filler.Form">
+										<td lang="ja">
+											@filler.Form
+											@if (filler.IsHabit)
+											{
+												<span class="badge bg-orange-lt ms-1">habit</span>
+											}
+										</td>
+										<td class="text-end text-secondary">@filler.Count&times;</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					}
+				</div>
+
+				<div class="col-12 col-md-6">
+					<div class="form-label">Politeness</div>
+					<div class="d-flex justify-content-between small mb-1">
+						<span>Polite endings</span>
+						<span>@CallText.Percent(speech.PoliteRatio)</span>
+					</div>
+					<div class="progress progress-sm mb-2">
+						<div class="progress-bar" style="width: @((int)Math.Round(speech.PoliteRatio * 100))%"></div>
+					</div>
+					<div class="small text-secondary">@speech.Keigo keigo form@(speech.Keigo == 1 ? "" : "s"), expected @speech.ExpectedRegister.</div>
+					@if (!string.IsNullOrWhiteSpace(speech.RegisterMismatch))
+					{
+						<div class="alert alert-warning small mt-2 mb-0 py-2">@speech.RegisterMismatch</div>
+					}
+
+					@if (speech.RecurringStructures.Length > 0)
+					{
+						<div class="form-label mt-3">Recurring sentence frames</div>
+						<ul class="small mb-0 ps-3" lang="ja">
+							@foreach (string structure in speech.RecurringStructures)
+							{
+								<li>@structure</li>
+							}
+						</ul>
+					}
+				</div>
+			</div>
+
+			<div class="form-label mt-4">N2 grammar you used</div>
+			@if (speech.Grammar.Length == 0)
+			{
+				<div class="text-secondary small">No N2 grammar patterns in this call.</div>
+			}
+			else
+			{
+				<div class="d-flex flex-wrap gap-2">
+					@foreach (CallGrammarUse use in speech.Grammar)
+					{
+						<span class="badge bg-green-lt" lang="ja" title="@Tooltip(use)">@use.Pattern &times;@use.Count</span>
+					}
+				</div>
+			}
+		</div>
+	</div>
+}
+
+@if (Detail.Strengths.Length > 0)
+{
+	<div class="card mb-3">
+		<div class="card-header">
+			<h3 class="card-title m-0">Strengths noticed</h3>
+		</div>
+		<ul class="list-group list-group-flush">
+			@foreach (string strength in Detail.Strengths)
+			{
+				<li class="list-group-item small">@strength</li>
+			}
+		</ul>
+	</div>
+}
+
+@if (!string.IsNullOrWhiteSpace(Detail.Report))
+{
+	<div class="card mb-3">
+		<div class="card-header">
+			<h3 class="card-title m-0">Report</h3>
+			<span class="ms-auto text-secondary small">@(Detail.Delivered ? "Sent to your companion" : "Not delivered yet")</span>
+		</div>
+		<div class="card-body small" style="white-space: pre-wrap;" lang="ja">@Detail.Report</div>
+	</div>
+}
+
+@if (Detail.Transcript.Length > 0)
+{
+	<div class="card mb-3">
+		<div class="card-header">
+			<h3 class="card-title m-0">Transcript</h3>
+			<span class="badge bg-secondary-lt ms-2">@Detail.Transcript.Length lines</span>
+			<div class="ms-auto d-flex gap-2">
+				@if (_showTranscript)
+				{
+					<label class="form-check form-switch m-0 small">
+						<input class="form-check-input" type="checkbox" @bind="_onlyMine" />
+						<span class="form-check-label">Only my lines</span>
+					</label>
+				}
+				<button type="button" class="btn btn-sm btn-outline-primary" data-transcript-toggle @onclick="() => _showTranscript = !_showTranscript">
+					@(_showTranscript ? "Hide" : "Show")
+				</button>
+			</div>
+		</div>
+		@if (_showTranscript)
+		{
+			<div class="card-body p-0" style="max-height: 70vh; overflow-y: auto;" data-transcript>
+				@foreach (CallTranscriptLine line in Detail.Transcript.Where(l => !_onlyMine || l.IsLearner))
+				{
+					<div class="d-flex gap-3 px-3 py-2 border-bottom @(line.IsLearner ? "bg-primary-lt" : "")">
+						<span class="text-secondary small font-monospace flex-shrink-0" style="min-width: 3.5rem;">@CallText.Timestamp(line.Start)</span>
+						<div class="min-w-0">
+							<div class="small fw-medium text-secondary">@line.Speaker</div>
+							<div lang="ja">@line.Text</div>
+							@if (!string.IsNullOrWhiteSpace(line.Disputed))
+							{
+								<div class="small text-secondary fst-italic">Second hearing: @line.Disputed</div>
+							}
+						</div>
+					</div>
+				}
+			</div>
+		}
+	</div>
+}
+
+@code {
+	[Parameter, EditorRequired]
+	public CallAnalysisDetail Detail { get; set; } = default!;
+
+	private string? _category;
+	private bool _showTranscript;
+	private bool _onlyMine;
+	private string? _shownId;
+
+	private List<(string Category, int Count)> Categories =>
+		[.. Detail.Struggles.GroupBy(s => s.Category).OrderByDescending(g => g.Count()).Select(g => (g.Key, g.Count()))];
+
+	protected override void OnParametersSet()
+	{
+		// A different call starts unfiltered and folded
+		if (_shownId != Detail.Summary.Id)
+		{
+			_shownId = Detail.Summary.Id;
+			_category = null;
+			_showTranscript = false;
+			_onlyMine = false;
+		}
+	}
+
+	private static string ShortId(string id) => id.Length > 6 ? id[^6..] : id;
+
+	private static string Tooltip(CallGrammarUse use) =>
+		string.IsNullOrWhiteSpace(use.Example) ? use.Meaning : $"{use.Meaning} - e.g. {use.Example}";
+
+	private static string Progress(CallAnalysisSummary call) => call.State switch
+	{
+		CallAnalysisState.Queued => "Waiting for its turn.",
+		CallAnalysisState.Transcribing => "Transcribing the recording.",
+		CallAnalysisState.Analyzing => $"Reviewed {call.ChunksAnalyzed} of {call.ChunkCount} parts.",
+		_ => "Writing the report."
+	};
+}
