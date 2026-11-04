@@ -144,3 +144,18 @@
 .call-word {
     cursor: pointer;
 }
+
+.call-viz svg .viz-you-stroke { stroke: var(--viz-you); }
+.call-viz svg .viz-partner-stroke { stroke: var(--viz-partner); }
+
+/* Vocabulary tables: a word opens its detail */
+.vocab-word {
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 3px;
+}
+
+/* The learner's own lines: a tint that keeps the text color readable in both themes */
+.line-mine {
+    background: rgba(var(--tblr-primary-rgb, 32, 107, 196), 0.10);
+}

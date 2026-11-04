@@ -36,7 +36,7 @@
 		<div class="card-body p-0" style="max-height: 70vh; overflow-y: auto;" data-transcript>
 			@foreach ((CallTranscriptLine line, int index) in Shown)
 			{
-				<div class="d-flex gap-3 px-3 py-2 border-bottom @(line.IsLearner ? "bg-primary-lt" : "") @(index == _target ? "call-line-target" : "")"
+				<div class="d-flex gap-3 px-3 py-2 border-bottom @(line.IsLearner ? "line-mine" : "") @(index == _target ? "call-line-target" : "")"
 					 data-line="@index">
 					<span class="text-secondary small font-monospace flex-shrink-0" style="min-width: 3.5rem;">@CallText.Timestamp(line.Start)</span>
 					<div class="min-w-0">

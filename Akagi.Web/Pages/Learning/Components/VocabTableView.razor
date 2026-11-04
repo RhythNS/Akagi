@@ -1,0 +1,169 @@
+@using Akagi.Bridge.Chat.Models
+
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="card mb-3" data-table="@Table.Title">
+	<div class="card-header flex-wrap gap-2">
+		<h3 class="card-title m-0">@Table.Title</h3>
+		<span class="badge bg-secondary-lt ms-2">@Table.Rows.Length</span>
+		<button type="button" class="btn btn-sm btn-outline-secondary ms-auto" data-csv @onclick="DownloadAsync" disabled="@(Table.Rows.Length == 0)">CSV</button>
+	</div>
+	@if (!string.IsNullOrWhiteSpace(Table.Description))
+	{
+		<div class="card-body py-2 small text-secondary border-bottom">@Table.Description</div>
+	}
+	@if (Table.Rows.Length == 0)
+	{
+		<div class="card-body text-secondary small">Nothing here for this filter.</div>
+	}
+	else
+	{
+		<div class="table-responsive">
+			<table class="table table-sm table-vcenter table-hover card-table mb-0">
+				<thead>
+					<tr>
+						@for (int i = 0; i < Table.Columns.Length; i++)
+						{
+							int column = i;
+							VocabColumn header = Table.Columns[column];
+							<th class="@(Numeric(header) ? "text-end" : "") text-nowrap" title="@header.Hint">
+								<button type="button" class="btn btn-link p-0 text-reset text-decoration-none small fw-bold" data-sort="@column" @onclick="() => Sort(column)">
+									@header.Label@(_sortColumn == column ? (_descending ? " ↓" : " ↑") : "")
+								</button>
+							</th>
+						}
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (VocabRow row in Sorted.Take(_shown))
+					{
+						<tr>
+							@for (int i = 0; i < row.Cells.Length && i < Table.Columns.Length; i++)
+							{
+								VocabCell cell = row.Cells[i];
+								VocabColumn column = Table.Columns[i];
+								@switch (column.Kind)
+								{
+									case VocabColumnKind.Word:
+										<td lang="ja" class="text-nowrap">
+											<span class="vocab-word fw-medium" role="button" data-word="@cell.Link" @onclick="() => OnWord.InvokeAsync(cell.Link)">@cell.Text</span>
+										</td>
+										break;
+									case VocabColumnKind.Call:
+										<td class="text-nowrap small">
+											<a href="@VocabText.CallUri(cell.Link, cell.Time)">@cell.Text</a>
+										</td>
+										break;
+									case VocabColumnKind.Text:
+										<td class="small" lang="ja" style="max-width: 22rem;">@cell.Text</td>
+										break;
+									default:
+										<td class="text-end">@cell.Text</td>
+										break;
+								}
+							}
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		@if (Table.Rows.Length > _shown)
+		{
+			<div class="card-footer py-2 text-center">
+				<button type="button" class="btn btn-sm btn-ghost-primary" data-more @onclick="() => _shown += PageSize">
+					Show @Math.Min(PageSize, Table.Rows.Length - _shown) more of @Table.Rows.Length
+				</button>
+			</div>
+		}
+	}
+</div>
+
+@code {
+	public const int PageSize = 50;
+
+	[Parameter, EditorRequired]
+	public VocabTable Table { get; set; } = default!;
+
+	[Parameter]
+	public EventCallback<string> OnWord { get; set; }
+
+	private VocabTable? _shownFor;
+	private int _sortColumn;
+	private bool _descending;
+	private int _shown = PageSize;
+	private IJSObjectReference? _module;
+
+	protected override void OnParametersSet()
+	{
+		// A new result starts as the report sorted it
+		if (!ReferenceEquals(_shownFor, Table))
+		{
+			_shownFor = Table;
+			_sortColumn = Math.Clamp(Table.SortColumn, 0, Math.Max(0, Table.Columns.Length - 1));
+			_descending = Table.Descending;
+			_shown = PageSize;
+		}
+	}
+
+	private static bool Numeric(VocabColumn column) => column.Kind is VocabColumnKind.Number or VocabColumnKind.Decimal or VocabColumnKind.Percent or VocabColumnKind.Date;
+
+	private IEnumerable<VocabRow> Sorted
+	{
+		get
+		{
+			Func<VocabRow, VocabCell?> cell = r => r.Cells.ElementAtOrDefault(_sortColumn);
+			bool byNumber = Table.Rows.Any(r => cell(r)?.Sort != null);
+			IOrderedEnumerable<VocabRow> ordered = byNumber
+				? (_descending ? Table.Rows.OrderByDescending(r => cell(r)?.Sort ?? double.MinValue) : Table.Rows.OrderBy(r => cell(r)?.Sort ?? double.MaxValue))
+				: (_descending ? Table.Rows.OrderByDescending(r => cell(r)?.Text, StringComparer.Ordinal) : Table.Rows.OrderBy(r => cell(r)?.Text, StringComparer.Ordinal));
+			return ordered;
+		}
+	}
+
+	private void Sort(int column)
+	{
+		if (_sortColumn == column)
+		{
+			_descending = !_descending;
+		}
+		else
+		{
+			_sortColumn = column;
+			_descending = Numeric(Table.Columns[column]);
+		}
+		_shown = PageSize;
+	}
+
+	private async Task DownloadAsync()
+	{
+		try
+		{
+			_module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Learning/Components/VocabTableView.razor.js");
+			if (_module != null)
+			{
+				VocabTable sorted = new() { Columns = Table.Columns, Rows = [.. Sorted] };
+				await _module.InvokeVoidAsync("downloadCsv", $"{Table.Title}.csv", VocabText.Csv(sorted));
+			}
+		}
+		catch (JSException)
+		{
+			// The download is a convenience
+		}
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		if (_module != null)
+		{
+			try
+			{
+				await _module.DisposeAsync();
+			}
+			catch (JSDisconnectedException)
+			{
+				// The circuit is gone
+			}
+		}
+	}
+}

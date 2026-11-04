@@ -1,0 +1,123 @@
+@using Akagi.Bridge.Chat.Models
+
+@* The filter every report shares. Changes apply at once, except the search, which applies on Enter or leaving the box. *@
+<div class="card mb-3" data-filter>
+	<div class="card-body py-2">
+		<div class="row g-2 align-items-end">
+			<div class="col-6 col-md-3 col-xl-2">
+				<label class="form-label small mb-1" for="vocab-partner">Partner</label>
+				<select id="vocab-partner" class="form-select form-select-sm" value="@Filter.Partner" @onchange="e => Change(f => f.Partner = e.Value?.ToString() ?? string.Empty)">
+					<option value="">All partners</option>
+					@foreach (string partner in Catalog.Partners)
+					{
+						<option value="@partner">@partner</option>
+					}
+				</select>
+			</div>
+			<div class="col-6 col-md-3 col-xl-2">
+				<label class="form-label small mb-1" for="vocab-from">From</label>
+				<select id="vocab-from" class="form-select form-select-sm" value="@DateValue(Filter.From)" @onchange="e => Change(f => f.From = ParseDate(e.Value))">
+					<option value="">First call</option>
+					@foreach (VocabCallInfo call in Catalog.Calls)
+					{
+						<option value="@DateValue(call.Date)">@call.Date.ToString("d") @call.Name</option>
+					}
+				</select>
+			</div>
+			<div class="col-6 col-md-3 col-xl-2">
+				<label class="form-label small mb-1" for="vocab-to">To</label>
+				<select id="vocab-to" class="form-select form-select-sm" value="@DateValue(Filter.To)" @onchange="e => Change(f => f.To = ParseDate(e.Value))">
+					<option value="">Latest call</option>
+					@foreach (VocabCallInfo call in Catalog.Calls)
+					{
+						<option value="@DateValue(call.Date)">@call.Date.ToString("d") @call.Name</option>
+					}
+				</select>
+			</div>
+			<div class="col-6 col-md-3 col-xl-2">
+				<label class="form-label small mb-1" for="vocab-classes">Words</label>
+				<select id="vocab-classes" class="form-select form-select-sm" value="@ClassValue" @onchange="e => Change(f => f.Classes = ParseClasses(e.Value))">
+					<option value="">Content words</option>
+					<option value="@AllClasses">All words</option>
+					@foreach (string wordClass in CallText.WordClasses)
+					{
+						<option value="@wordClass">@CallText.ClassLabel(wordClass)</option>
+					}
+				</select>
+			</div>
+			<div class="col-6 col-md-3 col-xl-1">
+				<label class="form-label small mb-1" for="vocab-min">Said at least</label>
+				<select id="vocab-min" class="form-select form-select-sm" value="@Filter.MinCount" @onchange="e => Change(f => f.MinCount = int.TryParse(e.Value?.ToString(), out int n) ? n : 1)">
+					@foreach (int count in new[] { 1, 2, 3, 5, 10 })
+					{
+						<option value="@count">@(count)×</option>
+					}
+				</select>
+			</div>
+			<div class="col-6 col-md-3 col-xl-2">
+				<label class="form-label small mb-1" for="vocab-search">Search</label>
+				<input id="vocab-search" type="search" class="form-control form-control-sm" placeholder="Word or meaning" lang="ja"
+					   value="@Filter.Search" @onchange="e => Change(f => f.Search = e.Value?.ToString() ?? string.Empty)" />
+			</div>
+			<div class="col-12 col-md-3 col-xl-1">
+				<label class="form-check form-switch m-0 small" title="Names of people, places and things (proper nouns)">
+					<input class="form-check-input" type="checkbox" checked="@Filter.IncludeNames" @onchange="e => Change(f => f.IncludeNames = e.Value is true)" />
+					<span class="form-check-label">Names</span>
+				</label>
+			</div>
+		</div>
+	</div>
+</div>
+
+@code {
+	private const string AllClasses = "all";
+
+	[Parameter, EditorRequired]
+	public VocabCatalog Catalog { get; set; } = default!;
+
+	[Parameter, EditorRequired]
+	public VocabFilter Filter { get; set; } = default!;
+
+	[Parameter]
+	public EventCallback<VocabFilter> OnChange { get; set; }
+
+	private string ClassValue => Filter.Classes.Length switch
+	{
+		0 => string.Empty,
+		1 => Filter.Classes[0],
+		_ => AllClasses
+	};
+
+	private static string DateValue(DateTime? date) => date?.ToString("yyyy-MM-dd") ?? string.Empty;
+
+	private static DateTime? ParseDate(object? value) =>
+		DateTime.TryParseExact(value?.ToString(), "yyyy-MM-dd", null, System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal, out DateTime date)
+			? date
+			: null;
+
+	private static string[] ParseClasses(object? value) => value?.ToString() switch
+	{
+		null or "" => [],
+		AllClasses => [.. CallText.WordClasses],
+		string single => [single]
+	};
+
+	/// <summary>
+	/// A changed copy, so the page sees a new filter.
+	/// </summary>
+	private Task Change(Action<VocabFilter> change)
+	{
+		VocabFilter next = new()
+		{
+			Partner = Filter.Partner,
+			From = Filter.From,
+			To = Filter.To,
+			Classes = Filter.Classes,
+			IncludeNames = Filter.IncludeNames,
+			MinCount = Filter.MinCount,
+			Search = Filter.Search
+		};
+		change(next);
+		return OnChange.InvokeAsync(next);
+	}
+}

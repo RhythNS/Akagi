@@ -400,6 +400,23 @@
 	[Parameter]
 	public EventCallback<DateTime> OnDateChange { get; set; }
 
+	/// <summary>
+	/// Seconds into the call to open the transcript at once the call is shown.
+	/// </summary>
+	[Parameter]
+	public double? InitialTime { get; set; }
+
+	private string? _jumpedFor;
+
+	protected override void OnAfterRender(bool firstRender)
+	{
+		if (InitialTime is double time && _transcript != null && _jumpedFor != Detail.Summary.Id)
+		{
+			_jumpedFor = Detail.Summary.Id;
+			_transcript.JumpTo(time);
+		}
+	}
+
 	private CallTranscriptCard? _transcript;
 	private bool _editingDate;
 	private DateTime _date;

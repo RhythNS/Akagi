@@ -103,12 +103,18 @@ internal static class Vocab
         return
         [
             Word(word.Lemma),
-            Text(word.Reading == word.Lemma ? string.Empty : word.Reading),
+            Text(ShowReading(word.Lemma, word.Reading) ? word.Reading : string.Empty),
             Text(ClassLabel(word.Class)),
             Text(info?.Meaning ?? string.Empty),
             new VocabCell { Text = info?.Band ?? (view.Dictionary.Ready ? "not listed" : string.Empty), Sort = info?.Rank ?? int.MaxValue }
         ];
     }
+
+    /// <summary>
+    /// A reading adds something only to a word written with kanji.
+    /// </summary>
+    public static bool ShowReading(string lemma, string reading) =>
+        reading.Length > 0 && reading != lemma && lemma.Any(c => c is >= '一' and <= '鿿' or '々');
 
     public static string ClassLabel(WordClass wordClass) => wordClass switch
     {

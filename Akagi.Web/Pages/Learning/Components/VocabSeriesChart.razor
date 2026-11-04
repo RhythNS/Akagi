@@ -1,0 +1,136 @@
+@using Akagi.Bridge.Chat.Models
+@using System.Globalization
+
+@* One or two series (you, your partners). Points over calls become columns or a line; categories become horizontal
+   bars with their labels, which stay readable however many there are. *@
+<div class="call-viz" data-series="@Series.Title">
+	<div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2">
+		<div class="fw-medium">@Series.Title</div>
+		@if (Series.Names.Length > 1)
+		{
+			<div class="d-flex gap-3 small text-secondary">
+				@for (int i = 0; i < Series.Names.Length; i++)
+				{
+					<span><span class="viz-key @VocabText.SeriesClass(i) me-1"></span>@Series.Names[i]</span>
+				}
+			</div>
+		}
+	</div>
+	@if (!string.IsNullOrWhiteSpace(Series.Hint))
+	{
+		<div class="text-secondary small">@Series.Hint</div>
+	}
+
+	@if (Series.Points.Length == 0 || Max <= 0)
+	{
+		<div class="text-secondary small py-3">Nothing to show.</div>
+	}
+	else if (!OverCalls)
+	{
+		<div class="mt-2" role="img" aria-label="@Series.Title">
+			@foreach (VocabPoint point in Series.Points)
+			{
+				<div class="d-flex align-items-center gap-2 mb-1" data-category="@point.Label">
+					<div class="small text-truncate text-end flex-shrink-0" style="width: 9rem;" lang="ja" title="@point.Label">@point.Label</div>
+					<div class="flex-fill d-flex flex-column" style="gap: 2px;">
+						@for (int i = 0; i < point.Values.Length; i++)
+						{
+							double? value = point.Values[i];
+							<div class="d-flex align-items-center gap-2" title="@($"{Series.Names.ElementAtOrDefault(i)}: {VocabText.Value(value, Series.Unit)}")">
+								<div class="@VocabText.SeriesClass(i)" style="height: 0.55rem; width: @VocabText.Css((value ?? 0) / Max * 100)%; min-width: @((value ?? 0) > 0 ? "2px" : "0"); border-radius: 0 4px 4px 0;"></div>
+								<span class="small text-secondary" style="font-size: 0.7rem;">@VocabText.Value(value, Series.Unit)</span>
+							</div>
+						}
+					</div>
+				</div>
+			}
+		</div>
+	}
+	else
+	{
+		<div class="viz-readout small text-secondary my-1">
+			@if (_hovered is VocabPoint hoveredPoint)
+			{
+				<span>
+					@hoveredPoint.Label:
+					@for (int i = 0; i < hoveredPoint.Values.Length; i++)
+					{
+						<span class="text-body fw-medium ms-1">@Series.Names.ElementAtOrDefault(i) @VocabText.Value(hoveredPoint.Values[i], Series.Unit)</span>
+					}
+				</span>
+			}
+			else
+			{
+				<span>Point at the chart for the numbers.</span>
+			}
+		</div>
+		<div class="d-flex align-items-start gap-2">
+			<div class="d-flex flex-column justify-content-between text-secondary small text-end" style="height: 8rem; min-width: 2.5rem;">
+				<span>@VocabText.Value(Max, Series.Unit)</span>
+				<span>0</span>
+			</div>
+			<div class="flex-fill position-relative border-bottom" style="height: 8rem; border-top: 1px dashed var(--viz-grid);">
+				@if (Series.Kind == VocabSeriesKind.Line)
+				{
+					<svg class="position-absolute top-0 start-0 w-100 h-100" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+						@for (int i = 0; i < Series.Names.Length; i++)
+						{
+							<polyline points="@Polyline(i)" fill="none" class="@(i == 0 ? "viz-you-stroke" : "viz-partner-stroke")" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
+						}
+					</svg>
+				}
+				<div class="position-absolute top-0 start-0 w-100 h-100 d-flex align-items-end" style="gap: 3px;" role="img" aria-label="@Series.Title">
+					@foreach (VocabPoint point in Series.Points)
+					{
+						<div class="h-100 flex-fill d-flex align-items-end @(_hovered == point ? "bg-secondary-lt" : "")" style="gap: 2px; min-width: 4px; @(Series.Kind == VocabSeriesKind.Columns ? "max-width: 4rem;" : "")"
+							 data-point="@point.CallId"
+							 @onmouseenter="() => _hovered = point"
+							 @onmouseleave="() => _hovered = null">
+							@if (Series.Kind == VocabSeriesKind.Columns)
+							{
+								@for (int i = 0; i < point.Values.Length; i++)
+								{
+									<div class="flex-fill @VocabText.SeriesClass(i)" style="height: @VocabText.Css((point.Values[i] ?? 0) / Max * 100)%; border-radius: 4px 4px 0 0;"></div>
+								}
+							}
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+		<div class="d-flex justify-content-between small text-secondary mt-1 ms-5">
+			<span>@Series.Points[0].Label</span>
+			@if (Series.Points.Length > 1)
+			{
+				<span>@Series.Points[^1].Label</span>
+			}
+		</div>
+	}
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public VocabSeries Series { get; set; } = default!;
+
+	private VocabPoint? _hovered;
+
+	/// <summary>
+	/// The points are calls in time order rather than categories.
+	/// </summary>
+	private bool OverCalls => Series.Points.Length > 0 && Series.Points.All(p => p.CallId.Length > 0);
+
+	private double Max => Series.Points.SelectMany(p => p.Values).Max(v => v ?? 0);
+
+	private string Polyline(int series)
+	{
+		int count = Series.Points.Length;
+		return string.Join(" ", Series.Points.Select((p, i) => (p, i))
+			.Where(x => x.p.Values.ElementAtOrDefault(series) is double)
+			.Select(x =>
+			{
+				double xPosition = count == 1 ? 50 : (x.i + 0.5) * 100.0 / count;
+				double yPosition = 100 - (x.p.Values[series]!.Value / Max * 100);
+				return $"{xPosition.ToString("0.##", CultureInfo.InvariantCulture)},{yPosition.ToString("0.##", CultureInfo.InvariantCulture)}";
+			}));
+	}
+}

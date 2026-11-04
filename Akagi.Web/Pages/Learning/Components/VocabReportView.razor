@@ -1,0 +1,52 @@
+@using Akagi.Bridge.Chat.Models
+
+@* Renders any report: its note, stat tiles, charts and tables, in that order. *@
+<div data-report="@Result.Key">
+	@if (!string.IsNullOrWhiteSpace(Result.Note))
+	{
+		<div class="alert alert-secondary small py-2">@Result.Note</div>
+	}
+
+	@if (Result.Stats.Length > 0)
+	{
+		<div class="row row-cards mb-3">
+			@foreach (VocabStat stat in Result.Stats)
+			{
+				<div class="col-6 col-xl-4">
+					<div class="card h-100">
+						<div class="card-body">
+							<div class="text-secondary small">@stat.Label</div>
+							<div class="h2 m-0" data-stat="@stat.Label">@stat.Value</div>
+							@if (!string.IsNullOrWhiteSpace(stat.Hint))
+							{
+								<div class="text-secondary small">@stat.Hint</div>
+							}
+						</div>
+					</div>
+				</div>
+			}
+		</div>
+	}
+
+	@foreach (VocabSeries series in Result.Series)
+	{
+		<div class="card mb-3">
+			<div class="card-body">
+				<VocabSeriesChart Series="series" />
+			</div>
+		</div>
+	}
+
+	@foreach (VocabTable table in Result.Tables)
+	{
+		<VocabTableView Table="table" OnWord="OnWord" />
+	}
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public VocabReportResult Result { get; set; } = default!;
+
+	[Parameter]
+	public EventCallback<string> OnWord { get; set; }
+}

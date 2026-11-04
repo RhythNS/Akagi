@@ -53,7 +53,7 @@ internal static class WordDetail
         return new VocabWordDetail
         {
             Lemma = lemma,
-            Reading = reading == lemma ? string.Empty : reading,
+            Reading = Vocab.ShowReading(lemma, reading) ? reading : string.Empty,
             Class = first.Class is WordClass wordClass ? Vocab.ClassLabel(wordClass) : first.Pos,
             Meaning = info?.Meaning ?? string.Empty,
             Band = info?.Band ?? string.Empty,

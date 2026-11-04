@@ -384,4 +384,17 @@ public class CallAnalysisPageTests : BunitContext
         Assert.Empty(cut.FindAll("[data-coaching]"));
         Assert.Empty(cut.FindAll("[data-facts]"));
     }
+
+    [Fact]
+    public void AMomentInTheAddress_OpensTheTranscriptThere()
+    {
+        Services.AddSingleton<ISocketClientContainer>(new Sockets { Client = _client });
+        Services.GetRequiredService<Microsoft.AspNetCore.Components.NavigationManager>().NavigateTo("Learn/Calls/done?at=70");
+        IRenderedComponent<CallAnalysisPage> cut = Render<CallAnalysisPage>(p => p.Add(x => x.CallId, "done"));
+
+        Respond(_ => new CallAnalysisResponseTransmission { Calls = [Summary("done", "Yuki")] });
+        Respond(_ => new CallAnalysisResponseTransmission { Detail = Detail(Summary("done", "Yuki")) });
+
+        cut.WaitForAssertion(() => Assert.Equal("2", cut.Find(".call-line-target").GetAttribute("data-line")));
+    }
 }

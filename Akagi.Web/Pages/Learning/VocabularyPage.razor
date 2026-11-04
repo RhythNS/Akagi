@@ -1,0 +1,299 @@
+@page "/Learn/Vocabulary"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Pages.Learning.Components
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+
+<PageTitle>Vocabulary - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-3">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Learn</div>
+			<h2 class="page-title">Vocabulary</h2>
+			<div class="text-secondary small mt-1">Every word from your calls: what you rely on, what your partners say that you do not, and how it changes over time.</div>
+		</div>
+	</div>
+</div>
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert">@_error</div>
+}
+
+@if (_catalog == null)
+{
+	@if (_offline)
+	{
+		<div class="card border-danger">
+			<div class="card-body py-5 text-center">
+				<div class="text-danger mb-2">
+					<Icon IconType="@Icons.AlertCircle" Size="36" />
+				</div>
+				<h3 class="h4 mb-1">Socket Service Offline</h3>
+				<p class="text-secondary mb-3">Unable to reach the Akagi backend. Your calls are stored there.</p>
+				<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" @onclick="LoadAsync">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>Retry Connection</span>
+				</button>
+			</div>
+		</div>
+	}
+	else
+	{
+		<div class="card">
+			<div class="card-body py-5 text-center">
+				<div class="spinner-border text-primary mb-3" role="status"></div>
+				<div class="text-secondary">Reading your calls...</div>
+			</div>
+		</div>
+	}
+}
+else if (_catalog.Calls.Length == 0)
+{
+	<div class="card">
+		<div class="card-body py-5 text-center">
+			<h3 class="h4 mb-1">No calls to read yet</h3>
+			<p class="text-secondary m-0">The vocabulary comes from finished calls where your own voice was recorded on its own channel.</p>
+		</div>
+	</div>
+}
+else
+{
+	<VocabFilterBar Catalog="_catalog" Filter="_filter" OnChange="FilterAsync" />
+	@if (!_catalog.DictionaryReady)
+	{
+		<div class="alert alert-secondary small py-2">The dictionary is still loading after the bot started, so meanings and frequency bands appear in a moment. Refresh the report to get them.</div>
+	}
+	@if (_catalog.MixedCalls > 0)
+	{
+		<div class="text-secondary small mb-2">@_catalog.MixedCalls call@(_catalog.MixedCalls == 1 ? " is" : "s are") left out because the voices were not recorded separately.</div>
+	}
+
+	<div class="row g-3">
+		<div class="col-12 col-lg-3">
+			<div class="card">
+				<div class="list-group list-group-flush" data-reports>
+					@foreach (IGrouping<string, VocabReportInfo> group in _catalog.Reports.GroupBy(r => r.Group))
+					{
+						<div class="list-group-header small">@group.Key</div>
+						@foreach (VocabReportInfo report in group)
+						{
+							<button type="button"
+									class="list-group-item list-group-item-action text-start py-2 @(report.Key == _reportKey ? "active" : "")"
+									data-report-key="@report.Key"
+									@onclick="() => SelectAsync(report.Key)">
+								@report.Title
+							</button>
+						}
+					}
+				</div>
+			</div>
+		</div>
+		<div class="col-12 col-lg-9">
+			@if (_word != null)
+			{
+				<VocabWordPanel Word="_word" OnClose="() => _word = null" />
+			}
+			else if (_wordLoading)
+			{
+				<div class="card mb-3"><div class="card-body text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div></div>
+			}
+
+			@if (Selected is VocabReportInfo info)
+			{
+				<div class="d-flex flex-wrap align-items-end gap-2 mb-3">
+					<div class="me-auto">
+						<h3 class="m-0">@info.Title</h3>
+						<div class="text-secondary small">@info.Description</div>
+					</div>
+					@foreach (VocabOption option in info.Options)
+					{
+						<div>
+							<label class="form-label small mb-1">@option.Label</label>
+							<select class="form-select form-select-sm" data-option="@option.Key" value="@OptionValue(option)" @onchange="e => OptionAsync(option.Key, e.Value?.ToString())">
+								@foreach (VocabChoice choice in option.Choices)
+								{
+									<option value="@choice.Value">@choice.Label</option>
+								}
+							</select>
+						</div>
+					}
+				</div>
+			}
+
+			@if (_reportLoading)
+			{
+				<div class="card">
+					<div class="card-body py-5 text-center">
+						<div class="spinner-border text-primary" role="status"></div>
+					</div>
+				</div>
+			}
+			else if (_result != null)
+			{
+				<VocabReportView Result="_result" OnWord="WordAsync" />
+			}
+		</div>
+	</div>
+}
+
+@code {
+	public const string DefaultReport = "summary";
+
+	[SupplyParameterFromQuery(Name = "report")]
+	public string? ReportQuery { get; set; }
+
+	private VocabCatalog? _catalog;
+	private VocabFilter _filter = new();
+	private string _reportKey = DefaultReport;
+	private readonly Dictionary<string, Dictionary<string, string>> _options = [];
+	private VocabReportResult? _result;
+	private VocabWordDetail? _word;
+	private bool _reportLoading;
+	private bool _wordLoading;
+	private bool _offline;
+	private string? _error;
+	// A slower answer to an older request must not replace a newer one
+	private int _reportVersion;
+
+	private VocabReportInfo? Selected => _catalog?.Reports.FirstOrDefault(r => r.Key == _reportKey);
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override Task OnInitializedAsync() => LoadAsync();
+
+	private async Task LoadAsync()
+	{
+		_error = null;
+		_offline = false;
+		VocabularyResponseTransmission? response = await SendAsync(new VocabularyRequestTransmission { Action = VocabularyAction.Catalog });
+		if (response?.Catalog == null)
+		{
+			_offline = response == null;
+			return;
+		}
+		_catalog = response.Catalog;
+		if (ReportQuery != null && _catalog.Reports.Any(r => r.Key == ReportQuery))
+		{
+			_reportKey = ReportQuery;
+		}
+		if (_catalog.Calls.Length > 0)
+		{
+			await RunAsync();
+		}
+	}
+
+	private async Task SelectAsync(string key)
+	{
+		_reportKey = key;
+		await RunAsync();
+	}
+
+	private async Task FilterAsync(VocabFilter filter)
+	{
+		_filter = filter;
+		string? open = _word?.Lemma;
+		await RunAsync();
+		// An open word follows the filter too
+		if (open != null)
+		{
+			await WordAsync(open);
+		}
+	}
+
+	private string OptionValue(VocabOption option) =>
+		_options.TryGetValue(_reportKey, out Dictionary<string, string>? chosen) && chosen.TryGetValue(option.Key, out string? value) ? value : option.Default;
+
+	private async Task OptionAsync(string key, string? value)
+	{
+		if (!_options.TryGetValue(_reportKey, out Dictionary<string, string>? chosen))
+		{
+			chosen = [];
+			_options[_reportKey] = chosen;
+		}
+		chosen[key] = value ?? string.Empty;
+		await RunAsync();
+	}
+
+	private async Task RunAsync()
+	{
+		int version = ++_reportVersion;
+		_reportLoading = true;
+		StateHasChanged();
+		VocabularyResponseTransmission? response = await SendAsync(new VocabularyRequestTransmission
+		{
+			Action = VocabularyAction.Report,
+			ReportKey = _reportKey,
+			Filter = _filter,
+			Options = _options.TryGetValue(_reportKey, out Dictionary<string, string>? chosen) ? new Dictionary<string, string>(chosen) : []
+		});
+		if (version != _reportVersion)
+		{
+			return;
+		}
+		_reportLoading = false;
+		_result = response?.Report;
+	}
+
+	private async Task WordAsync(string lemma)
+	{
+		_wordLoading = true;
+		_word = null;
+		StateHasChanged();
+		VocabularyResponseTransmission? response = await SendAsync(new VocabularyRequestTransmission { Action = VocabularyAction.Word, Lemma = lemma, Filter = _filter });
+		_wordLoading = false;
+		_word = response?.Word;
+	}
+
+	/// <summary>
+	/// Failures end up in <see cref="_error"/>; null means there is no response to work with.
+	/// </summary>
+	private async Task<VocabularyResponseTransmission?> SendAsync(VocabularyRequestTransmission transmission)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return null;
+		}
+
+		try
+		{
+			VocabularyResponseTransmission response = await new VocabularyRequest(transmission).Get(client, VocabularyRequest.Timeout);
+			_error = response.Error;
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Try again in a moment.";
+			return null;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_catalog == null && _offline && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+	}
+}

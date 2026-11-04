@@ -128,7 +128,7 @@
 				}
 				else if (_detail != null)
 				{
-					<CallAnalysisDetailView Detail="_detail" Busy="_feedbackBusy" OnFeedback="FeedbackAsync" OnDateChange="SetDateAsync" />
+					<CallAnalysisDetailView Detail="_detail" Busy="_feedbackBusy" OnFeedback="FeedbackAsync" OnDateChange="SetDateAsync" InitialTime="At" />
 				}
 			</div>
 		</div>
@@ -145,6 +145,12 @@
 
 	[Parameter]
 	public string? CallId { get; set; }
+
+	/// <summary>
+	/// Seconds into the call to open the transcript at, e.g. from a word's line on the vocabulary page.
+	/// </summary>
+	[SupplyParameterFromQuery(Name = "at")]
+	public double? At { get; set; }
 
 	private State _state = State.Loading;
 	private CallAnalysisSummary[] _calls = [];

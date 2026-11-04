@@ -23,7 +23,7 @@ internal class SummaryReport : VocabularyReport
         List<VocabStat> stats =
         [
             Vocab.Stat("Calls", view.Calls.Count.ToString()),
-            Vocab.Stat("Your words", mine.ToString(), $"{myDistinct} different"),
+            Vocab.Stat("Your words", mine.ToString(), view.HasPartners ? $"your partners: {theirs}" : string.Empty),
             Vocab.Stat("Different words you used", myDistinct.ToString(), view.HasPartners ? $"your partners: {theirDistinct}" : string.Empty),
             Vocab.Stat("Your variety (MATTR)", Vocab.PercentText(WeightedMattr(view, true)),
                 "Share of different words in every stretch of 50 words; it does not fall just because a call was long." +
