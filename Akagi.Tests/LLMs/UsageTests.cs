@@ -1,5 +1,7 @@
 using Akagi.Life.Japanese.Calls;
 using Akagi.LLMs.OpenRouter;
+using Microsoft.Extensions.Logging.Abstractions;
+using System.Net;
 using System.Text.Json;
 
 namespace Akagi.Tests.LLMs;
@@ -20,6 +22,60 @@ public class UsageTests
         ResponseUsage usage = JsonSerializer.Deserialize<OpenRouterResponse>(json, OpenRouterClient.PayloadJsonOptions)!.Usage!;
 
         Assert.Equal((6000, 2500, 4096, 1800, 0.0153), (usage.PromptTokens, usage.CompletionTokens, usage.PromptDetails!.CachedTokens, usage.CompletionDetails!.ReasoningTokens, usage.Cost));
+    }
+
+    private const string Ok = """{"id":"gen","choices":[{"message":{"role":"assistant","content":"hi"}}]}""";
+    private const string ThrottledInside = """{"id":"gen","choices":[{"error":{"code":429,"message":"rate-limited upstream"}}]}""";
+
+    private static (Func<Task<(HttpStatusCode, TimeSpan?, string)>> Send, List<int> Calls) Script(params (HttpStatusCode Status, string Body)[] answers)
+    {
+        List<int> calls = [];
+        return (() =>
+        {
+            calls.Add(calls.Count);
+            (HttpStatusCode status, string body) = answers[Math.Min(calls.Count - 1, answers.Length - 1)];
+            return Task.FromResult<(HttpStatusCode, TimeSpan?, string)>((status, status == HttpStatusCode.TooManyRequests ? TimeSpan.FromSeconds(1) : null, body));
+        }, calls);
+    }
+
+    [Fact]
+    public async Task Requests_TryAgainWhenThrottled_InTheStatusOrInsideTheResponse()
+    {
+        List<TimeSpan> waits = [];
+        (var send, List<int> calls) = Script((HttpStatusCode.TooManyRequests, "{}"), (HttpStatusCode.OK, ThrottledInside), (HttpStatusCode.OK, Ok));
+
+        OpenRouterResponse response = await OpenRouterClient.SendWithRetryAsync(send, w => { waits.Add(w); return Task.CompletedTask; }, NullLogger.Instance, "m");
+
+        Assert.Equal(3, calls.Count);
+        Assert.Equal("gen", response.Id);
+        // The server's Retry-After first, then the backoff
+        Assert.Equal([TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4)], waits);
+    }
+
+    [Fact]
+    public async Task Requests_GiveUpAfterTheLastTry_AndDoNotRetryRealErrors()
+    {
+        (var throttled, List<int> tries) = Script((HttpStatusCode.ServiceUnavailable, "down"));
+        Exception gaveUp = await Assert.ThrowsAsync<Exception>(() => OpenRouterClient.SendWithRetryAsync(throttled, _ => Task.CompletedTask, NullLogger.Instance, "m"));
+        Assert.Equal(OpenRouterClient.MaxTries, tries.Count);
+        Assert.Contains("ServiceUnavailable", gaveUp.Message);
+
+        (var invalid, List<int> once) = Script((HttpStatusCode.BadRequest, "bad tool schema"));
+        await Assert.ThrowsAsync<Exception>(() => OpenRouterClient.SendWithRetryAsync(invalid, _ => Task.CompletedTask, NullLogger.Instance, "m"));
+        Assert.Single(once);
+
+        (var errorInside, List<int> single) = Script((HttpStatusCode.OK, """{"error":{"code":401,"message":"No auth"}}"""));
+        Exception unauthorized = await Assert.ThrowsAsync<Exception>(() => OpenRouterClient.SendWithRetryAsync(errorInside, _ => Task.CompletedTask, NullLogger.Instance, "m"));
+        Assert.Single(single);
+        Assert.Contains("No auth", unauthorized.Message);
+    }
+
+    [Fact]
+    public void RetryDelay_IsCapped()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(2), OpenRouterClient.RetryDelay(1, null));
+        Assert.Equal(OpenRouterClient.MaxRetryWait, OpenRouterClient.RetryDelay(1, TimeSpan.FromMinutes(5)));
+        Assert.True(OpenRouterClient.IsRetriable(429) && OpenRouterClient.IsRetriable(503) && !OpenRouterClient.IsRetriable(400));
     }
 
     [Fact]

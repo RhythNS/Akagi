@@ -1,4 +1,5 @@
 using Akagi.Characters;
+using Akagi.Characters.Conversations;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Life.Japanese;
 using Akagi.Life.Japanese.Calls;
@@ -195,6 +196,8 @@ public class ConversationMergerTests
     {
         public int Requests { get; private set; }
         public ILLM.LLMUsage? Usage { get; private set; }
+        public SystemProcessor? Processor { get; private set; }
+        public Message? Sent { get; private set; }
 
         public void SetModel(string model)
         {
@@ -232,6 +235,8 @@ public class ConversationMergerTests
         public Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context)
         {
             Requests++;
+            Processor = systemProcessor;
+            Sent = context.Conversation.Messages.Single();
             return Task.FromResult<Command[]>(
             [
                 With(new NoteCallMistakeCommand(), ("Category", "Comprehension"), ("Pattern", "heard ちいかわ as ちかわ"), ("Said", "ちかわ")),
@@ -272,6 +277,10 @@ public class ConversationMergerTests
         Assert.Equal(1, llm.Requests);
         // Call reviews run on the model picked for Learning
         Assert.Equal(ILLM.LLMUsage.Learning, llm.Usage);
+        // The task is a user message with the names filled in; the system prompt alone opens the request, for the cache
+        Assert.Equal((Message.Type.User, Message.Type.User), (llm.Sent!.From, llm.Processor!.ReadableMessages));
+        Assert.DoesNotContain("{{", ((TextMessage)llm.Sent).Text);
+        Assert.Equal("low", llm.Processor.ReasoningEffort);
         // Nothing reaches the diagnosis before the quotes are checked and the call is consolidated
         Assert.Empty(diagnoses.Items);
     }

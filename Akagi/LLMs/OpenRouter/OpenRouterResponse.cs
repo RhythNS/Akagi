@@ -24,6 +24,12 @@ public class OpenRouterResponse
 
     [JsonPropertyName("usage")]
     public ResponseUsage? Usage { get; set; }
+
+    /// <summary>
+    /// An error for the whole request, which OpenRouter can send with a successful status.
+    /// </summary>
+    [JsonPropertyName("error")]
+    public ErrorResponse? Error { get; set; }
 }
 
 public class Choice

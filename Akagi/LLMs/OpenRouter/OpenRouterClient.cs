@@ -7,6 +7,8 @@ using Akagi.Receivers.Commands.Messages;
 using Akagi.Utils.Extensions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Net;
+using System.Net.Http.Headers;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
@@ -408,46 +410,32 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         }
 
         OpenRouterPayload payload = await GetPayload(systemProcessor, context);
-        HttpRequestMessage request = new(HttpMethod.Post,
-            $"{_options.BaseUrl}{_options.ResponsePath}");
-
-        request.Headers.Add("Authorization", $"Bearer {_options.ApiKey}");
-        request.Headers.TryAddWithoutValidation("Content-Type", "application/json");
-        request.Content = new StringContent(JsonSerializer.Serialize(payload, _jsonOptions), Encoding.UTF8, "application/json");
-
+        string json = JsonSerializer.Serialize(payload, _jsonOptions);
         string model = Model;
-        _logger.LogDebug("Sending request to OpenRouter using model {Model}", model);
-        HttpResponseMessage response;
-        try
-        {
-            response = await httpClient.SendAsync(request);
-        }
-        catch (TaskCanceledException ex)
-        {
-            // Nothing else cancels this request; callers must not mistake it for a shutdown
-            throw new TimeoutException($"OpenRouter did not answer within {timeout.TotalSeconds:0} seconds (model {model}).", ex);
-        }
-        if (response.IsSuccessStatusCode == false)
-        {
-            throw new Exception($"Request failed with status code {response.StatusCode}: {await response.Content.ReadAsStringAsync()}");
-        }
-        string content = await response.Content.ReadAsStringAsync();
-        _logger.LogDebug("Received response from OpenRouter using model {Model}", Model);
 
-        OpenRouterResponse? openRouterResponse;
-        try
+        async Task<(HttpStatusCode Status, TimeSpan? RetryAfter, string Body)> SendAsync()
         {
-            openRouterResponse = JsonSerializer.Deserialize<OpenRouterResponse>(content, _jsonOptions);
+            using HttpRequestMessage request = new(HttpMethod.Post, $"{_options.BaseUrl}{_options.ResponsePath}");
+            request.Headers.Add("Authorization", $"Bearer {_options.ApiKey}");
+            request.Headers.TryAddWithoutValidation("Content-Type", "application/json");
+            request.Content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            _logger.LogDebug("Sending request to OpenRouter using model {Model}", model);
+            try
+            {
+                using HttpResponseMessage response = await httpClient.SendAsync(request);
+                RetryConditionHeaderValue? retry = response.Headers.RetryAfter;
+                TimeSpan? retryAfter = retry?.Delta ?? (retry?.Date is DateTimeOffset date ? date - DateTimeOffset.UtcNow : null);
+                return (response.StatusCode, retryAfter, await response.Content.ReadAsStringAsync());
+            }
+            catch (TaskCanceledException ex)
+            {
+                // Nothing else cancels this request; callers must not mistake it for a shutdown
+                throw new TimeoutException($"OpenRouter did not answer within {timeout.TotalSeconds:0} seconds (model {model}).", ex);
+            }
         }
-        catch (JsonException ex)
-        {
-            _logger.LogError(ex, "Failed to deserialize OpenRouter response: {Content}", content);
-            throw new Exception("Failed to deserialize OpenRouter response.", ex);
-        }
-        if (openRouterResponse == null)
-        {
-            throw new Exception("Failed to deserialize OpenRouter response.");
-        }
+
+        OpenRouterResponse openRouterResponse = await SendWithRetryAsync(SendAsync, Task.Delay, _logger, model);
 
         if (openRouterResponse.Usage is ResponseUsage usage)
         {
@@ -459,6 +447,73 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         }
 
         return HandleResponse(systemProcessor, openRouterResponse, context);
+    }
+
+    /// <summary>
+    /// Tries per request. OpenRouter and the providers behind it throttle now and then (429) or are briefly unavailable.
+    /// </summary>
+    internal const int MaxTries = 4;
+    internal static readonly TimeSpan MaxRetryWait = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Error codes worth trying again: timeouts, throttling and temporary failures upstream.
+    /// </summary>
+    internal static bool IsRetriable(int code) => code is 408 or 429 or 500 or 502 or 503 or 504 or 529;
+
+    /// <summary>
+    /// The wait before try <paramref name="attempt"/> + 1: what the server asked for, else 2, 4, 8 seconds.
+    /// </summary>
+    internal static TimeSpan RetryDelay(int attempt, TimeSpan? retryAfter)
+    {
+        TimeSpan wait = retryAfter is TimeSpan asked && asked > TimeSpan.Zero ? asked : TimeSpan.FromSeconds(Math.Pow(2, attempt));
+        return wait > MaxRetryWait ? MaxRetryWait : wait;
+    }
+
+    /// <summary>
+    /// Sends a request and reads the response, trying again on throttling and temporary failures, whether they come as
+    /// an HTTP status or as an error inside a successful response.
+    /// </summary>
+    internal static async Task<OpenRouterResponse> SendWithRetryAsync(Func<Task<(HttpStatusCode Status, TimeSpan? RetryAfter, string Body)>> send,
+        Func<TimeSpan, Task> delay, ILogger logger, string model)
+    {
+        for (int attempt = 1; ; attempt++)
+        {
+            (HttpStatusCode status, TimeSpan? retryAfter, string body) = await send();
+            OpenRouterResponse? response = null;
+            int? errorCode = (int)status >= 400 ? (int)status : null;
+            if (errorCode == null)
+            {
+                try
+                {
+                    response = JsonSerializer.Deserialize<OpenRouterResponse>(body, PayloadJsonOptions);
+                }
+                catch (JsonException ex)
+                {
+                    logger.LogError(ex, "Failed to deserialize OpenRouter response: {Content}", body);
+                    throw new Exception("Failed to deserialize OpenRouter response.", ex);
+                }
+                errorCode = response?.Error?.Code ?? response?.Choices.FirstOrDefault()?.Error?.Code;
+            }
+
+            if (errorCode is int code && IsRetriable(code) && attempt < MaxTries)
+            {
+                TimeSpan wait = RetryDelay(attempt, retryAfter);
+                logger.LogWarning("OpenRouter {Model} answered {Code} on try {Attempt} of {Tries}; trying again in {Seconds:0.#}s",
+                    model, code, attempt, MaxTries, wait.TotalSeconds);
+                await delay(wait);
+                continue;
+            }
+            if ((int)status >= 400)
+            {
+                throw new Exception($"Request failed with status code {status}: {body}");
+            }
+            if (response?.Error is ErrorResponse error)
+            {
+                throw new Exception($"OpenRouter returned error response: {error.Code}:{error.Message}");
+            }
+            logger.LogDebug("Received response from OpenRouter using model {Model}", model);
+            return response ?? throw new Exception("Failed to deserialize OpenRouter response.");
+        }
     }
 
     public override async IAsyncEnumerable<LLMStreamEvent> GetNextStepsStreamAsync(

@@ -220,10 +220,25 @@ internal static class TranscriptChunker
 
         if (text.Length > 0)
         {
-            chunks.Add(new CallChunk { Index = chunks.Count, Start = start, End = end, Text = text.ToString().TrimEnd() });
+            // A short leftover joins the part before it: a request of its own would mostly pay for the instructions again
+            if (chunks.Count > 0 && text.Length < maxCharacters * LeftoverShare)
+            {
+                CallChunk last = chunks[^1];
+                last.Text = last.Text + Environment.NewLine + text.ToString().TrimEnd();
+                last.End = Math.Max(last.End, end);
+            }
+            else
+            {
+                chunks.Add(new CallChunk { Index = chunks.Count, Start = start, End = end, Text = text.ToString().TrimEnd() });
+            }
         }
         return chunks;
     }
+
+    /// <summary>
+    /// A last part shorter than this share of a part is added to the one before.
+    /// </summary>
+    public const double LeftoverShare = 0.25;
 
     public static string Timestamp(double seconds) =>
         TimeSpan.FromSeconds(seconds).ToString(seconds >= 3600 ? @"h\:mm\:ss" : @"mm\:ss", CultureInfo.InvariantCulture);

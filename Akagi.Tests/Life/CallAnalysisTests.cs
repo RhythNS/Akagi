@@ -119,6 +119,23 @@ public class TranscriptTests
     }
 
     [Fact]
+    public void Chunk_AddsAShortLeftoverToThePartBefore()
+    {
+        List<TranscriptSegment> segments =
+        [
+            new() { Start = 0, End = 5, Speaker = "Me", Text = new string('あ', 180) },
+            new() { Start = 6, End = 9, Speaker = "Yuki", Text = new string('い', 180) },
+            new() { Start = 10, End = 11, Speaker = "Me", Text = "うん。" }
+        ];
+
+        List<CallChunk> chunks = TranscriptChunker.Chunk(segments, 200);
+
+        Assert.Equal(2, chunks.Count);
+        Assert.EndsWith("Me: うん。", chunks[1].Text);
+        Assert.Equal(11, chunks[1].End);
+    }
+
+    [Fact]
     public void Lines_KeepUnlabeledLinesApart()
     {
         List<string> lines = [.. TranscriptChunker.Lines([new() { Start = 0, Text = "一" }, new() { Start = 1, Text = "二" }]).Select(l => l.Text)];

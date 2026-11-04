@@ -207,12 +207,14 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
         Character character = await _databaseFactory.GetDatabase<ICharacterDatabase>().GetCharacter(characterId)
             ?? throw new InvalidOperationException($"Analysis character {characterId} not found.");
 
+        // The instruction is the system prompt and the task a user message: providers merge system messages into one, and
+        // the instruction alone must open every request alike for the prompt cache to recognize it
         Conversation scratch = new() { Id = -1, Time = DateTime.UtcNow };
         scratch.AddMessage(new TextMessage
         {
-            From = Message.Type.System,
+            From = Message.Type.User,
             Time = DateTime.UtcNow,
-            Text = message,
+            Text = FillPlaceholders(message, user, character),
             CharacterId = null
         });
 
@@ -223,7 +225,7 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
             RunMode = ILLM.RunMode.CommandsOnly,
             // Reviewing the learner's Japanese is tutoring, so it runs on the model chosen for lessons
             Usage = ILLM.LLMUsage.Learning,
-            ReadableMessages = Message.Type.System,
+            ReadableMessages = Message.Type.User,
             Output = Message.Type.System,
             MessageCompiler = new ContextOnlyConversationCompiler(),
             SystemInstruction = instruction,
@@ -255,6 +257,27 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
                 job.Id, name, used.PromptTokens, used.CachedTokens, used.CompletionTokens, used.ReasoningTokens, used.Cost ?? 0);
         }
         return (calls, context.UsageLog);
+    }
+
+    /// <summary>
+    /// The names in a message, as <see cref="SystemProcessor.CompileSystemPrompt"/> puts them into the system prompt.
+    /// </summary>
+    internal static string FillPlaceholders(string message, User user, Character character) =>
+        message.Replace("{{user}}", user.Name).Replace("{{character}}", CardName(character));
+
+    /// <summary>
+    /// The card's name, which the system prompt uses; the character's own when its card is not loaded.
+    /// </summary>
+    private static string CardName(Character character)
+    {
+        try
+        {
+            return character.Card.Name;
+        }
+        catch (InvalidOperationException)
+        {
+            return character.Name;
+        }
     }
 
     internal static string BuildChunkMessage(CallJob job, CallChunk chunk)
