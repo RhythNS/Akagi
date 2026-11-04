@@ -21,6 +21,8 @@ static class DependencyInjection
         services.AddSingleton<ICompanionStateDatabase, CompanionStateDatabase>();
         services.AddSingleton<IJapaneseDiagnosisDatabase, JapaneseDiagnosisDatabase>();
         services.AddSingleton<ICallJobDatabase, CallJobDatabase>();
+        services.AddSingleton<IPersonProfileDatabase, PersonProfileDatabase>();
+        services.AddSingleton<ICallMemory, CallMemory>();
         services.AddSingleton<IProactiveDelivery, ProactiveDelivery>();
         services.AddHostedService<RoutineService>();
 

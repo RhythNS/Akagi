@@ -14,10 +14,14 @@ internal enum CallJobStatus
     Completed,
     Failed,
     /// <summary>
-    /// All chunks are reviewed; one more request merges, checks and ranks their findings. Numbered last because
-    /// statuses are stored as numbers.
+    /// All chunks are reviewed; one more request merges, checks and ranks their findings. Numbered after the others
+    /// because statuses are stored as numbers.
     /// </summary>
-    Consolidating
+    Consolidating,
+    /// <summary>One request over the whole call on how the conversation went.</summary>
+    Coaching,
+    /// <summary>One request over the whole call for what was learned about the people in it.</summary>
+    Remembering
 }
 
 /// <summary>
@@ -206,6 +210,11 @@ internal class CallJob : Savable
     /// </summary>
     public List<CallFinding> Findings { get; set; } = [];
     public CallReview? Review { get; set; }
+    public CallCoaching? Coaching { get; set; }
+    /// <summary>
+    /// The facts pass ran; it may have found nothing.
+    /// </summary>
+    public bool FactsChecked { get; set; }
     public CallStats? Stats { get; set; }
     /// <summary>
     /// Findings of a call analyzed before they were stored on the call were copied over from the diagnosis.

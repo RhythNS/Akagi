@@ -69,8 +69,6 @@ internal enum PersonGender
 /// </summary>
 internal class Person
 {
-    public const int MaxNotes = 6;
-
     public string Name { get; set; } = string.Empty;
     public string Relation { get; set; } = string.Empty;
     public PersonGender Gender { get; set; }
@@ -85,11 +83,13 @@ internal class Person
         {
             return;
         }
+        // Every note is kept: the companion's context only shows the latest ones, and the rest is the user's record
         Notes.Add(note.Trim());
-        if (Notes.Count > MaxNotes)
-        {
-            Notes.RemoveAt(0);
-        }
+    }
+
+    public void RemoveNote(string note)
+    {
+        Notes.RemoveAll(n => string.Equals(n, note.Trim(), StringComparison.OrdinalIgnoreCase));
     }
 }
 

@@ -149,8 +149,26 @@ internal static partial class CallJobs
         job.Error = string.Empty;
         job.Status = job.Chunks.Count == 0 ? CallJobStatus.Transcribing
             : !job.Chunks.All(c => c.Analyzed) ? CallJobStatus.Analyzing
-            : job.Review == null ? CallJobStatus.Consolidating
+            : job.Coaching == null ? CallJobStatus.Coaching
+            : !job.FactsChecked ? CallJobStatus.Remembering
+            : job.Review == null && !job.LegacyImported ? CallJobStatus.Consolidating
             : CallJobStatus.Reporting;
+        return true;
+    }
+
+    /// <summary>
+    /// Runs the passes a finished call has not had yet (conversation coaching, facts), from its stored transcript. The
+    /// review and the diagnosis stay as they are, and the companion is not told again.
+    /// </summary>
+    public static bool CatchUp(CallJob job)
+    {
+        if (job.Status != CallJobStatus.Completed || job.Segments.Count == 0 || (job.Coaching != null && job.FactsChecked))
+        {
+            return false;
+        }
+        job.Attempts = 0;
+        job.Error = string.Empty;
+        job.Status = job.Coaching == null ? CallJobStatus.Coaching : CallJobStatus.Remembering;
         return true;
     }
 
@@ -159,7 +177,7 @@ internal static partial class CallJobs
     /// diagnosis back out, then queues the review, consolidation and report. Transcription is not repeated, but the
     /// review requests are paid again.
     /// </summary>
-    public static bool Reanalyze(CallJob job, JapaneseDiagnosis? diagnosis)
+    public static async Task<bool> ReanalyzeAsync(CallJob job, JapaneseDiagnosis? diagnosis, ICallMemory? memory)
     {
         if (job.Status is not (CallJobStatus.Completed or CallJobStatus.Failed) || job.Chunks.Count == 0)
         {
@@ -173,8 +191,17 @@ internal static partial class CallJobs
                 CallDiagnosis.Undo(diagnosis, job, finding);
             }
         }
+        if (memory != null)
+        {
+            foreach (CallFinding fact in job.Findings.Where(f => f.Kind == FindingKind.Fact))
+            {
+                await memory.UndoAsync(job, fact);
+            }
+        }
         job.Findings = [];
         job.Review = null;
+        job.Coaching = null;
+        job.FactsChecked = false;
         job.Stats = null;
         job.Report = string.Empty;
         job.Delivered = false;

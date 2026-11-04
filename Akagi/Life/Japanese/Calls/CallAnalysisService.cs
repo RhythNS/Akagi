@@ -95,6 +95,8 @@ internal class CallAnalysisService : BackgroundService
             _services.GetRequiredService<ITranscriber>(),
             reviewer,
             reviewer,
+            reviewer,
+            _services.GetRequiredService<ICallMemory>(),
             _services.GetRequiredService<ICallDelivery>().DeliverAsync,
             options,
             _logger);

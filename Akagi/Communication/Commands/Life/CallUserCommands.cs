@@ -62,7 +62,7 @@ internal class CallsCommand : TextCommand
 {
     public override string Name => "/calls";
 
-    public override string Description => "Lists your analyzed calls, shows one report, retries a failed call, or has the companion tell you about a finished one again. Usage: /calls [id] | /calls retry <id> | /calls deliver <id> | /calls reanalyze <id>";
+    public override string Description => "Lists your analyzed calls, shows one report, retries a failed call, or has the companion tell you about a finished one again. Usage: /calls [id] | /calls retry <id> | /calls deliver <id> | /calls reanalyze <id> | /calls catchup <id>";
 
     public override async Task<CommandResult> ExecuteAsync(Context context, string[] args)
     {
@@ -102,7 +102,7 @@ internal class CallsCommand : TextCommand
             {
                 IJapaneseDiagnosisDatabase diagnoses = context.DatabaseFactory.GetDatabase<IJapaneseDiagnosisDatabase>();
                 JapaneseDiagnosis? diagnosis = await diagnoses.GetForUser(context.User.Id!);
-                if (CallJobs.Reanalyze(done, diagnosis))
+                if (await CallJobs.ReanalyzeAsync(done, diagnosis, Globals.Instance.ServiceProvider.GetService<ICallMemory>()))
                 {
                     if (diagnosis != null)
                     {
@@ -115,6 +115,27 @@ internal class CallsCommand : TextCommand
                 {
                     reply = $"[{done.ShortId}] can only be reviewed again once it is finished: {CallAnalysisPipeline.DescribeProgress(done)}";
                 }
+            }
+            await Communicator.SendMessage(context.User, reply);
+            return CommandResult.Ok;
+        }
+
+        if (args.Length > 0 && string.Equals(args[0], "catchup", StringComparison.OrdinalIgnoreCase))
+        {
+            CallJob? done = args.Length > 1 ? Find(jobs, args[1]) : null;
+            string reply;
+            if (done == null)
+            {
+                reply = args.Length > 1 ? $"No call with id '{args[1]}'." : "Which call? Usage: /calls catchup <id>";
+            }
+            else if (CallJobs.CatchUp(done))
+            {
+                await context.DatabaseFactory.GetDatabase<ICallJobDatabase>().SaveDocumentAsync(done);
+                reply = $"[{done.ShortId}] gets the passes it is missing (conversation coaching, facts about the people): two requests, nothing else is paid again.";
+            }
+            else
+            {
+                reply = $"[{done.ShortId}] has nothing to catch up on, or is not finished: {CallAnalysisPipeline.DescribeProgress(done)}";
             }
             await Communicator.SendMessage(context.User, reply);
             return CommandResult.Ok;

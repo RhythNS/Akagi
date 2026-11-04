@@ -30,12 +30,12 @@ internal class CallWord
 /// What the transcript shows without any LLM: who spoke how much, how turns went, and which words were used.
 /// Computed locally, so it is recomputed for free whenever <see cref="CurrentVersion"/> changes.
 /// </summary>
-internal class CallStats
+internal partial class CallStats
 {
     /// <summary>
     /// Raised whenever the measuring changes; stored statistics of an older version are computed again.
     /// </summary>
-    public const int CurrentVersion = 2;
+    public const int CurrentVersion = 3;
     public const double WindowSeconds = 300;
     public const double LongPauseSeconds = 2.0;
     /// <summary>
@@ -70,6 +70,11 @@ internal class CallStats
     /// Silences of <see cref="LongPauseSeconds"/> or more inside the learner's own turns.
     /// </summary>
     public int LongPauses { get; set; }
+    /// <summary>
+    /// Sentences ending in a question mark or a polite question ending.
+    /// </summary>
+    public int LearnerQuestions { get; set; }
+    public int PartnerQuestions { get; set; }
     public List<CallWindow> Windows { get; set; } = [];
 
     public int LearnerWords { get; set; }
@@ -91,6 +96,8 @@ internal class CallStats
         CallStats stats = new() { Separated = job.HasLearnerSeparation, HasPartner = lines.Any(l => !l.Learner) };
         stats.MeasureTime(lines);
         stats.MeasureTurns(lines);
+        stats.LearnerQuestions = lines.Where(l => l.Learner).Sum(l => Questions(l.Segment.Text));
+        stats.PartnerQuestions = lines.Where(l => !l.Learner).Sum(l => Questions(l.Segment.Text));
         stats.CountWords(lines);
         return stats;
     }
@@ -206,6 +213,14 @@ internal class CallStats
     }
 
     private static int Letters(string text) => text.Count(char.IsLetterOrDigit);
+
+    /// <summary>
+    /// Questions in a line: question marks, or a polite ですか／ますか ending without one.
+    /// </summary>
+    internal static int Questions(string text) => QuestionEnd().Matches(text).Count;
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"[？?]+|(?:ですか|ますか)(?=[。．.！!\s]|$)")]
+    private static partial System.Text.RegularExpressions.Regex QuestionEnd();
 
     private static List<(double Start, double End)> Union(IEnumerable<TranscriptSegment> segments)
     {

@@ -216,3 +216,16 @@ internal class LifeTestContext
         return ((CommandMessage)Conversation.Messages[^1]).Output;
     }
 }
+
+internal class InMemoryPersonProfileDatabase : InMemoryDatabase<Akagi.Life.Japanese.Calls.PersonProfile>, Akagi.Life.Japanese.Calls.IPersonProfileDatabase
+{
+    public InMemoryPersonProfileDatabase() : base("person_profiles")
+    {
+    }
+
+    public Task<List<Akagi.Life.Japanese.Calls.PersonProfile>> GetForUser(string userId) =>
+        Task.FromResult(Items.Where(p => p.UserId == userId).ToList());
+
+    public Task<Akagi.Life.Japanese.Calls.PersonProfile?> Get(string userId, string name) =>
+        Task.FromResult(Items.FirstOrDefault(p => p.UserId == userId && string.Equals(p.Name, name.Trim(), StringComparison.OrdinalIgnoreCase)));
+}

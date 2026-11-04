@@ -10,7 +10,20 @@ internal enum FindingKind
     Correct,
     Strength,
     /// <summary>A natural expression the partner used that the learner could adopt.</summary>
-    Phrase
+    Phrase,
+    /// <summary>A moment of the conversation itself: a missed follow-up, a flat reaction, a good question.</summary>
+    Conversation,
+    /// <summary>Something learned about the partner or the learner.</summary>
+    Fact
+}
+
+/// <summary>
+/// Whom a fact is about.
+/// </summary>
+internal enum FactSubject
+{
+    Partner,
+    Learner
 }
 
 internal enum FindingOrigin
@@ -97,11 +110,46 @@ internal class CallFinding
     public string Note { get; set; } = string.Empty;
     public FindingFeedback Feedback { get; set; }
     /// <summary>
-    /// Counted in the diagnosis; taking it back undoes exactly that.
+    /// Counted in the diagnosis (or for a fact, written to the people and memories); taking it back undoes exactly that.
     /// </summary>
     public bool Applied { get; set; }
 
+    /// <summary>
+    /// Conversation: the skill it is about (follow-up, question, reaction...). Fact: its topic (work, hobbies, plans...).
+    /// </summary>
+    public string Aspect { get; set; } = string.Empty;
+    /// <summary>
+    /// Conversation: Japanese-specific advice rather than general conversation skill.
+    /// </summary>
+    public bool Japanese { get; set; }
+    /// <summary>
+    /// Conversation: an example of doing it well rather than something to improve.
+    /// </summary>
+    public bool WentWell { get; set; }
+    /// <summary>
+    /// Conversation: the partner's line the learner was reacting to, checked against the transcript.
+    /// </summary>
+    public string Context { get; set; } = string.Empty;
+    public FactSubject Subject { get; set; }
+    /// <summary>
+    /// Fact: worth asking about next time, e.g. an upcoming exam.
+    /// </summary>
+    public bool FollowUp { get; set; }
+    /// <summary>
+    /// Fact about the learner: the companion memory it was written to.
+    /// </summary>
+    public string MemoryId { get; set; } = string.Empty;
+
     public bool Counts => State == FindingState.Kept && Feedback != FindingFeedback.NotAMistake;
+}
+
+/// <summary>
+/// The coaching pass's advice on the conversation as a whole.
+/// </summary>
+internal class CallCoaching
+{
+    public string Summary { get; set; } = string.Empty;
+    public List<string> Tips { get; set; } = [];
 }
 
 /// <summary>
@@ -136,6 +184,19 @@ internal static partial class CallQuotes
             return;
         }
 
+        if (finding.Kind == FindingKind.Fact)
+        {
+            // A fact may come from either side of the conversation
+            (QuoteCheck mine, TranscriptSegment? mineAt) = Locate(job, finding.Said, true, finding.ChunkIndex);
+            (QuoteCheck theirs, TranscriptSegment? theirsAt) = job.HasLearnerSeparation
+                ? Locate(job, finding.Said, false, finding.ChunkIndex)
+                : (QuoteCheck.NotFound, null);
+            (QuoteCheck best, TranscriptSegment? at) = Rank(mine) >= Rank(theirs) ? (mine, mineAt) : (theirs, theirsAt);
+            finding.Quote = best;
+            finding.Time = at?.Start;
+            return;
+        }
+
         // A phrase is the partner's; everything else is about the learner's own words
         bool wantLearner = finding.Kind != FindingKind.Phrase;
         (QuoteCheck check, TranscriptSegment? segment) = Locate(job, finding.Said, wantLearner, finding.ChunkIndex);
@@ -165,10 +226,18 @@ internal static partial class CallQuotes
         finding.Time = segment?.Start;
     }
 
+    private static int Rank(QuoteCheck check) => check switch
+    {
+        QuoteCheck.Found => 4,
+        QuoteCheck.Disputed => 3,
+        QuoteCheck.Approximate => 2,
+        _ => 0
+    };
+
     /// <summary>
     /// Rejects findings whose quote is not in the transcript or belongs to the other side. Returns whether it passed.
     /// </summary>
-    public static bool Passes(CallFinding finding)
+    public static bool Passes(CallJob job, CallFinding finding)
     {
         if (finding.Quote == QuoteCheck.NotFound)
         {
@@ -180,6 +249,14 @@ internal static partial class CallQuotes
         {
             finding.State = FindingState.Rejected;
             finding.Note = finding.Kind == FindingKind.Phrase ? "You said this yourself." : "Your partner said this, not you.";
+            return false;
+        }
+        if (finding.Kind == FindingKind.Conversation && finding.Context.Length > 0
+            && Locate(job, finding.Context, false, finding.ChunkIndex).Check == QuoteCheck.NotFound
+            && Locate(job, finding.Context, true, finding.ChunkIndex).Check == QuoteCheck.NotFound)
+        {
+            finding.State = FindingState.Rejected;
+            finding.Note = "The line it reacts to is not in the transcript.";
             return false;
         }
         return true;
@@ -368,8 +445,8 @@ internal static class CallDiagnosis
                 finding.Applied = true;
                 break;
 
-            // Phrases are kept on the call; the diagnosis tracks weaknesses and strengths
-            case FindingKind.Phrase:
+            // Phrases, conversation moments and facts are kept elsewhere; the diagnosis tracks the language
+            default:
                 break;
         }
     }

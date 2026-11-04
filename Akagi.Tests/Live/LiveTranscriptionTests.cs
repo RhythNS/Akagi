@@ -36,13 +36,26 @@ public class LiveTranscriptionTests
         public IDisposable? OnChange(Action<T, string?> listener) => null;
     }
 
-    private sealed class NoAnalysis : ICallChunkAnalyzer, ICallConsolidator
+    private sealed class NoAnalysis : ICallChunkAnalyzer, ICallConsolidator, ICallWholeReviewer, ICallMemory
     {
         public Task<ChunkReview> AnalyzeAsync(CallJob job, CallChunk chunk, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken) =>
             Task.FromResult(new ChunkReview([], string.Empty));
 
         public Task<Consolidation?> ConsolidateAsync(CallJob job, JapaneseDiagnosis? diagnosis, CancellationToken cancellationToken) =>
             Task.FromResult<Consolidation?>(null);
+
+        public Task<CoachingResult> CoachAsync(CallJob job, CancellationToken cancellationToken) => Task.FromResult(new CoachingResult([], null));
+
+        public Task<List<CallFinding>> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner, CancellationToken cancellationToken) =>
+            Task.FromResult(new List<CallFinding>());
+
+        public Task<(List<string> Partner, List<string> Learner)> KnownAsync(CallJob job) => Task.FromResult<(List<string>, List<string>)>(([], []));
+
+        public Task ApplyAsync(CallJob job, CallFinding finding, DateTime nowUtc) => Task.CompletedTask;
+
+        public Task UndoAsync(CallJob job, CallFinding finding) => Task.CompletedTask;
+
+        public Task RecordCallAsync(CallJob job) => Task.CompletedTask;
     }
 
     [LiveTranscriptionFact]
@@ -62,7 +75,7 @@ public class LiveTranscriptionTests
         CallAnalysisPipeline pipeline = new(jobs, diagnoses,
             new AudioSplitter(Environment.GetEnvironmentVariable("AKAGI_LIVE_FFMPEG")!),
             new OpenRouterTranscriber(http, new Monitor<CallAnalysisOptions>(options), new Monitor<OpenRouterClient.Options>(openRouter)),
-            new NoAnalysis(), new NoAnalysis(), _ => Task.CompletedTask, options, NullLogger.Instance);
+            new NoAnalysis(), new NoAnalysis(), new NoAnalysis(), new NoAnalysis(), _ => Task.CompletedTask, options, NullLogger.Instance);
 
         CallJob job = new()
         {

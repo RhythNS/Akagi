@@ -61,8 +61,8 @@ public class CallQuoteTests
 
         Assert.Equal(QuoteCheck.NotFound, invented.Quote);
         Assert.Equal(QuoteCheck.OtherSpeaker, theirs.Quote);
-        Assert.False(CallQuotes.Passes(invented));
-        Assert.False(CallQuotes.Passes(theirs));
+        Assert.False(CallQuotes.Passes(TwoVoices(), invented));
+        Assert.False(CallQuotes.Passes(TwoVoices(), theirs));
         Assert.Equal(FindingState.Rejected, theirs.State);
         Assert.Contains("partner", theirs.Note);
     }
@@ -135,6 +135,57 @@ public class CallConsolidationTests
         Assert.Equal("abc123", review.Findings[1].IssueId);
         Assert.Equal((FindingKind.Phrase, "無理しないでね", "take it easy"), (review.Findings[2].Kind, review.Findings[2].Said, review.Findings[2].Better));
         Assert.Equal(FindingKind.Strength, review.Findings[3].Kind);
+    }
+
+    [Fact]
+    public void WholeCallTools_BecomeMomentsAdviceAndFacts()
+    {
+        (List<CallFinding> moments, CallCoaching? advice) = ToolCallReviewer.ReadCoaching(
+        [
+            With(new NoteConversationMomentCommand(), ("Scope", "Japanese"), ("Aspect", "Reaction"), ("WentWell", "no"), ("PartnerLine", "昨日試験だった"),
+                ("Said", "そう"), ("Better", "えー、どうだった？"), ("Explanation", "Ask how it went.")),
+            With(new NoteConversationMomentCommand(), ("Scope", "general"), ("Aspect", "follow-up"), ("WentWell", "yes"), ("Said", "それで？"), ("Better", "ignored"), ("Explanation", "Good.")),
+            With(new WriteConversationAdviceCommand(), ("Summary", "You listen well."), ("Tips", "1. Ask back\n- React with feeling"))
+        ]);
+
+        Assert.Equal((true, "reaction", false, "昨日試験だった", "えー、どうだった？"), (moments[0].Japanese, moments[0].Aspect, moments[0].WentWell, moments[0].Context, moments[0].Better));
+        Assert.Equal((false, true, ""), (moments[1].Japanese, moments[1].WentWell, moments[1].Better));
+        Assert.Equal(["Ask back", "React with feeling"], advice!.Tips);
+
+        List<CallFinding> facts = ToolCallReviewer.ReadFacts(
+        [
+            With(new NotePersonFactCommand(), ("About", "partner"), ("Topic", "Plans"), ("Fact", "Rii has an exam on Friday."), ("Quote", "金曜日に試験"), ("AskLater", "yes")),
+            With(new NotePersonFactCommand(), ("About", "learner"), ("Topic", "games"), ("Fact", "Plays Animal Crossing."), ("Quote", "あつ森"))
+        ]);
+
+        Assert.Equal((FactSubject.Partner, "plans", true), (facts[0].Subject, facts[0].Aspect, facts[0].FollowUp));
+        Assert.Equal((FactSubject.Learner, false), (facts[1].Subject, facts[1].FollowUp));
+    }
+
+    [Fact]
+    public void WholeCallPrompts_CarryEvidenceAndWhatIsKnown()
+    {
+        CallJob job = new()
+        {
+            Partner = "Rii",
+            LearnerChannel = LearnerChannel.Left,
+            LearnerSpeaker = "Me",
+            Segments =
+            [
+                new TranscriptSegment { Start = 0, End = 2, Speaker = "Rii", Text = "週末なにした？" },
+                new TranscriptSegment { Start = 3, End = 5, Speaker = "Me", Text = "うん、そう。ゲームしました。" }
+            ]
+        };
+
+        string coaching = ToolCallReviewer.BuildCoachingMessage(job, ToolCallReviewer.WholeCallWindows(job).Single(), 0, 1);
+        string facts = ToolCallReviewer.BuildFactsMessage(job, "...", 0, 1, ["Rii lives in Osaka."], []);
+
+        Assert.Contains("Questions asked: {{user}} 0, the partner 1.", coaching);
+        Assert.Contains("うん 1x", coaching);
+        Assert.Contains("[00:00:00] Rii: 週末なにした？", coaching);
+        Assert.Contains("Already known about Rii:\n- Rii lives in Osaka.", facts.Replace("\r\n", "\n"));
+        Assert.Contains("Japanese: how this is done in Japanese", ToolCallReviewer.BuildCoachingInstruction(job));
+        Assert.Contains("be thorough", ToolCallReviewer.BuildFactsInstruction(job));
     }
 
     [Fact]
@@ -254,6 +305,16 @@ public class CallStatsTests
         Assert.Equal((1, 1), (busy.Learner, busy.Partner));
         Assert.Equal(2, stats.Words.Single(w => w.Lemma == "うん").Learner);
         Assert.Equal(WordClass.Interjection, stats.Words.Single(w => w.Lemma == "うん").Class);
+    }
+
+    [Theory]
+    [InlineData("最近どう？", 1)]
+    [InlineData("元気ですか。お仕事は忙しいですか", 2)]
+    [InlineData("そうか。わかった。", 0)]
+    [InlineData("え？？本当?", 2)]
+    public void Questions_AreCountedByTheirEndings(string text, int expected)
+    {
+        Assert.Equal(expected, CallStats.Questions(text));
     }
 
     [Fact]

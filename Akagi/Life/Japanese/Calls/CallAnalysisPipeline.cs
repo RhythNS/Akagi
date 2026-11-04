@@ -18,6 +18,8 @@ internal class CallAnalysisPipeline
     private readonly ITranscriber _transcriber;
     private readonly ICallChunkAnalyzer _analyzer;
     private readonly ICallConsolidator _consolidator;
+    private readonly ICallWholeReviewer _whole;
+    private readonly ICallMemory _memory;
     private readonly Func<CallJob, Task> _deliver;
     private readonly CallAnalysisOptions _options;
     private readonly ILogger _logger;
@@ -28,6 +30,8 @@ internal class CallAnalysisPipeline
                                 ITranscriber transcriber,
                                 ICallChunkAnalyzer analyzer,
                                 ICallConsolidator consolidator,
+                                ICallWholeReviewer whole,
+                                ICallMemory memory,
                                 Func<CallJob, Task> deliver,
                                 CallAnalysisOptions options,
                                 ILogger logger)
@@ -38,6 +42,8 @@ internal class CallAnalysisPipeline
         _transcriber = transcriber;
         _analyzer = analyzer;
         _consolidator = consolidator;
+        _whole = whole;
+        _memory = memory;
         _deliver = deliver;
         _options = options;
         _logger = logger;
@@ -56,6 +62,14 @@ internal class CallAnalysisPipeline
         if (job.Status == CallJobStatus.Analyzing)
         {
             await AnalyzeAsync(job, cancellationToken);
+        }
+        if (job.Status == CallJobStatus.Coaching)
+        {
+            await CoachAsync(job, cancellationToken);
+        }
+        if (job.Status == CallJobStatus.Remembering)
+        {
+            await RememberAsync(job, cancellationToken);
         }
         if (job.Status == CallJobStatus.Consolidating)
         {
@@ -233,7 +247,7 @@ internal class CallAnalysisPipeline
                     finding.IssueId = string.Empty;
                 }
                 CallQuotes.Check(job, finding);
-                CallQuotes.Passes(finding);
+                CallQuotes.Passes(job, finding);
                 job.Findings.Add(finding);
             }
             chunk.Summary = review.Summary;
@@ -246,7 +260,63 @@ internal class CallAnalysisPipeline
                 review.Findings.Count(f => f.State == FindingState.Rejected));
         }
 
-        job.Status = CallJobStatus.Consolidating;
+        job.Status = CallJobStatus.Coaching;
+        await SaveAsync(job);
+    }
+
+    /// <summary>
+    /// One request over the whole call on the conversation itself. Its moments do not touch the diagnosis, so they are kept
+    /// as soon as their quotes check out.
+    /// </summary>
+    private async Task CoachAsync(CallJob job, CancellationToken cancellationToken)
+    {
+        if (job.Coaching == null)
+        {
+            CoachingResult result = await _whole.CoachAsync(job, cancellationToken);
+            job.Findings.RemoveAll(f => f.Kind == FindingKind.Conversation);
+            foreach (CallFinding moment in result.Moments)
+            {
+                CallQuotes.Check(job, moment);
+                if (CallQuotes.Passes(job, moment))
+                {
+                    moment.State = FindingState.Kept;
+                }
+                job.Findings.Add(moment);
+            }
+            job.Coaching = result.Advice ?? new CallCoaching();
+            _logger.LogInformation("Call {JobId}: coaching noted {Moments} moment(s), {Rejected} failed the quote check",
+                job.Id, result.Moments.Count, result.Moments.Count(m => m.State == FindingState.Rejected));
+        }
+        job.Status = CallJobStatus.Remembering;
+        await SaveAsync(job);
+    }
+
+    /// <summary>
+    /// One request over the whole call for what was learned about the partner and the learner. They are written to the
+    /// people and memories with the report, so a failure before it leaves nothing half done.
+    /// </summary>
+    private async Task RememberAsync(CallJob job, CancellationToken cancellationToken)
+    {
+        if (!job.FactsChecked)
+        {
+            (List<string> partner, List<string> learner) = await _memory.KnownAsync(job);
+            List<CallFinding> facts = await _whole.FactsAsync(job, partner, learner, cancellationToken);
+            job.Findings.RemoveAll(f => f.Kind == FindingKind.Fact && !f.Applied);
+            foreach (CallFinding fact in facts)
+            {
+                CallQuotes.Check(job, fact);
+                if (CallQuotes.Passes(job, fact))
+                {
+                    fact.State = FindingState.Kept;
+                }
+                job.Findings.Add(fact);
+            }
+            job.FactsChecked = true;
+            _logger.LogInformation("Call {JobId}: noted {Facts} fact(s), {Rejected} failed the quote check",
+                job.Id, facts.Count, facts.Count(f => f.State == FindingState.Rejected));
+        }
+        // A call caught up after an earlier analysis keeps its review
+        job.Status = job.Review == null && !job.LegacyImported ? CallJobStatus.Consolidating : CallJobStatus.Reporting;
         await SaveAsync(job);
     }
 
@@ -338,6 +408,11 @@ internal class CallAnalysisPipeline
         {
             CallDiagnosis.Apply(diagnosis, job, finding, now);
         }
+        foreach (CallFinding fact in job.Findings.Where(f => f.Kind == FindingKind.Fact))
+        {
+            await _memory.ApplyAsync(job, fact, now);
+        }
+        await _memory.RecordCallAsync(job);
 
         // Fillers and register of mixed recordings include the friends' speech, so they would distort the trend.
         // Measured once: a retried report must not count the same habits again
@@ -382,7 +457,12 @@ internal class CallAnalysisPipeline
         job.Status = CallJobStatus.Completed;
         job.Error = string.Empty;
         await SaveAsync(job);
-        _logger.LogInformation("Call {JobId}: report written, {Issues} issue(s) kept; delivering it", job.Id, job.IssueCount);
+        _logger.LogInformation("Call {JobId}: report written, {Issues} issue(s) kept", job.Id, job.IssueCount);
+        if (job.Delivered)
+        {
+            // Caught up with new passes after it was told about once already
+            return;
+        }
 
         try
         {
@@ -457,6 +537,28 @@ internal class CallAnalysisPipeline
             }
         }
 
+        if (job.Coaching is { } coaching && (coaching.Summary.Length > 0 || coaching.Tips.Count > 0))
+        {
+            text.AppendLine("Conversation: " + coaching.Summary);
+            foreach (string tip in coaching.Tips)
+            {
+                text.AppendLine("- " + tip);
+            }
+        }
+
+        List<CallFinding> facts = [.. job.Findings.Where(f => f.Kind == FindingKind.Fact && f.Counts)];
+        if (facts.Count > 0)
+        {
+            string partner = job.PartnerLabel;
+            List<CallFinding> about = [.. facts.Where(f => f.Subject == FactSubject.Partner)];
+            text.AppendLine($"Learned {about.Count} thing(s) about {partner}" + (about.Count > 0 ? ": " + string.Join("; ", about.Take(5).Select(f => f.Pattern)) : "."));
+            List<CallFinding> open = [.. about.Where(f => f.FollowUp)];
+            if (open.Count > 0)
+            {
+                text.AppendLine("Worth asking about next time: " + string.Join("; ", open.Take(3).Select(f => f.Pattern)));
+            }
+        }
+
         List<CallFinding> strengths = [.. job.Findings.Where(f => f.Kind == FindingKind.Strength && f.Counts)];
         if (strengths.Count > 0)
         {
@@ -484,6 +586,8 @@ internal class CallAnalysisPipeline
             CallJobStatus.Transcribing when !job.IsTranscript => $", {job.TranscribedParts} part(s) transcribed",
             CallJobStatus.Analyzing => $", {job.Chunks.Count(c => c.Analyzed)}/{job.Chunks.Count} chunks analyzed",
             CallJobStatus.Consolidating => $", merging {job.Findings.Count} finding(s)",
+            CallJobStatus.Coaching => ", reading the conversation for coaching",
+            CallJobStatus.Remembering => ", noting what was learned about the people",
             _ => string.Empty
         };
         string error = string.IsNullOrEmpty(job.Error) ? string.Empty : $" ({job.Error})";

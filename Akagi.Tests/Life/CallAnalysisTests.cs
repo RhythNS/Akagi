@@ -1,4 +1,8 @@
+using Akagi.Characters.Companions;
+using Akagi.Characters.Memories;
 using Akagi.Life.Japanese;
+using Akagi.Tests.Characters;
+using Microsoft.Extensions.Logging;
 using Akagi.Life.Japanese.Calls;
 using Akagi.LLMs.OpenRouter;
 using Akagi.Tests.Support;
@@ -541,8 +545,35 @@ public class CallPipelineTests
     /// Stands in for the LLM: notes one mistake per chunk, plus one whose quote nobody said, and consolidates them into
     /// one group.
     /// </summary>
-    private sealed class StubAnalyzer : ICallChunkAnalyzer, ICallConsolidator
+    private sealed class StubAnalyzer : ICallChunkAnalyzer, ICallConsolidator, ICallWholeReviewer
     {
+        public int Coachings { get; private set; }
+        public int FactChecks { get; private set; }
+        public IReadOnlyList<string> KnownPartner { get; private set; } = [];
+
+        public Task<CoachingResult> CoachAsync(CallJob job, CancellationToken cancellationToken)
+        {
+            Coachings++;
+            return Task.FromResult(new CoachingResult(
+            [
+                new CallFinding { Kind = FindingKind.Conversation, Aspect = "follow-up", Context = "最近どう？", Said = "楽しかったです", Better = "楽しかった！ユキは？", Explanation = "Ask back." },
+                new CallFinding { Kind = FindingKind.Conversation, Aspect = "reaction", WentWell = true, Japanese = true, Said = "疲れました", Explanation = "Honest." },
+                new CallFinding { Kind = FindingKind.Conversation, Aspect = "question", Context = "誰も言っていない", Said = "楽しかったです", Explanation = "Invented context." }
+            ], new CallCoaching { Summary = "You answer but rarely ask back.", Tips = ["Ask back: ユキは？"] }));
+        }
+
+        public Task<List<CallFinding>> FactsAsync(CallJob job, IReadOnlyList<string> knownPartner, IReadOnlyList<string> knownLearner, CancellationToken cancellationToken)
+        {
+            FactChecks++;
+            KnownPartner = knownPartner;
+            return Task.FromResult(new List<CallFinding>
+            {
+                new() { Kind = FindingKind.Fact, Subject = FactSubject.Partner, Aspect = "personality", Pattern = "Yuki likes to check in on friends.", Said = "最近どう？", FollowUp = true },
+                new() { Kind = FindingKind.Fact, Subject = FactSubject.Learner, Aspect = "events", Pattern = "The learner had a fun but tiring day.", Said = "疲れました" },
+                new() { Kind = FindingKind.Fact, Subject = FactSubject.Partner, Aspect = "work", Pattern = "Yuki is a pilot.", Said = "パイロットです" }
+            });
+        }
+
         public List<int> Analyzed { get; } = [];
         public int FailOnChunk { get; set; } = -1;
         public int Consolidations { get; private set; }
@@ -579,8 +610,14 @@ public class CallPipelineTests
 
     private sealed class Fixture
     {
+        public const string Akagi = "6ae1ebfa5a533276d716f834";
+
         public InMemoryCallJobDatabase Jobs { get; } = new();
         public InMemoryJapaneseDiagnosisDatabase Diagnoses { get; } = new();
+        public InMemoryPersonProfileDatabase People { get; } = new();
+        public InMemoryMemoryDatabase Memories { get; } = new();
+        public InMemoryCompanionStateDatabase Companions { get; } = new();
+        public CallMemory Memory { get; }
         public StubSplitter Splitter { get; } = new();
         public StubTranscriber Transcriber { get; } = new();
         public StubAnalyzer Analyzer { get; }
@@ -590,14 +627,15 @@ public class CallPipelineTests
         public Fixture(string storage)
         {
             Analyzer = new StubAnalyzer();
-            Pipeline = new CallAnalysisPipeline(Jobs, Diagnoses, Splitter, Transcriber, Analyzer, Analyzer,
+            Memory = new CallMemory(People, Memories, Companions, null, Microsoft.Extensions.Logging.Abstractions.NullLogger<CallMemory>.Instance);
+            Pipeline = new CallAnalysisPipeline(Jobs, Diagnoses, Splitter, Transcriber, Analyzer, Analyzer, Analyzer, Memory,
                 job => { Delivered.Add(job); return Task.CompletedTask; },
                 new CallAnalysisOptions { StorageDirectory = storage, ChunkCharacters = 600 }, NullLogger.Instance);
         }
 
         public async Task<CallJob> Queue(LearnerChannel channel = LearnerChannel.Left)
         {
-            CallJob job = new() { UserId = ObjectId.GenerateNewId().ToString(), Title = "Yuki", Partner = "Yuki", SourcePath = "call.m4a", LearnerChannel = channel };
+            CallJob job = new() { UserId = ObjectId.GenerateNewId().ToString(), Title = "Yuki", Partner = "Yuki", SourcePath = "call.m4a", LearnerChannel = channel, DeliveryCharacterId = Akagi };
             await Jobs.SaveDocumentAsync(job);
             return job;
         }
@@ -768,7 +806,7 @@ public class CallPipelineTests
         Assert.Equal(1, fixture.Analyzer.Consolidations);
         Assert.All(job.Chunks, c => Assert.StartsWith("Part ", c.Summary));
 
-        List<CallFinding> reviewed = [.. job.Findings.Where(f => f.Origin == FindingOrigin.Review)];
+        List<CallFinding> reviewed = [.. job.Findings.Where(f => f.Origin == FindingOrigin.Review && f.Kind == FindingKind.Mistake)];
         Assert.Equal(2 * chunks, reviewed.Count);
         List<CallFinding> invented = [.. reviewed.Where(f => f.Pattern == "invented")];
         Assert.Equal(chunks, invented.Count);
@@ -830,7 +868,7 @@ public class CallPipelineTests
         JapaneseDiagnosis diagnosis = fixture.Diagnoses.Items.Single();
         int count = diagnosis.Issues.Single(i => i.Pattern == "too polite with friends").Count;
 
-        Assert.True(CallJobs.Reanalyze(job, diagnosis));
+        Assert.True(await CallJobs.ReanalyzeAsync(job, diagnosis, fixture.Memory));
 
         Assert.DoesNotContain(diagnosis.Issues, i => i.Pattern == "too polite with friends");
         Assert.DoesNotContain(diagnosis.Issues, i => i.Pattern == "なんか");
@@ -866,5 +904,77 @@ public class CallPipelineTests
 
         Assert.Equal(before, issue.Count);
         Assert.True(finding.Applied);
+    }
+
+    [Fact]
+    public async Task Run_CoachesTheConversationAndRemembersThePeople()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        CallJob job = await fixture.Queue();
+
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+
+        Assert.Equal((1, 1), (fixture.Analyzer.Coachings, fixture.Analyzer.FactChecks));
+        List<CallFinding> moments = [.. job.Findings.Where(f => f.Kind == FindingKind.Conversation)];
+        Assert.Equal(3, moments.Count);
+        Assert.Equal(2, moments.Count(m => m.State == FindingState.Kept));
+        CallFinding invented = moments.Single(m => m.Aspect == "question");
+        Assert.Equal(FindingState.Rejected, invented.State);
+        Assert.Contains("reacts to", invented.Note);
+        Assert.NotNull(moments.Single(m => m.Aspect == "follow-up").Time);
+        Assert.Equal("You answer but rarely ask back.", job.Coaching!.Summary);
+        Assert.Contains("Conversation: You answer but rarely ask back.", job.Report);
+        Assert.Contains("- Ask back: ユキは？", job.Report);
+
+        // The partner's facts land in their profile and the companion's people, the learner's in her memories
+        PersonProfile profile = Assert.Single(fixture.People.Items);
+        Assert.Equal("Yuki", profile.Name);
+        PersonFact fact = Assert.Single(profile.Facts);
+        Assert.Equal(("Yuki likes to check in on friends.", "personality", true), (fact.Text, fact.Topic, fact.FollowUp));
+        Assert.Equal(job.Id, Assert.Single(profile.Calls).CallId);
+        Assert.Contains("Yuki likes to check in on friends.", fixture.Companions.Items.Single().FindPerson("Yuki")!.Notes);
+        MemoryRecord memory = Assert.Single(fixture.Memories.Items);
+        Assert.Equal((Fixture.Akagi, CallMemory.MemoryCategory), (memory.CharacterId, memory.Category));
+        Assert.Contains("fun but tiring day", memory.Fact);
+        CallFinding pilot = job.Findings.Single(f => f.Pattern == "Yuki is a pilot.");
+        Assert.Equal((FindingState.Rejected, false), (pilot.State, pilot.Applied));
+        Assert.Contains("Worth asking about next time: Yuki likes to check in on friends.", job.Report);
+
+        // Taking a fact back removes it everywhere it was written
+        CallFinding written = job.Findings.Single(f => f.Pattern == "Yuki likes to check in on friends.");
+        await fixture.Memory.UndoAsync(job, written);
+        Assert.Empty(profile.Facts);
+        Assert.Empty(fixture.Companions.Items.Single().FindPerson("Yuki")!.Notes);
+        await fixture.Memory.UndoAsync(job, job.Findings.Single(f => f.Subject == FactSubject.Learner && f.Kind == FindingKind.Fact));
+        Assert.Empty(fixture.Memories.Items);
+    }
+
+    [Fact]
+    public async Task CatchUp_RunsOnlyTheMissingPasses_AndDoesNotDeliverAgain()
+    {
+        using TempDirectory temp = new();
+        Fixture fixture = new(temp.Path);
+        CallJob job = await fixture.Queue();
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+        Assert.False(CallJobs.CatchUp(job));
+
+        // As if it had been analyzed before these passes existed
+        job.Coaching = null;
+        job.FactsChecked = false;
+        job.Findings.RemoveAll(f => f.Kind is FindingKind.Conversation or FindingKind.Fact && !f.Applied);
+        int issues = fixture.Diagnoses.Items.Single().Issues.Sum(i => i.Count);
+
+        Assert.True(CallJobs.CatchUp(job));
+        Assert.Equal(CallJobStatus.Coaching, job.Status);
+        await fixture.Pipeline.RunAsync(job, CancellationToken.None);
+
+        Assert.Equal(CallJobStatus.Completed, job.Status);
+        Assert.Equal((2, 2, 1), (fixture.Analyzer.Coachings, fixture.Analyzer.FactChecks, fixture.Analyzer.Consolidations));
+        Assert.Single(fixture.Delivered);
+        Assert.Equal(issues, fixture.Diagnoses.Items.Single().Issues.Sum(i => i.Count));
+        // What the first run learned is known to the second
+        Assert.Contains("Yuki likes to check in on friends.", fixture.Analyzer.KnownPartner);
+        Assert.Single(fixture.People.Items.Single().Calls);
     }
 }

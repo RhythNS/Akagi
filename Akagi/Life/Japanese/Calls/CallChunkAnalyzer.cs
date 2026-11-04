@@ -55,7 +55,7 @@ internal interface ICallConsolidator
 /// The tutor character reviews the call on the Learning model: each chunk with the story so far, then one request over all
 /// findings. Its tools only carry arguments; the pipeline checks quotes and decides what reaches the diagnosis.
 /// </summary>
-internal class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator
+internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator, ICallWholeReviewer
 {
     public const int MaxMistakesPerChunk = 12;
     public const int MaxComprehensionIssuesPerChunk = 3;
@@ -343,7 +343,7 @@ internal class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator
         text.AppendLine("   Set one Severity for the group on this scale. " + SeverityScale);
         text.AppendLine("2. Call DropCallFindings for anything that should not count: not actually a mistake, something natives say the same way, a likely transcription error, or a duplicate of another finding about the very same words. Give a short reason the learner will read. Dropping a finding wrongly costs the learner a lesson, so only drop what you are sure about.");
         text.AppendLine("   You may also drop correct uses, strengths or phrases that are wrong or repeated.");
-        text.AppendLine("3. Call WriteCallReview once: an honest, balanced summary of how {{user}} did, and up to three priorities ranked by how much they would improve real conversations, each with how to practice it.");
+        text.AppendLine("3. Call WriteCallReview once: an honest, balanced summary of how {{user}} did, and up to three priorities ranked by how much they would improve real conversations, each with how to practice it. A priority may come from the conversation coach's advice when that matters more than a language point.");
         text.AppendLine();
         text.Append("Findings marked 'possibly' have disputed words; keep them only when the conversation itself supports them. Make all your calls in this one response, there is no second turn.");
         return text.ToString();
@@ -374,7 +374,18 @@ internal class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator
         AppendFindings(text, "Phrases worth adopting ([id] part time | phrase | meaning):",
             open.Where(f => f.Kind == FindingKind.Phrase), f => $"{f.Said} | {f.Better}");
 
-        int rejected = job.Findings.Count(f => f.State == FindingState.Rejected);
+        if (job.Coaching is { } coaching && (coaching.Summary.Length > 0 || coaching.Tips.Count > 0))
+        {
+            text.AppendLine("The conversation coach's advice on how {{user}} converses (not findings to group):");
+            text.AppendLine(coaching.Summary);
+            foreach (string tip in coaching.Tips)
+            {
+                text.AppendLine("- " + tip);
+            }
+            text.AppendLine();
+        }
+
+        int rejected = job.Findings.Count(f => f.State == FindingState.Rejected && f.Kind is not (FindingKind.Conversation or FindingKind.Fact));
         if (rejected > 0)
         {
             text.AppendLine($"({rejected} more were thrown away because their quotes are not in {{{{user}}}}'s lines.)");

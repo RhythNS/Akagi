@@ -165,3 +165,78 @@ internal class WriteCallReviewCommand : CallReviewToolCommand
         .Where(p => p.Length > 0)
         .Take(3)];
 }
+
+internal class NoteConversationMomentCommand : CallReviewToolCommand
+{
+    public override string Name => "NoteConversationMoment";
+
+    public override string Description => "Note one moment of the conversation itself: how the learner reacted, asked, followed up or took turns.";
+
+    public override Argument[] GetDefaultArguments() =>
+    [
+        Text("Scope", "Japanese for advice on how this is done in Japanese (reactions, aizuchi, softening, register in conversation), General for conversation skill in any language.", required: true),
+        Text("Aspect", "One of: follow-up, question, reaction, sharing, turn-taking, topic, listening, other.", required: true),
+        Text("WentWell", "yes when this is an example of doing it well, no when it could be better.", required: true),
+        Text("PartnerLine", "The partner's words the learner was reacting to, copied exactly from one of their lines. Leave empty when there is none."),
+        Text("Said", "The learner's words, copied exactly from one of their lines.", required: true),
+        Text("Better", "What the learner could have said or asked instead, in natural Japanese. Empty when it went well."),
+        Text("Explanation", "One or two sentences on why it works or how it would help the conversation.", required: true)
+    ];
+
+    public bool Japanese => Value("Scope").StartsWith("jap", StringComparison.OrdinalIgnoreCase);
+    public string Aspect => Value("Aspect").ToLowerInvariant();
+    public bool WentWell => Value("WentWell").StartsWith('y') || Value("WentWell").StartsWith("true", StringComparison.OrdinalIgnoreCase);
+    public string PartnerLine => Value("PartnerLine");
+    public string Said => Value("Said");
+    public string Better => Value("Better");
+    public string Explanation => Value("Explanation");
+}
+
+internal class WriteConversationAdviceCommand : CallReviewToolCommand
+{
+    public override string Name => "WriteConversationAdvice";
+
+    public override string Description => "Write the overall advice on how the learner converses.";
+
+    public override Argument[] GetDefaultArguments() =>
+    [
+        Text("Summary", "Two or three sentences on how the learner carries a conversation: what works and what holds it back.", required: true),
+        Text("Tips", "Up to five concrete tips, one per line, each with a ready-to-use Japanese example.", required: true)
+    ];
+
+    public string Summary => Value("Summary");
+    public string[] Tips => [.. Value("Tips").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        .Select(t => System.Text.RegularExpressions.Regex.Replace(t, @"^\s*(?:[-*•]|\d+[.)])\s*", string.Empty).Trim())
+        .Where(t => t.Length > 0)
+        .Take(5)];
+}
+
+internal class NotePersonFactCommand : CallReviewToolCommand
+{
+    public override string Name => "NotePersonFact";
+
+    public override string Description => "Note one thing learned about the partner or about the learner.";
+
+    public override Argument[] GetDefaultArguments() =>
+    [
+        Text("About", "partner or learner.", required: true),
+        Text("Topic", "One of: work, study, family, friends, home, hobbies, games, media, food, likes, dislikes, plans, events, travel, places, health, personality, language, other.", required: true),
+        Text("Fact", "One specific fact in one English sentence; keep names and Japanese terms as they were said.", required: true),
+        Text("Quote", "The words in the transcript that say it, copied exactly from one line.", required: true),
+        Text("AskLater", "yes when it is worth asking about next time, such as an upcoming event or an open question; otherwise no.")
+    ];
+
+    public FactSubjectChoice About => Value("About").StartsWith("learn", StringComparison.OrdinalIgnoreCase) || Value("About").StartsWith("me", StringComparison.OrdinalIgnoreCase) || Value("About").StartsWith("user", StringComparison.OrdinalIgnoreCase)
+        ? FactSubjectChoice.Learner
+        : FactSubjectChoice.Partner;
+    public string Topic => Value("Topic").ToLowerInvariant();
+    public string Fact => Value("Fact");
+    public string Quote => Value("Quote");
+    public bool AskLater => Value("AskLater").StartsWith('y') || Value("AskLater").StartsWith("true", StringComparison.OrdinalIgnoreCase);
+
+    public enum FactSubjectChoice
+    {
+        Partner,
+        Learner
+    }
+}
