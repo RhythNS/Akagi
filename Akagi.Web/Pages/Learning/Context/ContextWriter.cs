@@ -64,7 +64,8 @@ public static class ContextWriter
 
     public static string CallDay(CallAnalysisSummary call) => Day(CallDate(call));
 
-    public static string Insights(CallInsights insights, ContextBlock block)
+    /// <param name="calls">The loaded call with this id, for transcript lines around examples; null when it is not loaded.</param>
+    public static string Insights(CallInsights insights, ContextBlock block, Func<string, CallAnalysisDetail?>? calls = null)
     {
         Text text = new();
         if (block.Has("overview"))
@@ -107,11 +108,12 @@ public static class ContextWriter
                 }));
         }
 
-        if (block.Has("struggles") && insights.Struggles.Length > 0)
+        List<InsightStruggle> struggles = [.. insights.Struggles.Where(s => block.IsPicked(ContextItems.Issue(s.IssueId, s.Pattern)))];
+        if (block.Has("struggles") && struggles.Count > 0)
         {
             text.Heading("Struggles across calls, most serious and frequent first");
             int number = 0;
-            foreach (InsightStruggle struggle in insights.Struggles)
+            foreach (InsightStruggle struggle in struggles)
             {
                 number++;
                 List<string> facts = [$"{struggle.Times}x in {struggle.Calls} call(s)"];
@@ -125,16 +127,19 @@ public static class ContextWriter
                     facts.Add($"status {struggle.Status}");
                 }
                 text.Line($"{number}. [{struggle.Category}, {Severity(struggle.Severity)}] {struggle.Pattern} ({string.Join(", ", facts)})");
-                if (block.Has("occurrences") && struggle.Occurrences.Length > 0)
+                List<InsightOccurrence> examples = [.. ContextItems.Examples(struggle)
+                    .Where(o => block.IsPicked(ContextItems.Finding(o.Finding), ContextItems.ExampleDefault(block, struggle, o)))];
+                bool single = examples.Count == 1 && !block.Has("occurrences");
+                foreach (InsightOccurrence occurrence in examples)
                 {
-                    foreach (InsightOccurrence occurrence in struggle.Occurrences)
+                    text.Line(single || occurrence.CallId.Length == 0
+                        ? $"   Example: {Mistake(occurrence.Finding)}"
+                        : $"   - {Day(occurrence.Date)}, {occurrence.CallName}: {Mistake(occurrence.Finding)}");
+                    if (calls?.Invoke(occurrence.CallId) is CallAnalysisDetail call)
                     {
-                        text.Line($"   - {Day(occurrence.Date)}, {occurrence.CallName}: {Mistake(occurrence.Finding)}");
+                        Quote(text, call.Transcript, occurrence.Finding.Time, occurrence.Finding.Said,
+                            block.AroundOf(ContextItems.Finding(occurrence.Finding)), PartnerOf(call.Summary), "     ");
                     }
-                }
-                else if (struggle.Example is CallFindingView example && !string.IsNullOrWhiteSpace(example.Said))
-                {
-                    text.Line($"   Example: {Mistake(example)}");
                 }
             }
         }
@@ -163,27 +168,29 @@ public static class ContextWriter
     public static string Lessons(LearningOverview overview, ContextBlock block)
     {
         Text text = new();
-        if (block.Has("weak"))
+        List<LearningStruggle> weak = [.. overview.Struggles.Where(s => block.IsPicked(ContextItems.Weak(s)))];
+        if (block.Has("weak") && (weak.Count > 0 || overview.Struggles.Length == 0))
         {
             text.Heading("Weak spots my tutor works on");
-            if (overview.Struggles.Length == 0)
+            if (weak.Count == 0)
             {
                 text.Line("None recorded.");
             }
-            foreach (LearningStruggle struggle in overview.Struggles)
+            foreach (LearningStruggle struggle in weak)
             {
                 text.Line($"- [{struggle.Kind}] {struggle.Title}{Suffix(": ", struggle.Detail)}");
             }
         }
 
-        if (block.Has("lessons"))
+        List<LearningLesson> lessons = [.. overview.Recent.Where(l => block.IsPicked(ContextItems.Lesson(l)))];
+        if (block.Has("lessons") && (lessons.Count > 0 || overview.Recent.Length == 0))
         {
-            text.Heading("Recent lessons");
-            if (overview.Recent.Length == 0)
+            text.Heading(lessons.Count < overview.Recent.Length ? "Some of my recent lessons" : "Recent lessons");
+            if (lessons.Count == 0)
             {
                 text.Line("No lessons yet.");
             }
-            foreach (LearningLesson lesson in overview.Recent)
+            foreach (LearningLesson lesson in lessons)
             {
                 string mode = lesson.Mode == LessonMode.Typed ? "typed answers" : "multiple choice";
                 text.Line($"#### {Day(lesson.CreatedAt)}: {lesson.Topic}");
@@ -237,7 +244,7 @@ public static class ContextWriter
     public static string Call(CallAnalysisDetail detail, ContextBlock block)
     {
         CallAnalysisSummary call = detail.Summary;
-        string partner = string.IsNullOrWhiteSpace(call.Partner) ? "Partner" : call.Partner;
+        string partner = PartnerOf(call);
         Text text = new();
 
         if (block.Has("overview"))
@@ -295,7 +302,7 @@ public static class ContextWriter
 
         if (block.Has("struggles"))
         {
-            List<CallStruggle> struggles = [.. detail.Struggles.Where(s => s.TimesInCall > 0)];
+            List<CallStruggle> struggles = [.. detail.Struggles.Where(s => s.TimesInCall > 0 && block.IsPicked(ContextItems.Issue(s.IssueId, s.Pattern)))];
             if (struggles.Count > 0)
             {
                 text.Heading("Mistakes in this call");
@@ -315,9 +322,10 @@ public static class ContextWriter
                     {
                         text.Line($"  {struggle.Explanation.Trim()}");
                     }
-                    foreach (CallFindingView finding in Counted(struggle.Findings))
+                    foreach (CallFindingView finding in Picked(Counted(struggle.Findings), block))
                     {
                         text.Line($"  - {Mistake(finding)}");
+                        Quote(text, detail, finding, block, "    ");
                     }
                 }
             }
@@ -326,17 +334,17 @@ public static class ContextWriter
         if (block.Has("correct"))
         {
             Findings(text, "Things I got right that I used to get wrong", Counted(detail.CorrectUses), f =>
-                $"{Time(f)}{f.Said}{Suffix(" (right on: ", f.IssuePattern, ")")}{Marks(f)}");
+                $"{Time(f)}{f.Said}{Suffix(" (right on: ", f.IssuePattern, ")")}{Marks(f)}", block, detail);
         }
         if (block.Has("strengths"))
         {
             Findings(text, "What went well", Counted(detail.Strengths), f =>
-                $"{Time(f)}{f.Pattern}{Suffix(": ", f.Said)}{Suffix(" - ", f.Explanation)}{Marks(f)}");
+                $"{Time(f)}{f.Pattern}{Suffix(": ", f.Said)}{Suffix(" - ", f.Explanation)}{Marks(f)}", block, detail);
         }
         if (block.Has("phrases"))
         {
             Findings(text, $"Phrases worth adopting that {partner} used", Counted(detail.Phrases), f =>
-                $"{Time(f)}{f.Said}{Suffix(" - ", f.Better)}{Suffix(" (", f.Explanation, ")")}{Marks(f)}");
+                $"{Time(f)}{f.Said}{Suffix(" - ", f.Better)}{Suffix(" (", f.Explanation, ")")}{Marks(f)}", block, detail);
         }
 
         if (block.Has("coaching") && (detail.Conversation.Length > 0 || !string.IsNullOrWhiteSpace(detail.CoachingSummary) || detail.CoachingTips.Length > 0))
@@ -356,7 +364,7 @@ public static class ContextWriter
             }
             foreach ((string title, bool wentWell) in new[] { ("Could be better", false), ("Went well", true) })
             {
-                List<CallFindingView> moments = [.. Counted(detail.Conversation).Where(c => c.WentWell == wentWell)];
+                List<CallFindingView> moments = [.. Picked(Counted(detail.Conversation), block).Where(c => c.WentWell == wentWell)];
                 if (moments.Count == 0)
                 {
                     continue;
@@ -379,14 +387,15 @@ public static class ContextWriter
                     {
                         text.Line($"  {moment.Explanation.Trim()}");
                     }
+                    Quote(text, detail, moment, block, "  ");
                 }
             }
         }
 
         if (block.Has("facts"))
         {
-            Findings(text, $"What I learned about {partner}", Counted(detail.PartnerFacts).OrderByDescending(f => f.FollowUp), Fact);
-            Findings(text, "What came up about me", Counted(detail.LearnerFacts), Fact);
+            Findings(text, $"What I learned about {partner}", Counted(detail.PartnerFacts).OrderByDescending(f => f.FollowUp), Fact, block, detail);
+            Findings(text, "What came up about me", Counted(detail.LearnerFacts), Fact, block, detail);
         }
 
         if (block.Has("speech") && detail.Speech is CallSpeech speech)
@@ -445,12 +454,14 @@ public static class ContextWriter
             }
         }
 
-        if (block.Has("filtered") && detail.FilteredOut.Length > 0)
+        List<CallFindingView> filtered = [.. Picked(detail.FilteredOut, block)];
+        if (block.Has("filtered") && filtered.Count > 0)
         {
             text.Heading("Findings that were filtered out (not counted)");
-            foreach (CallFindingView finding in detail.FilteredOut)
+            foreach (CallFindingView finding in filtered)
             {
                 text.Line($"- [{finding.State}{Suffix(": ", finding.Note)}] {Mistake(finding)}");
+                Quote(text, detail, finding, block, "  ");
             }
         }
 
@@ -465,16 +476,17 @@ public static class ContextWriter
             text.Heading("Transcript");
             foreach (CallTranscriptLine line in detail.Transcript)
             {
-                string speaker = string.IsNullOrWhiteSpace(line.Speaker) ? (line.IsLearner ? "Me" : partner) : line.Speaker;
-                text.Line($"[{CallText.Timestamp(line.Start)}] {speaker}: {line.Text}{Suffix(" (second hearing: ", line.Disputed, ")")}");
+                text.Line(TranscriptLine(line, partner));
             }
         }
         return text.ToString();
     }
 
-    public static string Person(PersonDetail person, ContextBlock block)
+    /// <param name="calls">The loaded call with this id, for transcript lines around facts; null when it is not loaded.</param>
+    public static string Person(PersonDetail person, ContextBlock block, Func<string, CallAnalysisDetail?>? calls = null)
     {
         PersonSummary summary = person.Summary;
+        PersonFactView[] facts = [.. person.Facts.Where(f => block.IsPicked(ContextItems.Fact(f)))];
         Text text = new();
         if (block.Has("summary"))
         {
@@ -490,7 +502,7 @@ public static class ContextWriter
             }
         }
 
-        List<PersonFactView> open = [.. person.Facts.Where(f => f.FollowUp)];
+        List<PersonFactView> open = [.. facts.Where(f => f.FollowUp)];
         if (block.Has("threads") && open.Count > 0)
         {
             text.Heading("Worth asking about next time");
@@ -500,15 +512,19 @@ public static class ContextWriter
             }
         }
 
-        if (block.Has("facts") && person.Facts.Length > 0)
+        if (block.Has("facts") && facts.Length > 0)
         {
-            text.Heading($"Everything I know about {summary.Name}, newest first");
-            foreach (IGrouping<string, PersonFactView> topic in person.Facts.GroupBy(f => string.IsNullOrWhiteSpace(f.Topic) ? "other" : f.Topic))
+            text.Heading(facts.Length < person.Facts.Length ? $"What I know about {summary.Name}, newest first" : $"Everything I know about {summary.Name}, newest first");
+            foreach (IGrouping<string, PersonFactView> topic in facts.GroupBy(f => string.IsNullOrWhiteSpace(f.Topic) ? "other" : f.Topic))
             {
                 text.Line($"{topic.Key}:");
                 foreach (PersonFactView fact in topic)
                 {
                     text.Line($"- {fact.Text}{Suffix(" (\"", fact.Quote, "\")")} [{Day(fact.Date)}]");
+                    if (calls?.Invoke(fact.CallId) is CallAnalysisDetail call)
+                    {
+                        Quote(text, call.Transcript, fact.Time, fact.Quote, block.AroundOf(ContextItems.Fact(fact)), PartnerOf(call.Summary), "  ");
+                    }
                 }
             }
         }
@@ -624,9 +640,9 @@ public static class ContextWriter
         }
     }
 
-    private static void Findings(Text text, string title, IEnumerable<CallFindingView> findings, Func<CallFindingView, string> line)
+    private static void Findings(Text text, string title, IEnumerable<CallFindingView> findings, Func<CallFindingView, string> line, ContextBlock block, CallAnalysisDetail detail)
     {
-        List<CallFindingView> list = [.. findings];
+        List<CallFindingView> list = [.. Picked(findings, block)];
         if (list.Count == 0)
         {
             return;
@@ -635,14 +651,42 @@ public static class ContextWriter
         foreach (CallFindingView finding in list)
         {
             text.Line($"- {line(finding)}");
+            Quote(text, detail, finding, block, "  ");
         }
     }
 
+    private static IEnumerable<CallFindingView> Counted(IEnumerable<CallFindingView> findings) => ContextItems.Counted(findings);
+
+    private static IEnumerable<CallFindingView> Picked(IEnumerable<CallFindingView> findings, ContextBlock block) =>
+        findings.Where(f => block.IsPicked(ContextItems.Finding(f)));
+
+    private static void Quote(Text text, CallAnalysisDetail detail, CallFindingView finding, ContextBlock block, string indent) =>
+        Quote(text, detail.Transcript, finding.Time, finding.Said, block.AroundOf(ContextItems.Finding(finding)), PartnerOf(detail.Summary), indent);
+
     /// <summary>
-    /// Findings that count: kept by the analysis and not waved off by the user.
+    /// The transcript lines before and after the one an example is about, that line marked.
     /// </summary>
-    private static IEnumerable<CallFindingView> Counted(IEnumerable<CallFindingView> findings) =>
-        findings.Where(f => f.State == CallFindingState.Kept && f.Feedback != CallFindingFeedback.NotAMistake);
+    private static void Quote(Text text, CallTranscriptLine[] transcript, double? time, string said, int around, string partner, string indent)
+    {
+        if (around <= 0 || time is not double at || transcript.Length == 0)
+        {
+            return;
+        }
+        int index = ContextItems.LineAt(transcript, at, said);
+        text.Line($"{indent}Transcript around it:");
+        for (int i = Math.Max(0, index - around); i <= Math.Min(transcript.Length - 1, index + around); i++)
+        {
+            text.Line($"{indent}> {TranscriptLine(transcript[i], partner)}{(i == index ? "   <- here" : "")}");
+        }
+    }
+
+    private static string TranscriptLine(CallTranscriptLine line, string partner)
+    {
+        string speaker = string.IsNullOrWhiteSpace(line.Speaker) ? (line.IsLearner ? "Me" : partner) : line.Speaker;
+        return $"[{CallText.Timestamp(line.Start)}] {speaker}: {line.Text}{Suffix(" (second hearing: ", line.Disputed, ")")}";
+    }
+
+    private static string PartnerOf(CallAnalysisSummary call) => string.IsNullOrWhiteSpace(call.Partner) ? "Partner" : call.Partner;
 
     private static string Mistake(CallFindingView finding)
     {

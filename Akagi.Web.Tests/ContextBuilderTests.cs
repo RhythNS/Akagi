@@ -7,6 +7,8 @@ using Akagi.Web.Pages.Learning.Context;
 using Akagi.Web.Services.Sockets;
 using Akagi.Web.Services.Sockets.Requests;
 using Bunit;
+using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Net;
@@ -106,7 +108,14 @@ public class ContextBuilderTests : BunitContext
         ],
         Conversation = [new CallFindingView { Kind = CallFindingKind.Conversation, Aspect = "follow-up", Japanese = true, Context = "週末どうだった？", Said = "よかった", Better = "よかったよ、ケンは？", Explanation = "Ask back." }],
         PartnerFacts = [new CallFindingView { Kind = CallFindingKind.Fact, Aspect = "plans", Pattern = "Ken moves to Osaka in spring.", FollowUp = true }],
-        Transcript = [new CallTranscriptLine { Start = 3, Speaker = "Ken", Text = "もしもし" }, new CallTranscriptLine { Start = 5, Speaker = "Me", Text = "もしもし、元気？", IsLearner = true }]
+        Transcript =
+        [
+            new CallTranscriptLine { Start = 3, Speaker = "Ken", Text = "もしもし" },
+            new CallTranscriptLine { Start = 5, Speaker = "Me", Text = "もしもし、元気？", IsLearner = true },
+            new CallTranscriptLine { Start = 90, Speaker = "Ken", Text = "週末どうだった？" },
+            new CallTranscriptLine { Start = 95, Speaker = "Me", Text = "うん、楽しかったです", IsLearner = true },
+            new CallTranscriptLine { Start = 100, Speaker = "Ken", Text = "よかったね" }
+        ]
     };
 
     private static CallInsights Insights() => new()
@@ -123,8 +132,13 @@ public class ContextBuilderTests : BunitContext
             new InsightStruggle
             {
                 Category = "Register", Pattern = "too polite with friends", Times = 7, Calls = 2, Severity = 2, LastSeen = CallDay,
-                Example = new CallFindingView { Said = "楽しかったです", Better = "楽しかった" },
-                Occurrences = [new InsightOccurrence { CallId = "k1", CallName = "Call with Ken", Date = CallDay, Finding = new CallFindingView { Said = "行きます", Better = "行く", Time = 20 } }]
+                // The bot takes the example from the occurrences
+                Example = new CallFindingView { Id = "o2", Said = "楽しかったです", Better = "楽しかった", Time = 95 },
+                Occurrences =
+                [
+                    new InsightOccurrence { CallId = "k1", CallName = "Call with Ken", Date = CallDay, Finding = new CallFindingView { Id = "o1", Said = "行きます", Better = "行く", Time = 5 } },
+                    new InsightOccurrence { CallId = "k1", CallName = "Call with Ken", Date = CallDay, Finding = new CallFindingView { Id = "o2", Said = "楽しかったです", Better = "楽しかった", Time = 95 } }
+                ]
             }
         ]
     };
@@ -169,12 +183,14 @@ public class ContextBuilderTests : BunitContext
         Assert.Contains("忙しい (いそがしい, i-adjective): I said it 12x", text);
         Assert.DoesNotContain("仕事", text);
         Assert.DoesNotContain("うん", text);
-        Assert.Contains("Example: said \"楽しかったです\"", text);
+        Assert.Contains("Example: [01:35] said \"楽しかったです\"", text);
+        Assert.DoesNotContain("行きます", text);
 
         block.Sections.Add("occurrences");
         text = ContextWriter.Insights(Insights(), block);
 
-        Assert.Contains("- 2026-10-27, Call with Ken: [00:20] said \"行きます\" -> better \"行く\"", text);
+        Assert.Contains("- 2026-10-27, Call with Ken: [00:05] said \"行きます\" -> better \"行く\"", text);
+        Assert.Contains("- 2026-10-27, Call with Ken: [01:35] said \"楽しかったです\"", text);
     }
 
     [Fact]
@@ -235,6 +251,83 @@ public class ContextBuilderTests : BunitContext
     }
 
     [Fact]
+    public void ACall_QuotesTranscriptLinesAroundAnExample_AndLeavesOutWhatWasDropped()
+    {
+        ContextBlock block = ContextBlock.Create(ContextKind.Call, "k1", "Call");
+        block.SetAround("f:f1", 1);
+
+        string text = ContextWriter.Call(Detail(), block);
+
+        Assert.Contains("    Transcript around it:\n    > [01:30] Ken: 週末どうだった？\n    > [01:35] Me: うん、楽しかったです   <- here\n    > [01:40] Ken: よかったね\n", text);
+        Assert.DoesNotContain("もしもし", text);
+
+        // A wider default reaches every example; the one set by hand keeps its own number
+        block.Around = 2;
+        text = ContextWriter.Call(Detail(), block);
+        Assert.DoesNotContain("もしもし、元気？", text);
+        block.SetAround("f:f1", 2);
+        Assert.Empty(block.AroundFor);
+        text = ContextWriter.Call(Detail(), block);
+        Assert.Contains("> [00:05] Me: もしもし、元気？", text);
+
+        // Dropping the example keeps the mistake, dropping the mistake drops both
+        block.Pick("f:f1", false);
+        text = ContextWriter.Call(Detail(), block);
+        Assert.Contains("too polite with friends", text);
+        Assert.DoesNotContain("楽しかったです", text);
+        block.Pick("issue:i1", false);
+        text = ContextWriter.Call(Detail(), block);
+        Assert.DoesNotContain("Mistakes in this call", text);
+    }
+
+    [Fact]
+    public void Insights_ListEveryExampleToPick_AndQuoteTheCallsTheyCameFrom()
+    {
+        ContextBlock block = ContextBlock.Create(ContextKind.Insights, string.Empty, "Insights");
+
+        ContextItemGroup group = Assert.Single(ContextItems.For(block, Insights()));
+        ContextItem struggle = Assert.Single(group.Items);
+        // Only the example is in until every occurrence is asked for or one is picked by hand
+        Assert.Equal([false, true], struggle.Children.Select(c => c.Default));
+        Assert.All(struggle.Children, c => Assert.True(c.CanQuote));
+
+        block.Pick("f:o1", true, false);
+        block.Around = 1;
+        string text = ContextWriter.Insights(Insights(), block, id => id == "k1" ? Detail() : null);
+
+        Assert.Contains("   - 2026-10-27, Call with Ken: [00:05] said \"行きます\"", text);
+        Assert.Contains("     > [00:05] Me: もしもし、元気？   <- here", text);
+        Assert.Contains("     > [01:35] Me: うん、楽しかったです   <- here", text);
+        Assert.Equal((3, 3), ContextItems.Count(block, [group]));
+
+        // Without the call loaded the examples are still written, just without the transcript
+        text = ContextWriter.Insights(Insights(), block);
+        Assert.Contains("said \"行きます\"", text);
+        Assert.DoesNotContain("<- here", text);
+    }
+
+    [Fact]
+    public void Lessons_LeaveOutDroppedLessonsAndWeakSpots()
+    {
+        LearningOverview overview = new()
+        {
+            Struggles = [new LearningStruggle { Id = "w1", Kind = StruggleKind.Grammar, Title = "て-form" }, new LearningStruggle { Id = "w2", Kind = StruggleKind.Vocabulary, Title = "counters" }],
+            Recent = [new LearningLesson { Id = "l1", Topic = "Casual speech", CreatedAt = CallDay }, new LearningLesson { Id = "l2", Topic = "Keigo", CreatedAt = CallDay }]
+        };
+        ContextBlock block = ContextBlock.Create(ContextKind.Lessons, string.Empty, "Lessons");
+        block.Pick("weak:w2", false);
+        block.Pick("lesson:l1", false);
+
+        string text = ContextWriter.Lessons(overview, block);
+
+        Assert.Contains("て-form", text);
+        Assert.DoesNotContain("counters", text);
+        Assert.Contains("### Some of my recent lessons", text);
+        Assert.Contains("Keigo", text);
+        Assert.DoesNotContain("Casual speech", text);
+    }
+
+    [Fact]
     public void Compose_PutsEveryBlockUnderItsHeading()
     {
         string text = ContextWriter.Compose([("About me", "I learn Japanese."), ("Call with Ken", "### Overview\nDate: 2026-10-27")], new DateTime(2026, 11, 5));
@@ -243,7 +336,7 @@ public class ContextBuilderTests : BunitContext
     }
 
     [Fact]
-    public void ThePage_StartsWithANote_AddsACall_AndDownloadsWhatIsIncluded()
+    public async Task ThePage_StartsWithANote_AddsACall_AndDownloadsWhatIsIncluded()
     {
         BunitJSModuleInterop module = JSInterop.SetupModule(Module);
         module.Mode = JSRuntimeMode.Loose;
@@ -253,15 +346,15 @@ public class ContextBuilderTests : BunitContext
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-block-kind='Note']")));
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-add='call:k1']")));
 
-        cut.Find("[data-add='call:k1']").Click();
+        await cut.Find("[data-add='call:k1']").ClickAsync(new MouseEventArgs());
 
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-block-kind='Call'] [data-block-size]")));
         Assert.Contains("Call with Ken on 2026-10-27", cut.Find("[data-block-kind='Call'] [data-block-title]").TextContent);
         Assert.NotEmpty(cut.FindAll("[data-added='call:k1']"));
         Assert.Equal("2", cut.Find("[data-summary='blocks']").TextContent);
 
-        cut.Find("[data-block-kind='Call'] [data-section='transcript']").Click();
-        cut.Find("[data-context-download]").Click();
+        await cut.Find("[data-block-kind='Call'] [data-section='transcript']").ClickAsync(new MouseEventArgs());
+        await cut.Find("[data-context-download]").ClickAsync(new MouseEventArgs());
 
         string file = (string)module.VerifyInvoke("download").Arguments[1]!;
         Assert.Contains("## About me and this file", file);
@@ -270,9 +363,9 @@ public class ContextBuilderTests : BunitContext
         Assert.True(file.IndexOf("About me", StringComparison.Ordinal) < file.IndexOf("Call with Ken", StringComparison.Ordinal));
 
         // Moved to the top and the note left out
-        cut.Find("[data-block-kind='Call'] [data-block-up]").Click();
-        cut.Find("[data-block-kind='Note'] [data-block-include]").Change(false);
-        cut.Find("[data-context-download]").Click();
+        await cut.Find("[data-block-kind='Call'] [data-block-up]").ClickAsync(new MouseEventArgs());
+        await cut.Find("[data-block-kind='Note'] [data-block-include]").ChangeAsync(new ChangeEventArgs { Value = false });
+        await cut.Find("[data-context-download]").ClickAsync(new MouseEventArgs());
 
         file = (string)module.VerifyInvoke("download", 2)[1].Arguments[1]!;
         Assert.DoesNotContain("About me", file);
@@ -285,6 +378,67 @@ public class ContextBuilderTests : BunitContext
         Assert.Equal([ContextKind.Call, ContextKind.Note], blocks.Select(b => b.Kind));
         Assert.False(blocks[1].Included);
         Assert.Contains("transcript", blocks[0].Sections);
+    }
+
+    [Fact]
+    public async Task ThePage_PicksItemsOneByOne_AndQuotesLinesAroundOneExample()
+    {
+        BunitJSModuleInterop module = JSInterop.SetupModule(Module);
+        module.Mode = JSRuntimeMode.Loose;
+        module.Setup<string?>("load", "akagi.context.v1").SetResult(JsonSerializer.Serialize(new List<ContextBlock> { ContextBlock.Create(ContextKind.Call, "k1", "Call") }));
+        AnswerLikeTheBot();
+        IRenderedComponent<ContextBuilderPage> cut = Render<ContextBuilderPage>();
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-block-pick]")));
+        Assert.Contains("(4 of 4)", cut.Find("[data-block-pick]").TextContent);
+        await cut.Find("[data-block-pick]").ClickAsync(new MouseEventArgs());
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-item='f:f1'] [data-around-more]")));
+        await cut.Find("[data-item='f:f1'] [data-around-more]").ClickAsync(new MouseEventArgs());        Assert.Equal("1", cut.Find("[data-item='f:f1'] [data-around]").GetAttribute("data-around"));
+        await cut.Find("[data-context-download]").ClickAsync(new MouseEventArgs());
+        string file = (string)module.VerifyInvoke("download").Arguments[1]!;
+        Assert.Contains("> [01:35] Me: うん、楽しかったです   <- here", file);
+
+        await cut.Find("[data-item='issue:i1'] [data-item-pick]").ChangeAsync(new ChangeEventArgs { Value = false });
+        Assert.Contains("(2 of 4)", cut.Find("[data-block-pick]").TextContent);
+        // The examples of a dropped mistake cannot be picked on their own
+        Assert.True(cut.Find("[data-item='f:f1'] [data-item-pick]").HasAttribute("disabled"));
+        await cut.Find("[data-context-download]").ClickAsync(new MouseEventArgs());
+        file = (string)module.VerifyInvoke("download", 2)[1].Arguments[1]!;
+        Assert.DoesNotContain("too polite with friends", file);
+        Assert.Contains("Ken moves to Osaka", file);
+
+        ContextBlock saved = JsonSerializer.Deserialize<List<ContextBlock>>((string)module.Invocations["save"].Last().Arguments[1]!)!.Single();
+        Assert.Equal(new Dictionary<string, bool> { ["issue:i1"] = false }, saved.Picks);
+        Assert.Equal(new Dictionary<string, int> { ["f:f1"] = 1 }, saved.AroundFor);
+    }
+
+    [Fact]
+    public async Task ThePage_LoadsTheCallsInsightsQuoteFrom()
+    {
+        BunitJSModuleInterop module = JSInterop.SetupModule(Module);
+        module.Mode = JSRuntimeMode.Loose;
+        ContextBlock insights = ContextBlock.Create(ContextKind.Insights, string.Empty, "Insights");
+        insights.Around = 1;
+        module.Setup<string?>("load", "akagi.context.v1").SetResult(JsonSerializer.Serialize(new List<ContextBlock> { insights }));
+        AnswerLikeTheBot();
+        IRenderedComponent<ContextBuilderPage> cut = Render<ContextBuilderPage>();
+
+        // The insights come first, then the call their example is from
+        cut.WaitForAssertion(() =>
+        {
+            lock (_asked)
+            {
+                Assert.Contains(_asked, a => a.Action == CallAnalysisAction.Detail && a.CallId == "k1");
+            }
+            Assert.NotEmpty(cut.FindAll("[data-block-size]"));
+            Assert.Empty(cut.FindAll("[data-context-summary] .spinner-border"));
+        });
+        await cut.Find("[data-context-download]").ClickAsync(new MouseEventArgs());
+
+        Assert.Contains("> [01:35] Me: うん、楽しかったです   <- here", (string)module.VerifyInvoke("download").Arguments[1]!);
+        // The call was only loaded on the side, not added
+        Assert.Single(cut.FindAll("[data-block]"));
     }
 
     [Fact]

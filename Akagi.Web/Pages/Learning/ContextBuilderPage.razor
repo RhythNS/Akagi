@@ -244,6 +244,10 @@
 				ContextBlock block = _blocks[position];
 				string? text = Text(block);
 				bool open = _open.Contains(block.Id);
+				bool picking = _picking.Contains(block.Id);
+				IReadOnlyList<ContextItemGroup>? groups = ContextItems.CanPick(block.Kind) && _data.TryGetValue(block.DataKey, out object? blockData)
+					? ContextItems.For(block, blockData)
+					: null;
 				<div class="card mb-2 @(block.Included ? "" : "opacity-50") @(_dropIndex == position && _dragIndex != null && _dragIndex != position ? "border-primary" : "")"
 					 data-block="@block.Id" data-block-kind="@block.Kind"
 					 @ondragover:preventDefault
@@ -321,10 +325,56 @@
 										</select>
 									</label>
 								}
-								<button type="button" class="btn btn-sm btn-ghost-secondary ms-auto" data-block-preview disabled="@(text == null)" @onclick="() => TogglePreview(block)">
-									@(open ? "Hide text" : "Show text")
-								</button>
+								@if (ContextItems.CanQuote(block.Kind))
+								{
+									<label class="small text-secondary d-inline-flex align-items-center gap-1" title="Transcript lines quoted before and after each example; change single examples under Pick items">
+										Transcript around examples
+										<select class="form-select form-select-sm w-auto" data-block-around value="@block.Around.ToString(CultureInfo.InvariantCulture)"
+												@onchange="e => BlockAroundAsync(block, e.Value as string)">
+											@foreach (int lines in AroundChoices)
+											{
+												<option value="@lines.ToString(CultureInfo.InvariantCulture)">@(lines == 0 ? "none" : $"±{lines} line{(lines == 1 ? "" : "s")}")</option>
+											}
+										</select>
+									</label>
+								}
+								<div class="ms-auto d-flex gap-1">
+									@if (groups != null)
+									{
+										(int picked, int all) = ContextItems.Count(block, groups);
+										<button type="button" class="btn btn-sm @(picking ? "btn-secondary" : "btn-ghost-secondary")" data-block-pick disabled="@(all == 0)" @onclick="() => TogglePicking(block)">
+											Pick items @(all > 0 ? $"({picked} of {all})" : "")
+										</button>
+									}
+									<button type="button" class="btn btn-sm btn-ghost-secondary" data-block-preview disabled="@(text == null)" @onclick="() => TogglePreview(block)">
+										@(open ? "Hide text" : "Show text")
+									</button>
+								</div>
 							</div>
+							@if (picking && groups is { Count: > 0 })
+							{
+								<div class="mt-2 border rounded" style="max-height: 32rem; overflow-y: auto;" data-block-items>
+									@foreach (ContextItemGroup group in groups)
+									{
+										<div class="px-2 py-1 border-bottom d-flex align-items-center gap-1 bg-light-subtle" style="position: sticky; top: 0; z-index: 1;">
+											<div class="subheader m-0 me-auto">@group.Title</div>
+											<button type="button" class="btn btn-sm btn-ghost-primary py-0" data-items-all="@group.Section" @onclick="() => PickAllAsync(block, group, true)">All</button>
+											<button type="button" class="btn btn-sm btn-ghost-secondary py-0" data-items-none="@group.Section" @onclick="() => PickAllAsync(block, group, false)">None</button>
+										</div>
+										@foreach (ContextItem item in group.Items)
+										{
+											bool on = block.IsPicked(item.Id, item.Default);
+											<div class="px-2 border-bottom">
+												@ItemRow(block, item, true, false)
+												@foreach (ContextItem child in item.Children)
+												{
+													@ItemRow(block, child, on, true)
+												}
+											</div>
+										}
+									}
+								</div>
+							}
 							@if (_failed.TryGetValue(block.DataKey, out string? failure))
 							{
 								<div class="alert alert-danger small py-2 mt-2 mb-0 d-flex align-items-center gap-2" data-block-error>
@@ -395,8 +445,11 @@
 	private readonly HashSet<string> _loading = [];
 	private readonly Dictionary<string, (string Signature, object Data, string Text)> _written = [];
 	private bool _fetching;
+	private int _dataVersion;
 
 	private readonly HashSet<string> _open = [];
+	private readonly HashSet<string> _picking = [];
+	private static readonly int[] AroundChoices = [0, 1, 2, 3, 5];
 	private bool _showFile;
 	private bool _copied;
 	private bool _confirmClear;
@@ -422,7 +475,7 @@
 	/// <summary>
 	/// Included blocks whose data has not arrived yet.
 	/// </summary>
-	private int Waiting => _blocks.Count(b => b.Included && b.Kind != ContextKind.Note && Text(b) == null && !_failed.ContainsKey(b.DataKey));
+	private int Waiting => _blocks.Count(b => b.Included && b.Kind != ContextKind.Note && Text(b) == null && !_failed.ContainsKey(b.DataKey)) + NeededCalls().Count;
 
 	private static string HeadingOf(ContextBlock block) =>
 		string.IsNullOrWhiteSpace(block.Title) ? (block.Kind == ContextKind.Note ? "Note" : block.Kind.ToString()) : block.Title;
@@ -470,22 +523,70 @@
 		{
 			return null;
 		}
-		string signature = $"{block.Limit}|{block.Partner}|{string.Join(",", block.Sections.Order(StringComparer.Ordinal))}";
+		// Insights and people quote transcripts of calls loaded on the side, so any newly loaded call can change them
+		bool quotesCalls = block.Kind is ContextKind.Insights or ContextKind.Person;
+		string signature = string.Join("|",
+			block.Limit, block.Partner, string.Join(",", block.Sections.Order(StringComparer.Ordinal)), block.Around,
+			string.Join(",", block.Picks.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")),
+			string.Join(",", block.AroundFor.OrderBy(p => p.Key, StringComparer.Ordinal).Select(p => $"{p.Key}={p.Value}")),
+			quotesCalls ? _dataVersion : 0);
 		if (_written.TryGetValue(block.Id, out (string Signature, object Data, string Text) written) && written.Signature == signature && ReferenceEquals(written.Data, data))
 		{
 			return written.Text;
 		}
 		string text = data switch
 		{
-			CallInsights insights => ContextWriter.Insights(insights, block),
+			CallInsights insights => ContextWriter.Insights(insights, block, LoadedCall),
 			LearningOverview overview => ContextWriter.Lessons(overview, block),
 			CallAnalysisDetail detail => ContextWriter.Call(detail, block),
-			PersonDetail person => ContextWriter.Person(person, block),
+			PersonDetail person => ContextWriter.Person(person, block, LoadedCall),
 			VocabReportResult report => ContextWriter.Vocabulary(_catalog?.Reports.FirstOrDefault(r => r.Key == block.Key), report, block),
 			_ => string.Empty
 		};
 		_written[block.Id] = (signature, data, text);
 		return text;
+	}
+
+	private CallAnalysisDetail? LoadedCall(string id) =>
+		_data.TryGetValue(ContextBlock.Create(ContextKind.Call, id, string.Empty).DataKey, out object? data) ? data as CallAnalysisDetail : null;
+
+	/// <summary>
+	/// Calls not loaded yet whose transcript an insights or person block quotes around a picked example.
+	/// </summary>
+	private List<string> NeededCalls()
+	{
+		HashSet<string> ids = [];
+		foreach (ContextBlock block in _blocks.Where(b => b.Included))
+		{
+			_data.TryGetValue(block.DataKey, out object? data);
+			if (data is CallInsights insights && block.Has("struggles"))
+			{
+				foreach (InsightStruggle struggle in insights.Struggles.Where(s => block.IsPicked(ContextItems.Issue(s.IssueId, s.Pattern))))
+				{
+					foreach (InsightOccurrence occurrence in ContextItems.Examples(struggle))
+					{
+						string id = ContextItems.Finding(occurrence.Finding);
+						if (occurrence.CallId.Length > 0 && occurrence.Finding.Time != null && block.AroundOf(id) > 0
+							&& block.IsPicked(id, ContextItems.ExampleDefault(block, struggle, occurrence)))
+						{
+							ids.Add(occurrence.CallId);
+						}
+					}
+				}
+			}
+			else if (data is PersonDetail person && block.Has("facts"))
+			{
+				foreach (PersonFactView fact in person.Facts)
+				{
+					string id = ContextItems.Fact(fact);
+					if (fact.CallId.Length > 0 && fact.Time != null && block.AroundOf(id) > 0 && block.IsPicked(id))
+					{
+						ids.Add(fact.CallId);
+					}
+				}
+			}
+		}
+		return [.. ids.Where(id => !_data.ContainsKey($"{ContextKind.Call}:{id}") && !_failed.ContainsKey($"{ContextKind.Call}:{id}"))];
 	}
 
 	protected override void OnInitialized()
@@ -632,7 +733,8 @@
 		{
 			while (!_disposed.IsCancellationRequested)
 			{
-				ContextBlock? next = _blocks.FirstOrDefault(b => b.Kind != ContextKind.Note && !_data.ContainsKey(b.DataKey) && !_failed.ContainsKey(b.DataKey));
+				ContextBlock? next = _blocks.FirstOrDefault(b => b.Kind != ContextKind.Note && !_data.ContainsKey(b.DataKey) && !_failed.ContainsKey(b.DataKey))
+					?? NeededCalls().Select(id => ContextBlock.Create(ContextKind.Call, id, string.Empty)).FirstOrDefault();
 				if (next == null)
 				{
 					break;
@@ -670,6 +772,7 @@
 			if (data != null)
 			{
 				_data[key] = data;
+				_dataVersion++;
 				RetitleAll();
 			}
 			else
@@ -803,6 +906,7 @@
 	{
 		_blocks.Remove(block);
 		_open.Remove(block.Id);
+		_picking.Remove(block.Id);
 		_written.Remove(block.Id);
 		await SaveAsync();
 	}
@@ -852,7 +956,7 @@
 	private async Task IncludeAsync(ContextBlock block, bool included)
 	{
 		block.Included = included;
-		await SaveAsync();
+		await SavedAndFetchAsync();
 	}
 
 	private async Task ToggleSectionAsync(ContextBlock block, string section)
@@ -861,7 +965,7 @@
 		{
 			block.Sections.Add(section);
 		}
-		await SaveAsync();
+		await SavedAndFetchAsync();
 	}
 
 	private async Task LimitAsync(ContextBlock block, string? value)
@@ -895,6 +999,92 @@
 	private async Task RetryAsync(ContextBlock block)
 	{
 		_failed.Remove(block.DataKey);
+		StateHasChanged();
+		await FetchMissingAsync();
+	}
+
+	/// <summary>
+	/// One pickable item: its checkbox, and for an example from a call how many transcript lines to quote around it.
+	/// </summary>
+	private RenderFragment ItemRow(ContextBlock block, ContextItem item, bool enabled, bool child)
+	{
+		bool on = enabled && block.IsPicked(item.Id, item.Default);
+		int around = block.AroundOf(item.Id);
+		bool own = block.AroundFor.ContainsKey(item.Id);
+		return @<div class="d-flex align-items-start gap-2 py-1 @(child ? "ps-4" : "")" data-item="@item.Id">
+			<input type="checkbox" class="form-check-input m-0 mt-1 flex-shrink-0" checked="@on" disabled="@(!enabled)" aria-label="Include in the file"
+				   data-item-pick @onchange="e => PickAsync(block, item, e.Value is true)" />
+			<div class="me-auto small text-break @(on ? "" : "text-secondary")" style="min-width: 0;">
+				<span lang="ja" class="@(child ? "" : "fw-medium")">@item.Text</span>
+				@if (!string.IsNullOrWhiteSpace(item.Detail))
+				{
+					<span class="text-secondary ms-1" lang="ja">@item.Detail</span>
+				}
+			</div>
+			@if (item.CanQuote && on)
+			{
+				<div class="btn-group btn-group-sm flex-shrink-0" title="Transcript lines quoted before and after this example">
+					<button type="button" class="btn btn-ghost-secondary px-2 py-0" aria-label="Fewer transcript lines" disabled="@(around == 0)"
+							data-around-less @onclick="() => AroundAsync(block, item.Id, around - 1)">-</button>
+					<span class="d-inline-flex align-items-center px-1 small @(own ? "fw-bold text-primary" : "text-secondary")" data-around="@around"
+						  title="@(own ? "Set for this example" : "The block's setting")">&plusmn;@around</span>
+					<button type="button" class="btn btn-ghost-secondary px-2 py-0" aria-label="More transcript lines" disabled="@(around >= ContextItems.MostAround)"
+							data-around-more @onclick="() => AroundAsync(block, item.Id, around + 1)">+</button>
+				</div>
+			}
+		</div>;
+	}
+
+	private void TogglePicking(ContextBlock block)
+	{
+		if (!_picking.Remove(block.Id))
+		{
+			_picking.Add(block.Id);
+		}
+	}
+
+	private async Task PickAsync(ContextBlock block, ContextItem item, bool picked)
+	{
+		block.Pick(item.Id, picked, item.Default);
+		await SavedAndFetchAsync();
+	}
+
+	private async Task PickAllAsync(ContextBlock block, ContextItemGroup group, bool picked)
+	{
+		foreach (ContextItem item in group.Items)
+		{
+			block.Pick(item.Id, picked, item.Default);
+		}
+		await SavedAndFetchAsync();
+	}
+
+	private async Task AroundAsync(ContextBlock block, string id, int lines)
+	{
+		block.SetAround(id, lines);
+		await SavedAndFetchAsync();
+	}
+
+	private async Task BlockAroundAsync(ContextBlock block, string? value)
+	{
+		if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int lines))
+		{
+			return;
+		}
+		block.Around = Math.Clamp(lines, 0, ContextItems.MostAround);
+		// Examples set to the new default by hand need no exception any more
+		foreach (string id in block.AroundFor.Where(p => p.Value == block.Around).Select(p => p.Key).ToList())
+		{
+			block.AroundFor.Remove(id);
+		}
+		await SavedAndFetchAsync();
+	}
+
+	/// <summary>
+	/// Saves the list and loads calls the change made necessary, such as one whose transcript is now quoted.
+	/// </summary>
+	private async Task SavedAndFetchAsync()
+	{
+		await SaveAsync();
 		StateHasChanged();
 		await FetchMissingAsync();
 	}

@@ -61,8 +61,58 @@ public sealed class ContextBlock
     /// For a vocabulary report: only calls with this partner; empty for all.
     /// </summary>
     public string Partner { get; set; } = string.Empty;
+    /// <summary>
+    /// Items the user picked or dropped by hand, by item id (see <see cref="ContextItems"/>); the rest follow their default.
+    /// </summary>
+    public Dictionary<string, bool> Picks { get; set; } = [];
+    /// <summary>
+    /// Transcript lines quoted before and after each example.
+    /// </summary>
+    public int Around { get; set; }
+    /// <summary>
+    /// Examples with their own number of transcript lines around them, by item id.
+    /// </summary>
+    public Dictionary<string, int> AroundFor { get; set; } = [];
 
     public bool Has(string section) => Sections.Contains(section);
+
+    /// <summary>
+    /// Whether the item goes into the file: the user's pick, or <paramref name="byDefault"/>.
+    /// </summary>
+    public bool IsPicked(string id, bool byDefault = true) => Picks.TryGetValue(id, out bool picked) ? picked : byDefault;
+
+    /// <summary>
+    /// Keeps a pick only where it differs from the default, so changing the default still reaches untouched items.
+    /// </summary>
+    public void Pick(string id, bool picked, bool byDefault = true)
+    {
+        if (picked == byDefault)
+        {
+            Picks.Remove(id);
+        }
+        else
+        {
+            Picks[id] = picked;
+        }
+    }
+
+    /// <summary>
+    /// The transcript lines to quote before and after the example.
+    /// </summary>
+    public int AroundOf(string id) => AroundFor.TryGetValue(id, out int lines) ? lines : Around;
+
+    public void SetAround(string id, int lines)
+    {
+        lines = Math.Clamp(lines, 0, ContextItems.MostAround);
+        if (lines == Around)
+        {
+            AroundFor.Remove(id);
+        }
+        else
+        {
+            AroundFor[id] = lines;
+        }
+    }
 
     /// <summary>
     /// The block as it starts: every section that is on by default.
