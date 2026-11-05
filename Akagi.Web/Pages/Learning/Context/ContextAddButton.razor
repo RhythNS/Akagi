@@ -1,0 +1,26 @@
+@* Adds a source to the context once; shows that it is already in. *@
+@if (Added)
+{
+	<span class="text-success small d-inline-flex align-items-center gap-1 flex-shrink-0 px-2" data-added="@Key">
+		<Icon IconType="@Akagi.Web.Icons.Icons.Check" Size="14" />
+		Added
+	</span>
+}
+else
+{
+	<button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" data-add="@Key" @onclick="OnAdd">Add</button>
+}
+
+@code {
+	[Parameter]
+	public bool Added { get; set; }
+
+	/// <summary>
+	/// Names the source in the markup, e.g. call:{id}.
+	/// </summary>
+	[Parameter]
+	public string Key { get; set; } = string.Empty;
+
+	[Parameter]
+	public EventCallback OnAdd { get; set; }
+}

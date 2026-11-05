@@ -1,0 +1,1005 @@
+@page "/Learn/Context"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Pages.Learning.Components
+@using Akagi.Web.Pages.Learning.Context
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+@using System.Globalization
+@using System.Text.Json
+
+@implements IAsyncDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject IJSRuntime JS
+@inject NavigationManager Navigation
+
+<PageTitle>Context Builder - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Learn</div>
+			<h2 class="page-title">Context builder</h2>
+			<div class="text-secondary small mt-1">Pick what another AI should know about your learning, put it in order, and download it as a text file to upload there.</div>
+		</div>
+		<div class="col-auto ms-auto d-flex flex-wrap gap-2">
+			<button type="button" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" data-context-refresh title="Load everything again from the bot" @onclick="RefreshAsync">
+				<Icon IconType="@Icons.Refresh" Size="16" />
+				<span>Refresh</span>
+			</button>
+			<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" data-context-copy disabled="@(Exported.Length == 0)" @onclick="CopyAsync">
+				<Icon IconType="@(_copied ? Icons.Check : Icons.Copy)" Size="16" />
+				<span>@(_copied ? "Copied" : "Copy")</span>
+			</button>
+			<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" data-context-download disabled="@(Exported.Length == 0)" @onclick="DownloadAsync">
+				<Icon IconType="@Icons.Download" Size="16" />
+				<span>Download .txt</span>
+			</button>
+		</div>
+	</div>
+</div>
+
+@if (_offline)
+{
+	<div class="alert alert-warning d-flex align-items-center gap-2" data-context-offline>
+		<Icon IconType="@Icons.AlertCircle" Size="18" />
+		<span class="me-auto">The Akagi backend cannot be reached, so calls, people and lessons cannot be loaded. Notes still work.</span>
+		<button type="button" class="btn btn-sm btn-warning" @onclick="RefreshAsync">Retry</button>
+	</div>
+}
+
+<div class="row g-3">
+	<div class="col-12 col-xl-4 order-xl-2">
+		<div class="card" data-context-picker>
+			<div class="card-header">
+				<h3 class="card-title m-0">Add to the context</h3>
+			</div>
+			<div class="list-group list-group-flush">
+				<div class="list-group-item">
+					<div class="d-flex align-items-center gap-2">
+						<div class="me-auto">
+							<div class="fw-medium">Note</div>
+							<div class="text-secondary small">Your own text: who you are, what you want to ask.</div>
+						</div>
+						<button type="button" class="btn btn-sm btn-outline-primary" data-add="note" @onclick="AddNoteAsync">Add</button>
+					</div>
+				</div>
+				<div class="list-group-item">
+					<div class="d-flex align-items-center gap-2">
+						<div class="me-auto">
+							<div class="fw-medium">Speaking insights</div>
+							<div class="text-secondary small">Trends, recurring struggles, vocabulary and phrases across all calls.</div>
+						</div>
+						<ContextAddButton Added="Has(ContextKind.Insights, string.Empty)" Key="insights" OnAdd="() => AddAsync(ContextKind.Insights, string.Empty, InsightsTitle)" />
+					</div>
+				</div>
+				<div class="list-group-item">
+					<div class="d-flex align-items-center gap-2">
+						<div class="me-auto">
+							<div class="fw-medium">Lessons</div>
+							<div class="text-secondary small">The weak spots your tutor tracks and your recent lessons with every answer.</div>
+						</div>
+						<ContextAddButton Added="Has(ContextKind.Lessons, string.Empty)" Key="lessons" OnAdd="() => AddAsync(ContextKind.Lessons, string.Empty, LessonsTitle)" />
+					</div>
+				</div>
+			</div>
+
+			<div class="card-body py-2 border-top d-flex align-items-center bg-light-subtle">
+				<div class="subheader m-0">Calls</div>
+				@if (_calls.Any(c => c.State == CallAnalysisState.Completed && !Has(ContextKind.Call, c.Id)))
+				{
+					<button type="button" class="btn btn-sm btn-ghost-primary py-0 ms-auto" data-add-all-calls @onclick="AddAllCallsAsync">Add all</button>
+				}
+			</div>
+			@if (_pickerLoading)
+			{
+				<div class="card-body text-secondary small">Loading...</div>
+			}
+			else if (_calls.Length == 0)
+			{
+				<div class="card-body text-secondary small">No calls analyzed yet.</div>
+			}
+			else
+			{
+				<div class="list-group list-group-flush" style="max-height: 18rem; overflow-y: auto;">
+					@foreach (CallAnalysisSummary call in _calls)
+					{
+						<div class="list-group-item py-2" data-pick-call="@call.Id">
+							<div class="d-flex align-items-center gap-2">
+								<div class="me-auto text-truncate">
+									<div class="text-truncate">@CallText.Name(call)</div>
+									<div class="text-secondary small">
+										@ContextWriter.CallDay(call)
+										@if (call.DurationSeconds > 0)
+										{
+											<span>, @CallText.Duration(call.DurationSeconds)</span>
+										}
+										@if (call.State != CallAnalysisState.Completed)
+										{
+											<span class="badge @CallText.StateClass(call.State) ms-1">@CallText.StateLabel(call.State)</span>
+										}
+									</div>
+								</div>
+								<ContextAddButton Added="Has(ContextKind.Call, call.Id)" Key="@($"call:{call.Id}")" OnAdd="() => AddAsync(ContextKind.Call, call.Id, ContextWriter.CallTitle(call))" />
+							</div>
+						</div>
+					}
+				</div>
+			}
+
+			<div class="card-body py-2 border-top d-flex align-items-center bg-light-subtle">
+				<div class="subheader m-0">People</div>
+			</div>
+			@if (_pickerLoading)
+			{
+				<div class="card-body text-secondary small">Loading...</div>
+			}
+			else if (_people.Length == 0)
+			{
+				<div class="card-body text-secondary small">Nobody from your calls yet.</div>
+			}
+			else
+			{
+				<div class="list-group list-group-flush" style="max-height: 14rem; overflow-y: auto;">
+					@foreach (PersonSummary person in _people)
+					{
+						<div class="list-group-item py-2" data-pick-person="@person.Name">
+							<div class="d-flex align-items-center gap-2">
+								<div class="me-auto text-truncate">
+									<div class="text-truncate">@person.Name</div>
+									<div class="text-secondary small">@person.Calls call@(person.Calls == 1 ? "" : "s"), @person.Facts fact@(person.Facts == 1 ? "" : "s")</div>
+								</div>
+								<ContextAddButton Added="Has(ContextKind.Person, person.Name)" Key="@($"person:{person.Name}")" OnAdd="() => AddAsync(ContextKind.Person, person.Name, PersonTitle(person.Name))" />
+							</div>
+						</div>
+					}
+				</div>
+			}
+
+			<div class="card-body py-2 border-top d-flex align-items-center bg-light-subtle">
+				<div class="subheader m-0">Vocabulary reports</div>
+			</div>
+			@if (_catalog == null)
+			{
+				<div class="card-body text-secondary small">@(_catalogLoading ? "Loading..." : "Not available.")</div>
+			}
+			else if (_catalog.Reports.Length == 0)
+			{
+				<div class="card-body text-secondary small">No reports.</div>
+			}
+			else
+			{
+				<div class="list-group list-group-flush" style="max-height: 18rem; overflow-y: auto;">
+					@foreach (IGrouping<string, VocabReportInfo> group in _catalog.Reports.GroupBy(r => r.Group))
+					{
+						<div class="list-group-item py-1 text-secondary small fw-medium">@group.Key</div>
+						@foreach (VocabReportInfo report in group)
+						{
+							<div class="list-group-item py-2" data-pick-report="@report.Key">
+								<div class="d-flex align-items-center gap-2">
+									<div class="me-auto">
+										<div>@report.Title</div>
+										@if (!string.IsNullOrWhiteSpace(report.Description))
+										{
+											<div class="text-secondary small">@report.Description</div>
+										}
+									</div>
+									<button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0" data-add="@($"report:{report.Key}")"
+											@onclick="() => AddAsync(ContextKind.Vocabulary, report.Key, VocabularyTitle(report.Key, string.Empty))">
+										@(Has(ContextKind.Vocabulary, report.Key) ? "Add again" : "Add")
+									</button>
+								</div>
+							</div>
+						}
+					}
+				</div>
+			}
+		</div>
+	</div>
+
+	<div class="col-12 col-xl-8 order-xl-1">
+		<div class="card mb-3" data-context-summary>
+			<div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
+				<span><span class="fw-bold" data-summary="blocks">@ExportedBlocks.Count</span> of @_blocks.Count block@(_blocks.Count == 1 ? "" : "s") in the file</span>
+				<span class="text-secondary">@Exported.Length.ToString("N0", CultureInfo.InvariantCulture) characters</span>
+				<span class="text-secondary" title="A rough guess: about four characters per token in English, one per character in Japanese.">&asymp; <span data-summary="tokens">@ContextWriter.EstimateTokens(Exported).ToString("N0", CultureInfo.InvariantCulture)</span> tokens</span>
+				@if (Waiting > 0)
+				{
+					<span class="text-azure small d-inline-flex align-items-center gap-1"><span class="spinner-border spinner-border-sm"></span> @Waiting loading</span>
+				}
+				@if (_blocks.Count > 0)
+				{
+					<button type="button" class="btn btn-sm @(_confirmClear ? "btn-danger" : "btn-ghost-secondary") ms-auto" data-context-clear @onclick="ClearAsync" @onfocusout="() => _confirmClear = false">
+						@(_confirmClear ? "Really remove all?" : "Remove all")
+					</button>
+				}
+			</div>
+		</div>
+
+		@if (!_restored)
+		{
+			<div class="card">
+				<div class="card-body py-5 text-center text-secondary">
+					<div class="spinner-border text-primary mb-3" role="status"></div>
+					<div>Loading your context...</div>
+				</div>
+			</div>
+		}
+		else if (_blocks.Count == 0)
+		{
+			<div class="card">
+				<div class="card-body py-5 text-center text-secondary">
+					Nothing in the context yet. Add calls, people, insights or a note from the list.
+				</div>
+			</div>
+		}
+
+		<div @ref="_list" data-context-blocks>
+			@for (int index = 0; index < _blocks.Count; index++)
+			{
+				int position = index;
+				ContextBlock block = _blocks[position];
+				string? text = Text(block);
+				bool open = _open.Contains(block.Id);
+				<div class="card mb-2 @(block.Included ? "" : "opacity-50") @(_dropIndex == position && _dragIndex != null && _dragIndex != position ? "border-primary" : "")"
+					 data-block="@block.Id" data-block-kind="@block.Kind"
+					 @ondragover:preventDefault
+					 @ondragenter="() => _dropIndex = position"
+					 @ondrop="() => DropAsync(position)">
+					<div class="card-header py-2 gap-2 flex-nowrap">
+						<span class="text-secondary" style="cursor: grab;" draggable="true" title="Drag to move"
+							  @ondragstart="() => _dragIndex = position" @ondragend="EndDrag">
+							<Icon IconType="@Icons.GripVertical" Size="18" />
+						</span>
+						<input type="checkbox" class="form-check-input m-0 flex-shrink-0" checked="@block.Included" title="Include in the file"
+							   aria-label="Include in the file" data-block-include @onchange="e => IncludeAsync(block, e.Value is true)" />
+						<span class="badge @KindClass(block.Kind) flex-shrink-0">@KindLabel(block.Kind)</span>
+						<span class="fw-medium text-truncate me-auto" data-block-title>@(block.Kind == ContextKind.Note && string.IsNullOrWhiteSpace(block.Title) ? "Note" : block.Title)</span>
+						@if (text != null)
+						{
+							<span class="text-secondary small text-nowrap d-none d-sm-inline" data-block-size>&asymp; @ContextWriter.EstimateTokens(text).ToString("N0", CultureInfo.InvariantCulture) tokens</span>
+						}
+						<div class="btn-group btn-group-sm flex-shrink-0">
+							<button type="button" class="btn btn-ghost-secondary px-1" title="Move up" data-block-up disabled="@(position == 0)" @onclick="() => MoveAsync(position, position - 1)">
+								<Icon IconType="@Icons.ChevronUp" Size="16" />
+							</button>
+							<button type="button" class="btn btn-ghost-secondary px-1" title="Move down" data-block-down disabled="@(position == _blocks.Count - 1)" @onclick="() => MoveAsync(position, position + 1)">
+								<Icon IconType="@Icons.ChevronDown" Size="16" />
+							</button>
+							<button type="button" class="btn btn-ghost-danger px-1" title="Remove" data-block-remove @onclick="() => RemoveAsync(block)">
+								<Icon IconType="@Icons.Trash" Size="16" />
+							</button>
+						</div>
+					</div>
+					<div class="card-body py-2">
+						@if (block.Kind == ContextKind.Note)
+						{
+							<input type="text" class="form-control form-control-sm mb-2" placeholder="Heading" aria-label="Heading" data-note-title
+								   value="@block.Title" @oninput="e => NoteAsync(block, e.Value as string, null)" />
+							<textarea class="form-control form-control-sm" rows="5" placeholder="What the other AI should know or do" aria-label="Note" data-note-text
+									  value="@block.Text" @oninput="e => NoteAsync(block, null, e.Value as string)"></textarea>
+						}
+						else
+						{
+							<div class="d-flex flex-wrap align-items-center gap-1">
+								@foreach (ContextSection section in ContextSections.For(block.Kind))
+								{
+									bool on = block.Has(section.Key);
+									<button type="button" class="btn btn-sm py-0 px-2 @(on ? "btn-primary" : "btn-outline-secondary")" aria-pressed="@(on ? "true" : "false")"
+											data-section="@section.Key" @onclick="() => ToggleSectionAsync(block, section.Key)">
+										@section.Label
+									</button>
+								}
+							</div>
+							<div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+								@if (ContextSections.HasLimit(block.Kind))
+								{
+									<label class="small text-secondary d-inline-flex align-items-center gap-1">
+										Longest lists
+										<select class="form-select form-select-sm w-auto" data-block-limit value="@block.Limit.ToString(CultureInfo.InvariantCulture)"
+												@onchange="e => LimitAsync(block, e.Value as string)">
+											@foreach (int limit in Limits)
+											{
+												<option value="@limit.ToString(CultureInfo.InvariantCulture)">@(limit == ContextBlock.AllItems ? "everything" : $"top {limit}")</option>
+											}
+										</select>
+									</label>
+								}
+								@if (block.Kind == ContextKind.Vocabulary && _catalog is { Partners.Length: > 0 } catalog)
+								{
+									<label class="small text-secondary d-inline-flex align-items-center gap-1">
+										Calls
+										<select class="form-select form-select-sm w-auto" data-block-partner value="@block.Partner" @onchange="e => PartnerAsync(block, e.Value as string)">
+											<option value="">with everyone</option>
+											@foreach (string partner in catalog.Partners)
+											{
+												<option value="@partner">with @partner</option>
+											}
+										</select>
+									</label>
+								}
+								<button type="button" class="btn btn-sm btn-ghost-secondary ms-auto" data-block-preview disabled="@(text == null)" @onclick="() => TogglePreview(block)">
+									@(open ? "Hide text" : "Show text")
+								</button>
+							</div>
+							@if (_failed.TryGetValue(block.DataKey, out string? failure))
+							{
+								<div class="alert alert-danger small py-2 mt-2 mb-0 d-flex align-items-center gap-2" data-block-error>
+									<span class="me-auto">@failure</span>
+									<button type="button" class="btn btn-sm btn-outline-danger py-0" @onclick="() => RetryAsync(block)">Retry</button>
+								</div>
+							}
+							else if (text == null)
+							{
+								<div class="text-secondary small mt-2 d-flex align-items-center gap-2" data-block-loading>
+									<span class="spinner-border spinner-border-sm"></span> Loading...
+								</div>
+							}
+							else if (text.Length == 0)
+							{
+								<div class="text-secondary small mt-2">Nothing to export with these sections; it is left out of the file.</div>
+							}
+							@if (open && !string.IsNullOrEmpty(text))
+							{
+								<div class="mt-2 p-2 border rounded small font-monospace text-body" style="max-height: 24rem; overflow: auto; white-space: pre-wrap;" lang="ja" data-block-text>@text</div>
+							}
+						}
+					</div>
+				</div>
+			}
+		</div>
+
+		@if (_blocks.Count > 0)
+		{
+			<div class="card mt-3" data-context-preview>
+				<div class="card-header">
+					<h3 class="card-title m-0">The whole file</h3>
+					<button type="button" class="btn btn-sm btn-outline-secondary ms-auto" data-preview-toggle @onclick="() => _showFile = !_showFile">
+						@(_showFile ? "Hide" : "Show")
+					</button>
+				</div>
+				@if (_showFile)
+				{
+					<div class="card-body small font-monospace text-body" style="max-height: 40rem; overflow: auto; white-space: pre-wrap;" lang="ja" data-file-text>@Exported</div>
+				}
+			</div>
+		}
+	</div>
+</div>
+
+@code {
+	private const string StorageKey = "akagi.context.v1";
+	private const string InsightsTitle = "Speaking insights across all my calls";
+	private const string LessonsTitle = "My lessons";
+	private static readonly int[] Limits = [10, 25, 50, 100, 250, ContextBlock.AllItems];
+
+	/// <summary>
+	/// Adds a block on arrival: "call:{id}", "person:{name}", "insights" or "lessons", for links from the other Learn pages.
+	/// </summary>
+	[SupplyParameterFromQuery(Name = "add")]
+	public string? AddQuery { get; set; }
+
+	private List<ContextBlock> _blocks = [];
+	private CallAnalysisSummary[] _calls = [];
+	private PersonSummary[] _people = [];
+	private VocabCatalog? _catalog;
+	private bool _pickerLoading = true;
+	private bool _catalogLoading = true;
+	private bool _offline;
+
+	private readonly Dictionary<string, object> _data = [];
+	private readonly Dictionary<string, string> _failed = [];
+	private readonly HashSet<string> _loading = [];
+	private readonly Dictionary<string, (string Signature, object Data, string Text)> _written = [];
+	private bool _fetching;
+
+	private readonly HashSet<string> _open = [];
+	private bool _showFile;
+	private bool _copied;
+	private bool _confirmClear;
+	private int? _dragIndex;
+	private int? _dropIndex;
+
+	private ElementReference _list;
+	private IJSObjectReference? _module;
+	private bool _restored;
+	private readonly CancellationTokenSource _disposed = new();
+
+	private List<(string Title, string Text)> ExportedBlocks =>
+	[
+		.. _blocks
+			.Where(b => b.Included)
+			.Select(b => (Title: HeadingOf(b), Text: Text(b)))
+			.Where(b => !string.IsNullOrWhiteSpace(b.Text))
+			.Select(b => (b.Title, b.Text!))
+	];
+
+	private string Exported => ExportedBlocks.Count == 0 ? string.Empty : ContextWriter.Compose(ExportedBlocks, DateTime.Now);
+
+	/// <summary>
+	/// Included blocks whose data has not arrived yet.
+	/// </summary>
+	private int Waiting => _blocks.Count(b => b.Included && b.Kind != ContextKind.Note && Text(b) == null && !_failed.ContainsKey(b.DataKey));
+
+	private static string HeadingOf(ContextBlock block) =>
+		string.IsNullOrWhiteSpace(block.Title) ? (block.Kind == ContextKind.Note ? "Note" : block.Kind.ToString()) : block.Title;
+
+	private bool Has(ContextKind kind, string key) => _blocks.Any(b => b.Kind == kind && b.Key == key);
+
+	private static string PersonTitle(string name) => $"What I know about {name}";
+
+	private string VocabularyTitle(string key, string partner)
+	{
+		string title = _catalog?.Reports.FirstOrDefault(r => r.Key == key)?.Title ?? key;
+		return string.IsNullOrWhiteSpace(partner) ? $"Vocabulary: {title}" : $"Vocabulary: {title} (calls with {partner})";
+	}
+
+	private static string KindLabel(ContextKind kind) => kind switch
+	{
+		ContextKind.Insights => "Insights",
+		ContextKind.Lessons => "Lessons",
+		ContextKind.Call => "Call",
+		ContextKind.Person => "Person",
+		ContextKind.Vocabulary => "Vocabulary",
+		_ => "Note"
+	};
+
+	private static string KindClass(ContextKind kind) => kind switch
+	{
+		ContextKind.Insights => "bg-purple-lt",
+		ContextKind.Lessons => "bg-green-lt",
+		ContextKind.Call => "bg-azure-lt",
+		ContextKind.Person => "bg-orange-lt",
+		ContextKind.Vocabulary => "bg-teal-lt",
+		_ => "bg-secondary-lt"
+	};
+
+	/// <summary>
+	/// The block as text; null while its data is missing. Written again only when the block or its data changed.
+	/// </summary>
+	private string? Text(ContextBlock block)
+	{
+		if (block.Kind == ContextKind.Note)
+		{
+			return block.Text;
+		}
+		if (!_data.TryGetValue(block.DataKey, out object? data))
+		{
+			return null;
+		}
+		string signature = $"{block.Limit}|{block.Partner}|{string.Join(",", block.Sections.Order(StringComparer.Ordinal))}";
+		if (_written.TryGetValue(block.Id, out (string Signature, object Data, string Text) written) && written.Signature == signature && ReferenceEquals(written.Data, data))
+		{
+			return written.Text;
+		}
+		string text = data switch
+		{
+			CallInsights insights => ContextWriter.Insights(insights, block),
+			LearningOverview overview => ContextWriter.Lessons(overview, block),
+			CallAnalysisDetail detail => ContextWriter.Call(detail, block),
+			PersonDetail person => ContextWriter.Person(person, block),
+			VocabReportResult report => ContextWriter.Vocabulary(_catalog?.Reports.FirstOrDefault(r => r.Key == block.Key), report, block),
+			_ => string.Empty
+		};
+		_written[block.Id] = (signature, data, text);
+		return text;
+	}
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override Task OnInitializedAsync() => LoadPickerAsync();
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender)
+		{
+			return;
+		}
+		try
+		{
+			_module = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Learning/ContextBuilderPage.razor.js");
+			await _module.InvokeVoidAsync("enableDrag", _list);
+		}
+		catch (JSException)
+		{
+			_module = null;
+		}
+		catch (InvalidOperationException)
+		{
+			_module = null;
+		}
+		await RestoreAsync();
+	}
+
+	private async Task RestoreAsync()
+	{
+		string? stored = null;
+		if (_module != null)
+		{
+			try
+			{
+				stored = await _module.InvokeAsync<string?>("load", StorageKey);
+			}
+			catch (JSException)
+			{
+				// Start fresh
+			}
+		}
+
+		List<ContextBlock>? blocks = null;
+		if (!string.IsNullOrWhiteSpace(stored))
+		{
+			try
+			{
+				blocks = JsonSerializer.Deserialize<List<ContextBlock>>(stored);
+			}
+			catch (JsonException)
+			{
+				// An unreadable list starts over
+			}
+		}
+		_blocks = blocks ?? [new ContextBlock { Kind = ContextKind.Note, Title = ContextWriter.IntroTitle, Text = ContextWriter.IntroText }];
+		_restored = true;
+
+		if (!string.IsNullOrWhiteSpace(AddQuery))
+		{
+			await AddFromQueryAsync(AddQuery);
+			Navigation.NavigateTo("Learn/Context", replace: true);
+		}
+		await SaveAsync();
+		StateHasChanged();
+		await FetchMissingAsync();
+	}
+
+	private async Task AddFromQueryAsync(string query)
+	{
+		int colon = query.IndexOf(':');
+		string kind = colon < 0 ? query : query[..colon];
+		string key = colon < 0 ? string.Empty : query[(colon + 1)..];
+		switch (kind)
+		{
+			case "call" when key.Length > 0:
+				CallAnalysisSummary? call = _calls.FirstOrDefault(c => c.Id == key);
+				await AddAsync(ContextKind.Call, key, call != null ? ContextWriter.CallTitle(call) : "Call", save: false);
+				break;
+			case "person" when key.Length > 0:
+				await AddAsync(ContextKind.Person, key, PersonTitle(key), save: false);
+				break;
+			case "insights":
+				await AddAsync(ContextKind.Insights, string.Empty, InsightsTitle, save: false);
+				break;
+			case "lessons":
+				await AddAsync(ContextKind.Lessons, string.Empty, LessonsTitle, save: false);
+				break;
+		}
+	}
+
+	private async Task LoadPickerAsync()
+	{
+		_pickerLoading = true;
+		_catalogLoading = true;
+		_offline = false;
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			_offline = true;
+			_pickerLoading = false;
+			_catalogLoading = false;
+			return;
+		}
+
+		(CallAnalysisResponseTransmission? calls, _) = await CallsAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.List });
+		(CallAnalysisResponseTransmission? people, _) = await CallsAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.People });
+		_calls = calls?.Calls ?? [];
+		_people = people?.People ?? [];
+		_pickerLoading = false;
+		StateHasChanged();
+
+		// The vocabulary engine reads every call the first time, so it comes last and on its own
+		(VocabularyResponseTransmission? vocabulary, _) = await VocabularyAsync(new VocabularyRequestTransmission { Action = VocabularyAction.Catalog });
+		_catalog = vocabulary?.Catalog;
+		_catalogLoading = false;
+		RetitleAll();
+	}
+
+	private async Task RefreshAsync()
+	{
+		_data.Clear();
+		_failed.Clear();
+		_written.Clear();
+		await LoadPickerAsync();
+		StateHasChanged();
+		await FetchMissingAsync();
+	}
+
+	/// <summary>
+	/// Loads the data of every block that lacks it, one request after another to spare the bot.
+	/// </summary>
+	private async Task FetchMissingAsync()
+	{
+		if (_fetching)
+		{
+			return;
+		}
+		_fetching = true;
+		try
+		{
+			while (!_disposed.IsCancellationRequested)
+			{
+				ContextBlock? next = _blocks.FirstOrDefault(b => b.Kind != ContextKind.Note && !_data.ContainsKey(b.DataKey) && !_failed.ContainsKey(b.DataKey));
+				if (next == null)
+				{
+					break;
+				}
+				await FetchAsync(next);
+				StateHasChanged();
+			}
+		}
+		finally
+		{
+			_fetching = false;
+		}
+	}
+
+	private async Task FetchAsync(ContextBlock block)
+	{
+		string key = block.DataKey;
+		_loading.Add(key);
+		try
+		{
+			(object? data, string? error) = block.Kind switch
+			{
+				ContextKind.Insights => await Pick(CallsAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.Insights }), r => r.Insights),
+				ContextKind.Call => await Pick(CallsAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.Detail, CallId = block.Key }), r => r.Detail),
+				ContextKind.Person => await Pick(CallsAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.Person, Name = block.Key }), r => r.Person),
+				ContextKind.Lessons => await Pick(LessonsAsync(), r => r.Overview),
+				ContextKind.Vocabulary => await Pick(VocabularyAsync(new VocabularyRequestTransmission
+				{
+					Action = VocabularyAction.Report,
+					ReportKey = block.Key,
+					Filter = new VocabFilter { Partner = block.Partner }
+				}), r => r.Report),
+				_ => (null, null)
+			};
+			if (data != null)
+			{
+				_data[key] = data;
+				RetitleAll();
+			}
+			else
+			{
+				_failed[key] = error ?? "Could not load this.";
+			}
+		}
+		finally
+		{
+			_loading.Remove(key);
+		}
+	}
+
+	private static async Task<(object? Data, string? Error)> Pick<T>(Task<(T? Response, string? Error)> request, Func<T, object?> select) where T : class
+	{
+		(T? response, string? error) = await request;
+		return response == null ? (null, error) : (select(response), error);
+	}
+
+	/// <summary>
+	/// Keeps headings in step with the data, e.g. after a call's date was corrected.
+	/// </summary>
+	private void RetitleAll()
+	{
+		foreach (ContextBlock block in _blocks)
+		{
+			_data.TryGetValue(block.DataKey, out object? data);
+			string? title = block.Kind switch
+			{
+				ContextKind.Call when data is CallAnalysisDetail detail => ContextWriter.CallTitle(detail.Summary),
+				ContextKind.Call => _calls.FirstOrDefault(c => c.Id == block.Key) is CallAnalysisSummary call ? ContextWriter.CallTitle(call) : null,
+				ContextKind.Vocabulary when _catalog != null => VocabularyTitle(block.Key, block.Partner),
+				_ => null
+			};
+			if (title != null)
+			{
+				block.Title = title;
+			}
+		}
+	}
+
+	private async Task<(CallAnalysisResponseTransmission? Response, string? Error)> CallsAsync(CallAnalysisRequestTransmission transmission)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return (null, "The Akagi backend cannot be reached.");
+		}
+		try
+		{
+			CallAnalysisResponseTransmission response = await new CallAnalysisRequest(transmission).Get(client, CallAnalysisRequest.Timeout);
+			return (response, response.Error);
+		}
+		catch (TimeoutException)
+		{
+			return (null, "That took too long. Try again in a moment.");
+		}
+	}
+
+	private async Task<(LearningResponseTransmission? Response, string? Error)> LessonsAsync()
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return (null, "The Akagi backend cannot be reached.");
+		}
+		try
+		{
+			LearningResponseTransmission response = await new LearningRequest(new LearningRequestTransmission { Action = LearningAction.Overview })
+				.Get(client, LearningRequest.OverviewTimeout);
+			return (response, response.Error);
+		}
+		catch (TimeoutException)
+		{
+			return (null, "That took too long. Try again in a moment.");
+		}
+	}
+
+	private async Task<(VocabularyResponseTransmission? Response, string? Error)> VocabularyAsync(VocabularyRequestTransmission transmission)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return (null, "The Akagi backend cannot be reached.");
+		}
+		try
+		{
+			VocabularyResponseTransmission response = await new VocabularyRequest(transmission).Get(client, VocabularyRequest.Timeout);
+			return (response, response.Error);
+		}
+		catch (TimeoutException)
+		{
+			return (null, "That took too long. Try again in a moment.");
+		}
+	}
+
+	private async Task AddAsync(ContextKind kind, string key, string title, bool save = true)
+	{
+		if (kind != ContextKind.Vocabulary && Has(kind, key))
+		{
+			return;
+		}
+		_blocks.Add(ContextBlock.Create(kind, key, title));
+		if (save)
+		{
+			await SaveAsync();
+			StateHasChanged();
+			await FetchMissingAsync();
+		}
+	}
+
+	private async Task AddAllCallsAsync()
+	{
+		// Oldest first, so the calls read in the order they happened
+		foreach (CallAnalysisSummary call in _calls.Where(c => c.State == CallAnalysisState.Completed).OrderBy(c => c.Date))
+		{
+			await AddAsync(ContextKind.Call, call.Id, ContextWriter.CallTitle(call), save: false);
+		}
+		await SaveAsync();
+		StateHasChanged();
+		await FetchMissingAsync();
+	}
+
+	private async Task AddNoteAsync()
+	{
+		_blocks.Add(new ContextBlock { Kind = ContextKind.Note, Title = "Note" });
+		await SaveAsync();
+	}
+
+	private async Task RemoveAsync(ContextBlock block)
+	{
+		_blocks.Remove(block);
+		_open.Remove(block.Id);
+		_written.Remove(block.Id);
+		await SaveAsync();
+	}
+
+	private async Task ClearAsync()
+	{
+		if (!_confirmClear)
+		{
+			_confirmClear = true;
+			return;
+		}
+		_confirmClear = false;
+		_blocks.Clear();
+		_open.Clear();
+		_written.Clear();
+		await SaveAsync();
+	}
+
+	private async Task MoveAsync(int from, int to)
+	{
+		if (from == to || from < 0 || to < 0 || from >= _blocks.Count || to >= _blocks.Count)
+		{
+			return;
+		}
+		ContextBlock block = _blocks[from];
+		_blocks.RemoveAt(from);
+		_blocks.Insert(to, block);
+		await SaveAsync();
+	}
+
+	private async Task DropAsync(int position)
+	{
+		int? from = _dragIndex;
+		EndDrag();
+		if (from is int index)
+		{
+			await MoveAsync(index, position);
+		}
+	}
+
+	private void EndDrag()
+	{
+		_dragIndex = null;
+		_dropIndex = null;
+	}
+
+	private async Task IncludeAsync(ContextBlock block, bool included)
+	{
+		block.Included = included;
+		await SaveAsync();
+	}
+
+	private async Task ToggleSectionAsync(ContextBlock block, string section)
+	{
+		if (!block.Sections.Remove(section))
+		{
+			block.Sections.Add(section);
+		}
+		await SaveAsync();
+	}
+
+	private async Task LimitAsync(ContextBlock block, string? value)
+	{
+		block.Limit = int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int limit) ? limit : block.Limit;
+		await SaveAsync();
+	}
+
+	private async Task PartnerAsync(ContextBlock block, string? partner)
+	{
+		block.Partner = partner ?? string.Empty;
+		block.Title = VocabularyTitle(block.Key, block.Partner);
+		await SaveAsync();
+		StateHasChanged();
+		await FetchMissingAsync();
+	}
+
+	private async Task NoteAsync(ContextBlock block, string? title, string? text)
+	{
+		if (title != null)
+		{
+			block.Title = title;
+		}
+		if (text != null)
+		{
+			block.Text = text;
+		}
+		await SaveAsync();
+	}
+
+	private async Task RetryAsync(ContextBlock block)
+	{
+		_failed.Remove(block.DataKey);
+		StateHasChanged();
+		await FetchMissingAsync();
+	}
+
+	private void TogglePreview(ContextBlock block)
+	{
+		if (!_open.Remove(block.Id))
+		{
+			_open.Add(block.Id);
+		}
+	}
+
+	private async Task SaveAsync()
+	{
+		if (!_restored || _module == null)
+		{
+			return;
+		}
+		try
+		{
+			await _module.InvokeVoidAsync("save", StorageKey, JsonSerializer.Serialize(_blocks));
+		}
+		catch (JSException)
+		{
+			// Keeping the list is a convenience
+		}
+		catch (JSDisconnectedException)
+		{
+			// The circuit is gone
+		}
+	}
+
+	private async Task DownloadAsync()
+	{
+		string text = Exported;
+		if (_module == null || text.Length == 0)
+		{
+			return;
+		}
+		try
+		{
+			await _module.InvokeVoidAsync("download", $"akagi-context-{DateTime.Now:yyyy-MM-dd}.txt", text);
+		}
+		catch (JSException)
+		{
+			// The download is a convenience
+		}
+	}
+
+	private async Task CopyAsync()
+	{
+		string text = Exported;
+		if (_module == null || text.Length == 0)
+		{
+			return;
+		}
+		try
+		{
+			_copied = await _module.InvokeAsync<bool>("copy", text);
+		}
+		catch (JSException)
+		{
+			_copied = false;
+		}
+		if (_copied)
+		{
+			StateHasChanged();
+			try
+			{
+				await Task.Delay(TimeSpan.FromSeconds(2), _disposed.Token);
+			}
+			catch (TaskCanceledException)
+			{
+				return;
+			}
+			_copied = false;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_offline && SocketClientContainer.IsConnected)
+			{
+				await RefreshAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+		_disposed.Cancel();
+		if (_module != null)
+		{
+			try
+			{
+				await _module.DisposeAsync();
+			}
+			catch (JSDisconnectedException)
+			{
+				// The circuit is gone
+			}
+		}
+	}
+}

@@ -43,6 +43,11 @@
 					}
 				</div>
 			</div>
+			<a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" href="@($"Learn/Context?add=call:{call.Id}")"
+			   title="Add this call to the context you can download for another AI" data-export-call>
+				<Icon IconType="@Icons.FileExport" Size="14" />
+				<span>Export for AI</span>
+			</a>
 			<span class="badge @CallText.StateClass(call.State)">@CallText.StateLabel(call.State)</span>
 		</div>
 

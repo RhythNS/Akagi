@@ -124,7 +124,14 @@
 				{
 					<div class="card mb-3" data-person-detail="@person.Summary.Name">
 						<div class="card-body">
-							<h3 class="h2 mb-1">@person.Summary.Name</h3>
+							<div class="d-flex align-items-start gap-2">
+								<h3 class="h2 mb-1 me-auto">@person.Summary.Name</h3>
+								<a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" href="@("Learn/Context?add=person:" + Uri.EscapeDataString(person.Summary.Name))"
+								   title="Add this person to the context you can download for another AI" data-export-person>
+									<Icon IconType="@Icons.FileExport" Size="14" />
+									<span>Export for AI</span>
+								</a>
+							</div>
 							<div class="text-secondary small d-flex flex-wrap gap-3">
 								@if (person.Summary.LastTalked is DateTime last)
 								{

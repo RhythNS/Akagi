@@ -54,6 +54,18 @@ public static class Icons
     public static IIconType ChevronDown => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M6 9l6 6l6 -6' />");
 
+    public static IIconType ChevronUp => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M6 15l6 -6l6 6' />");
+
+    public static IIconType GripVertical => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M9 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' /><path d='M9 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' /><path d='M9 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' /><path d='M15 5m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' /><path d='M15 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' /><path d='M15 19m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' />");
+
+    public static IIconType Copy => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M7 9.667a2.667 2.667 0 0 1 2.667 -2.667h8.666a2.667 2.667 0 0 1 2.667 2.667v8.666a2.667 2.667 0 0 1 -2.667 2.667h-8.666a2.667 2.667 0 0 1 -2.667 -2.667z' /><path d='M4.012 16.737a2.005 2.005 0 0 1 -1.012 -1.737v-10c0 -1.1 .9 -2 2 -2h10c.75 0 1.158 .385 1.5 1' />");
+
+    public static IIconType Download => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2' /><path d='M7 11l5 5l5 -5' /><path d='M12 4l0 12' />");
+
     public static IIconType Trash => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M4 7l16 0' /><path d='M10 11l0 6' /><path d='M14 11l0 6' /><path d='M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12' /><path d='M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3' />");
 
