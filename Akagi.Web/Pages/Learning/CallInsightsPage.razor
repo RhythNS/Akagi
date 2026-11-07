@@ -148,7 +148,8 @@ else
 
 	<CallFocusCard Struggles="insights.FocusStruggles" Busy="_busy" OnUnfocus="id => SetFocusAsync(id, false)" />
 
-	<CallAdviceCard Insights="insights" Busy="_busy" Writing="_writing" OnFocus="id => SetFocusAsync(id, true)" OnWrite="WriteAdviceAsync" />
+	<CallAdviceCard Insights="insights" Busy="_busy" Writing="_writing" OnFocus="id => SetFocusAsync(id, true)" OnWrite="WriteAdviceAsync"
+					OnIgnore="IgnoreAdviceAsync" />
 
 	<h3 class="mt-2">Trends</h3>
 	<div class="row row-cards mb-3">
@@ -500,6 +501,16 @@ else
 		CallAnalysisRequestTransmission request = Request(CallAnalysisAction.SetFocus);
 		request.IssueId = issueId;
 		request.Focus = focus;
+		_busy = true;
+		await SendAsync(request, CallAnalysisRequest.Timeout);
+		_busy = false;
+	}
+
+	private async Task IgnoreAdviceAsync(CallAdviceCard.IgnoreChange change)
+	{
+		CallAnalysisRequestTransmission request = Request(CallAnalysisAction.IgnoreAdvice);
+		request.AdviceKey = change.Key;
+		request.Ignore = change.Ignore;
 		_busy = true;
 		await SendAsync(request, CallAnalysisRequest.Timeout);
 		_busy = false;

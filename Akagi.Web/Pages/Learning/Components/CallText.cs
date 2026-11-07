@@ -156,6 +156,11 @@ public static class CallText
 
     public static string PersonUri(string name) => "Learn/People/" + Uri.EscapeDataString(name);
 
+    /// <summary>
+    /// The page of one mined sentence: its clip being cut, then its downloads.
+    /// </summary>
+    public static string MineUri(string id) => "Learn/Mine/" + Uri.EscapeDataString(id);
+
     public static string Percent(double ratio) => (ratio * 100).ToString("0", CultureInfo.InvariantCulture) + "%";
 
     public static string Number(double value) => value.ToString("0.0", CultureInfo.InvariantCulture);

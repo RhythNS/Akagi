@@ -5,44 +5,20 @@
 @using Akagi.Bridge.Chat.Transmissions.Responses
 @using Akagi.Web.Icons
 @using Akagi.Web.Pages.Learning.Components
-@using Akagi.Web.Services
 @using Akagi.Web.Services.Sockets
 @using Akagi.Web.Services.Sockets.Requests
 
 @implements IDisposable
 @inject ISocketClientContainer SocketClientContainer
-@inject IJSRuntime JS
 
-<PageTitle>Sentence Mining - Akagi</PageTitle>
+<PageTitle>Mined sentences - Akagi</PageTitle>
 
 <div class="page-header d-print-none mb-4">
-	<div class="row g-2 align-items-center">
-		<div class="col">
-			<div class="page-pretitle">Learn</div>
-			<h2 class="page-title">Sentence mining</h2>
-			<div class="text-secondary small mt-1">
-				Sentences from your calls to learn from, with your partner's own voice. Mine lines in a call's transcript, or in the
-				lines of a word or expression on the <a href="Learn/Vocabulary">vocabulary page</a>.
-			</div>
-		</div>
-		@if (_loaded)
-		{
-			<div class="col-auto ms-auto d-flex gap-2">
-				<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" disabled="@(_busy || _sentences.Length == 0)"
-						data-export-clips @onclick="ExportClipsAsync">
-					@if (_exporting)
-					{
-						<span class="spinner-border spinner-border-sm" role="status"></span>
-						<span>Cutting clips...</span>
-					}
-					else
-					{
-						<Icon IconType="@Icons.Download" Size="16" />
-						<span>@(_selected.Count > 0 ? $"Download {_selected.Count} for Anki" : "Download all for Anki")</span>
-					}
-				</button>
-			</div>
-		}
+	<div class="page-pretitle">Learn</div>
+	<h2 class="page-title">Mined sentences</h2>
+	<div class="text-secondary small mt-1">
+		Everything you mined. Open one for its clip and downloads. To mine more, use <span class="badge bg-secondary-lt">Mine</span> next to a
+		line in a call's transcript or on the <a href="Learn/Vocabulary">vocabulary page</a>.
 	</div>
 </div>
 
@@ -51,40 +27,16 @@
 	<div class="alert alert-danger" role="alert">@_error</div>
 }
 
-@if (!_loaded)
+@if (_loaded)
 {
-	@if (_offline)
-	{
-		<div class="card border-danger">
-			<div class="card-body py-5 text-center">
-				<h3 class="h4 mb-1">Socket Service Offline</h3>
-				<p class="text-secondary mb-3">Unable to reach the Akagi backend. Your mined sentences are stored there.</p>
-				<button type="button" class="btn btn-primary" @onclick="LoadAsync">Retry Connection</button>
-			</div>
-		</div>
-	}
-	else
-	{
-		<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
-	}
-}
-else
-{
-	<div class="card mb-3">
+	<div class="card">
 		<div class="card-header">
 			<h3 class="card-title m-0">Your sentences</h3>
 			<span class="badge bg-secondary-lt ms-2">@_sentences.Length</span>
-			@if (_sentences.Length > 0)
-			{
-				<span class="ms-auto text-secondary small">The download is a zip: one mp3 clip per sentence and a CSV for Anki's import (see its README).</span>
-			}
 		</div>
 		@if (_sentences.Length == 0)
 		{
-			<div class="card-body text-secondary" data-mining-empty>
-				Nothing mined yet. Open a call and use <span class="badge bg-secondary-lt">Mine</span> next to a line, or open a word your
-				partners use that you never say (Speaking insights, "Heard, not said") and mine one of its lines.
-			</div>
+			<div class="card-body text-secondary" data-mining-empty>Nothing mined yet.</div>
 		}
 		else
 		{
@@ -92,10 +44,9 @@ else
 				<table class="table table-sm table-vcenter card-table mb-0" data-mined>
 					<thead>
 						<tr>
-							<th class="w-1"><input class="form-check-input" type="checkbox" checked="@(_selected.Count == _sentences.Length)" aria-label="Select all" @onchange="ToggleAll" /></th>
 							<th>Sentence</th>
 							<th>From</th>
-							<th>Note</th>
+							<th>Clip</th>
 							<th class="w-1"></th>
 						</tr>
 					</thead>
@@ -103,27 +54,31 @@ else
 						@foreach (MinedSentenceView sentence in _sentences)
 						{
 							<tr data-sentence="@sentence.Id">
-								<td><input class="form-check-input" type="checkbox" checked="@_selected.Contains(sentence.Id)" aria-label="Select" @onchange="() => Toggle(sentence.Id)" /></td>
 								<td lang="ja">
-									<div>@VocabLineList.Marked(new VocabLine { Text = sentence.Text, Marks = sentence.Target.Length > 0 ? [sentence.Target] : [] })</div>
-									@if (sentence.Target.Length > 0)
-									{
-										<div class="text-secondary small">for @sentence.Target</div>
-									}
+									<a class="text-reset" href="@CallText.MineUri(sentence.Id)" data-open="@sentence.Id">
+										@VocabLineList.Marked(new VocabLine { Text = sentence.Text, Marks = sentence.Target.Length > 0 ? [sentence.Target] : [] })
+									</a>
 								</td>
 								<td class="small text-nowrap">
 									<a href="@VocabText.CallUri(sentence.CallId, sentence.Start)" title="Open the call at this line">@sentence.CallName</a>
 									<div class="text-secondary">@sentence.Date.ToString("d") @CallText.Timestamp(sentence.Start), @sentence.Speaker</div>
 								</td>
-								<td style="min-width: 12rem;">
-									<input type="text" class="form-control form-control-sm" value="@sentence.Note" placeholder="Meaning, reading..."
-										   aria-label="Note" data-note="@sentence.Id" @onchange="e => SetNoteAsync(sentence, e.Value?.ToString() ?? string.Empty)" />
-								</td>
-								<td>
-									<button type="button" class="btn btn-sm btn-ghost-danger py-0 px-1" title="Remove from the list" disabled="@_busy"
-											data-remove="@sentence.Id" @onclick="() => RemoveAsync(sentence.Id)">
-										<Icon IconType="@Icons.Trash" Size="14" />
-									</button>
+								<td><span class="badge @StateClass(sentence.State)" data-clip-state>@StateLabel(sentence.State)</span></td>
+								<td class="text-nowrap">
+									@if (_confirm == sentence.Id)
+									{
+										<button type="button" class="btn btn-sm btn-danger py-0" disabled="@_busy" data-remove-yes="@sentence.Id"
+												@onclick="() => RemoveAsync(sentence.Id)">Remove</button>
+										<button type="button" class="btn btn-sm btn-outline-secondary py-0" data-remove-no @onclick="() => _confirm = null">Keep</button>
+									}
+									else
+									{
+										<a class="btn btn-sm btn-ghost-primary py-0 px-1" href="@CallText.MineUri(sentence.Id)" title="Clip and downloads">Open</a>
+										<button type="button" class="btn btn-sm btn-ghost-danger py-0 px-1" title="Remove the sentence and its clip"
+												data-remove="@sentence.Id" @onclick="() => _confirm = sentence.Id">
+											<Icon IconType="@Icons.Trash" Size="14" />
+										</button>
+									}
 								</td>
 							</tr>
 						}
@@ -132,54 +87,28 @@ else
 			</div>
 		}
 	</div>
-
-	<div class="card mb-3" data-call-subtitles>
-		<div class="card-header">
-			<h3 class="card-title m-0">Subtitles for a whole call</h3>
-		</div>
-		<div class="card-body">
-			<div class="text-secondary small mb-3">
-				An SRT file of the call with its audio, for tools that mine from subtitles (asbplayer, subs2srs, Migaku). With your
-				partner only, the audio is their channel and the subtitles are their lines.
-			</div>
-			<div class="d-flex flex-wrap align-items-end gap-2">
-				<div>
-					<label class="form-label small mb-1">Call</label>
-					<select class="form-select form-select-sm" @bind="_callId" aria-label="Call" data-subtitle-call>
-						@foreach (CallAnalysisSummary call in _calls)
-						{
-							<option value="@call.Id">@CallText.Name(call), @call.Date.ToString("d")</option>
-						}
-					</select>
-				</div>
-				<div>
-					<label class="form-label small mb-1">Voices</label>
-					<select class="form-select form-select-sm" @bind="_voices" aria-label="Voices" data-subtitle-voices>
-						<option value="@MiningVoiceChoice.Partner">Partner only</option>
-						<option value="@MiningVoiceChoice.Both">Both voices</option>
-					</select>
-				</div>
-				<button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-2" disabled="@(_busy || string.IsNullOrEmpty(_callId))"
-						data-subtitle-download @onclick="ExportCallAsync">
-					<Icon IconType="@Icons.Download" Size="14" />
-					<span>@(_exportingCall ? "Preparing..." : "Download")</span>
-				</button>
-			</div>
+}
+else if (_offline)
+{
+	<div class="card border-danger">
+		<div class="card-body py-5 text-center">
+			<h3 class="h4 mb-1">Socket Service Offline</h3>
+			<p class="text-secondary mb-3">Unable to reach the Akagi backend. Your mined sentences are stored there.</p>
+			<button type="button" class="btn btn-primary" @onclick="LoadAsync">Retry Connection</button>
 		</div>
 	</div>
+}
+else
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
 }
 
 @code {
 	private MinedSentenceView[] _sentences = [];
-	private CallAnalysisSummary[] _calls = [];
-	private readonly HashSet<string> _selected = [];
-	private string _callId = string.Empty;
-	private MiningVoiceChoice _voices = MiningVoiceChoice.Partner;
 	private bool _loaded;
 	private bool _offline;
 	private bool _busy;
-	private bool _exporting;
-	private bool _exportingCall;
+	private string? _confirm;
 	private string? _error;
 
 	protected override void OnInitialized()
@@ -191,9 +120,8 @@ else
 
 	private async Task LoadAsync()
 	{
-		_error = null;
 		_offline = false;
-		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.List }, MiningRequest.Timeout);
+		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.List });
 		if (response == null)
 		{
 			_offline = true;
@@ -201,111 +129,40 @@ else
 		}
 		_sentences = response.Sentences;
 		_loaded = true;
-		await LoadCallsAsync();
-	}
-
-	private async Task LoadCallsAsync()
-	{
-		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
-		if (client == null)
-		{
-			return;
-		}
-		try
-		{
-			CallAnalysisResponseTransmission response = await new CallAnalysisRequest(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.List })
-				.Get(client, CallAnalysisRequest.Timeout);
-			_calls = [.. response.Calls.Where(c => c.State == CallAnalysisState.Completed)];
-			_callId = _calls.FirstOrDefault()?.Id ?? string.Empty;
-		}
-		catch (TimeoutException)
-		{
-			// The subtitle picker stays empty
-		}
-	}
-
-	private void Toggle(string id)
-	{
-		if (!_selected.Remove(id))
-		{
-			_selected.Add(id);
-		}
-	}
-
-	private void ToggleAll()
-	{
-		if (_selected.Count == _sentences.Length)
-		{
-			_selected.Clear();
-		}
-		else
-		{
-			_selected.UnionWith(_sentences.Select(s => s.Id));
-		}
 	}
 
 	private async Task RemoveAsync(string id)
 	{
 		_busy = true;
-		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.Remove, Id = id }, MiningRequest.Timeout);
+		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.Remove, Id = id });
 		_busy = false;
+		_confirm = null;
 		if (response is { Error: null })
 		{
-			_sentences = response.Sentences;
-			_selected.Remove(id);
+			_sentences = [.. _sentences.Where(s => s.Id != id)];
 		}
 	}
 
-	private async Task SetNoteAsync(MinedSentenceView sentence, string note)
+	internal static string StateLabel(MinedClipState state) => state switch
 	{
-		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.SetNote, Id = sentence.Id, Note = note }, MiningRequest.Timeout);
-		if (response is { Error: null })
-		{
-			_sentences = response.Sentences;
-		}
-	}
+		MinedClipState.Ready => "ready",
+		MinedClipState.Queued or MinedClipState.Cutting => "cutting",
+		MinedClipState.NoAudio => "no recording",
+		_ => "failed"
+	};
 
-	private async Task ExportClipsAsync()
+	private static string StateClass(MinedClipState state) => state switch
 	{
-		_busy = true;
-		_exporting = true;
-		StateHasChanged();
-		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission
-		{
-			Action = MiningAction.ExportClips,
-			Ids = [.. _selected.Where(id => _sentences.Any(s => s.Id == id))]
-		}, MiningRequest.ExportTimeout);
-		_exporting = false;
-		_busy = false;
-		if (response is { Error: null, Data.Length: > 0 })
-		{
-			await FileDownloads.SaveAsync(JS, response.FileName, response.Data);
-		}
-	}
-
-	private async Task ExportCallAsync()
-	{
-		_busy = true;
-		_exportingCall = true;
-		StateHasChanged();
-		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission
-		{
-			Action = MiningAction.ExportCall,
-			CallId = _callId,
-			Voices = _voices
-		}, MiningRequest.ExportTimeout);
-		_exportingCall = false;
-		_busy = false;
-		if (response is { Error: null, Data.Length: > 0 })
-		{
-			await FileDownloads.SaveAsync(JS, response.FileName, response.Data);
-		}
-	}
+		MinedClipState.Ready => "bg-green-lt",
+		MinedClipState.Queued or MinedClipState.Cutting => "bg-azure-lt",
+		MinedClipState.NoAudio => "bg-secondary-lt",
+		_ => "bg-red-lt"
+	};
 
 	/// <summary>
 	/// Failures end up in <see cref="_error"/>; null means there is no response to work with.
 	/// </summary>
-	private async Task<MiningResponseTransmission?> SendAsync(MiningRequestTransmission transmission, TimeSpan timeout)
+	private async Task<MiningResponseTransmission?> SendAsync(MiningRequestTransmission transmission)
 	{
 		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
 		if (client is null || !SocketClientContainer.IsConnected)
@@ -314,7 +171,7 @@ else
 		}
 		try
 		{
-			MiningResponseTransmission response = await new MiningRequest(transmission).Get(client, timeout);
+			MiningResponseTransmission response = await new MiningRequest(transmission).Get(client, MiningRequest.Timeout);
 			_error = response.Error;
 			return response;
 		}

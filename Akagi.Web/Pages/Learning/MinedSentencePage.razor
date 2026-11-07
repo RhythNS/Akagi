@@ -1,0 +1,366 @@
+@page "/Learn/Mine/{Id}"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Pages.Learning.Components
+@using Akagi.Web.Services
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject IJSRuntime JS
+
+<PageTitle>Mined sentence - Akagi</PageTitle>
+
+@if (_sentence is MinedSentenceView header)
+{
+	<div class="page-header d-print-none mb-4">
+		<div class="page-pretitle"><a class="text-reset" href="Learn/Mining">Mined sentences</a></div>
+		<h2 class="page-title" lang="ja" data-mined-text>
+			@VocabLineList.Marked(new VocabLine { Text = header.Text, Marks = header.Target.Length > 0 ? [header.Target] : [] })
+		</h2>
+		<div class="text-secondary small mt-1">
+			@header.Speaker in <a href="@VocabText.CallUri(header.CallId, header.Start)" title="Open the call at this line">@header.CallName</a>,
+			@header.Date.ToString("d") at @CallText.Timestamp(header.Start)
+			@if (header.Target.Length > 0)
+			{
+				<span>· mined for <span lang="ja">@header.Target</span></span>
+			}
+		</div>
+	</div>
+}
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert">@_error</div>
+}
+
+@if (_removed)
+{
+	<div class="card" data-mined-removed>
+		<div class="card-body text-center py-5">
+			<h3 class="h4 mb-1">Removed</h3>
+			<p class="text-secondary mb-3">The sentence and its clip are gone. You can mine the line again from the call.</p>
+			<a class="btn btn-outline-primary" href="Learn/Mining">All mined sentences</a>
+		</div>
+	</div>
+}
+else if (_sentence is MinedSentenceView sentence)
+{
+	<div class="card mb-3" data-mined-state="@sentence.State">
+		@if (sentence.State is MinedClipState.Queued or MinedClipState.Cutting)
+		{
+			<div class="card-body py-5 text-center" data-mined-progress>
+				<div class="spinner-border text-primary mb-3" role="status"></div>
+				<h3 class="h4 mb-1">@(sentence.State == MinedClipState.Queued ? "Waiting to cut the clip..." : "Cutting the clip from the recording...")</h3>
+				<p class="text-secondary mb-0">
+					@(sentence.IsLearner ? "From your own channel." : $"From {sentence.Speaker}'s channel only.")
+					This page updates by itself.
+				</p>
+			</div>
+		}
+		else
+		{
+			<div class="card-body">
+				@if (sentence.State == MinedClipState.Ready)
+				{
+					<div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+						<audio controls preload="auto" @ref="_player" style="max-width: 100%;" data-mined-audio></audio>
+						<span class="text-secondary small">@CallText.Seconds(sentence.ClipSeconds), @(sentence.IsLearner ? "your channel" : $"{sentence.Speaker}'s channel")</span>
+					</div>
+				}
+				else if (sentence.State == MinedClipState.NoAudio)
+				{
+					<div class="alert alert-secondary small" data-mined-no-audio>
+						This call has no recording (it came from a transcript), so there is no audio. The subtitle and Anki downloads have the text.
+					</div>
+				}
+				else
+				{
+					<div class="alert alert-danger small d-flex flex-wrap align-items-center gap-2" data-mined-failed>
+						<span class="me-auto">The clip could not be cut. @sentence.Error</span>
+						<button type="button" class="btn btn-sm btn-outline-danger" disabled="@_busy" data-mined-retry @onclick="RetryAsync">Try again</button>
+					</div>
+				}
+
+				<div class="d-flex flex-wrap gap-2" data-mined-downloads>
+					@if (sentence.State == MinedClipState.Ready)
+					{
+						<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" disabled="@_busy"
+								data-download="@MiningFileKind.Audio" @onclick="() => DownloadAsync(MiningFileKind.Audio)">
+							<Icon IconType="@Icons.Download" Size="16" />
+							<span>Audio (.mp3)</span>
+						</button>
+					}
+					<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" disabled="@_busy"
+							title="The sentence as subtitles, timed to the clip" data-download="@MiningFileKind.Subtitles" @onclick="() => DownloadAsync(MiningFileKind.Subtitles)">
+						<Icon IconType="@Icons.Download" Size="16" />
+						<span>Subtitles (.srt)</span>
+					</button>
+					<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" disabled="@_busy"
+							title="A zip with the clip and a CSV for Anki's import; its README says where the clip goes" data-download="@MiningFileKind.Anki" @onclick="() => DownloadAsync(MiningFileKind.Anki)">
+						<Icon IconType="@Icons.Download" Size="16" />
+						<span>Anki (.zip)</span>
+					</button>
+				</div>
+			</div>
+		}
+		<div class="card-footer d-flex align-items-center gap-2">
+			@if (_confirmRemove)
+			{
+				<span class="small me-auto">Remove this sentence and its clip?</span>
+				<button type="button" class="btn btn-sm btn-danger" disabled="@_busy" data-remove-yes @onclick="RemoveAsync">Remove</button>
+				<button type="button" class="btn btn-sm btn-outline-secondary" data-remove-no @onclick="() => _confirmRemove = false">Keep</button>
+			}
+			else
+			{
+				<span class="text-secondary small me-auto">Mined @sentence.AddedAt.ToLocalTime().ToString("g")</span>
+				<button type="button" class="btn btn-sm btn-ghost-danger" data-remove @onclick="() => _confirmRemove = true">
+					<Icon IconType="@Icons.Trash" Size="14" />
+					<span class="ms-1">Remove</span>
+				</button>
+			}
+		</div>
+	</div>
+}
+else if (_offline)
+{
+	<div class="card border-danger">
+		<div class="card-body py-5 text-center">
+			<h3 class="h4 mb-1">Socket Service Offline</h3>
+			<p class="text-secondary mb-3">Unable to reach the Akagi backend. Mined sentences are stored there.</p>
+			<button type="button" class="btn btn-primary" @onclick="LoadAsync">Retry Connection</button>
+		</div>
+	</div>
+}
+else if (_missing)
+{
+	<div class="card" data-mined-missing>
+		<div class="card-body py-5 text-center">
+			<h3 class="h4 mb-1">Not found</h3>
+			<p class="text-secondary mb-0">This sentence does not exist, or it was removed (also when its call was deleted).</p>
+		</div>
+	</div>
+}
+else
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+
+@code {
+	/// <summary>How often the page asks while the clip is being cut.</summary>
+	public static TimeSpan PollInterval { get; set; } = TimeSpan.FromSeconds(1);
+
+	[Parameter]
+	public string Id { get; set; } = string.Empty;
+
+	private MinedSentenceView? _sentence;
+	private byte[]? _audio;
+	private bool _audioShown;
+	private ElementReference _player;
+	private bool _offline;
+	private bool _missing;
+	private bool _removed;
+	private bool _busy;
+	private bool _confirmRemove;
+	private string? _error;
+	private string? _loadedId;
+	private readonly CancellationTokenSource _stop = new();
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override async Task OnParametersSetAsync()
+	{
+		if (_loadedId != Id)
+		{
+			_loadedId = Id;
+			_sentence = null;
+			_audio = null;
+			_audioShown = false;
+			_removed = false;
+			_missing = false;
+			await LoadAsync();
+		}
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (_audio != null && !_audioShown && _sentence?.State == MinedClipState.Ready)
+		{
+			_audioShown = true;
+			await FileDownloads.SetAudioAsync(JS, _player, _audio);
+		}
+	}
+
+	private async Task LoadAsync()
+	{
+		_offline = false;
+		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.Get, Id = Id }, quiet: true);
+		if (response == null)
+		{
+			_offline = _sentence == null;
+			return;
+		}
+		await ShowAsync(response.Sentence);
+		if (IsCutting)
+		{
+			_ = FollowAsync(Id);
+		}
+	}
+
+	private bool IsCutting => _sentence?.State is MinedClipState.Queued or MinedClipState.Cutting;
+
+	/// <summary>
+	/// Asks again until the clip is cut or failed.
+	/// </summary>
+	private async Task FollowAsync(string id)
+	{
+		try
+		{
+			while (IsCutting && id == Id && !_stop.IsCancellationRequested)
+			{
+				await Task.Delay(PollInterval, _stop.Token);
+				MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.Get, Id = id }, quiet: true);
+				if (response != null && id == Id)
+				{
+					await InvokeAsync(async () =>
+					{
+						await ShowAsync(response.Sentence);
+						StateHasChanged();
+					});
+				}
+			}
+		}
+		catch (OperationCanceledException)
+		{
+			// The page was left
+		}
+	}
+
+	private async Task ShowAsync(MinedSentenceView? sentence)
+	{
+		_sentence = sentence;
+		_missing = sentence == null;
+		if (sentence?.State == MinedClipState.Ready && _audio == null)
+		{
+			// Fetched once for the player; the audio download reuses it
+			MiningResponseTransmission? audio = await SendAsync(new MiningRequestTransmission { Action = MiningAction.Download, Id = sentence.Id, File = MiningFileKind.Audio }, quiet: true);
+			if (audio is { Error: null, Data.Length: > 0 })
+			{
+				_audio = audio.Data;
+				_audioFileName = audio.FileName;
+			}
+		}
+	}
+
+	private string _audioFileName = string.Empty;
+
+	private async Task DownloadAsync(MiningFileKind kind)
+	{
+		if (_sentence == null)
+		{
+			return;
+		}
+		if (kind == MiningFileKind.Audio && _audio != null)
+		{
+			await FileDownloads.SaveAsync(JS, _audioFileName, _audio);
+			return;
+		}
+		_busy = true;
+		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.Download, Id = _sentence.Id, File = kind });
+		_busy = false;
+		if (response is { Error: null, Data.Length: > 0 })
+		{
+			await FileDownloads.SaveAsync(JS, response.FileName, response.Data);
+		}
+	}
+
+	private async Task RetryAsync()
+	{
+		if (_sentence == null)
+		{
+			return;
+		}
+		_busy = true;
+		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.Retry, Id = _sentence.Id });
+		_busy = false;
+		if (response?.Sentence != null)
+		{
+			await ShowAsync(response.Sentence);
+			if (IsCutting)
+			{
+				_ = FollowAsync(Id);
+			}
+		}
+	}
+
+	private async Task RemoveAsync()
+	{
+		if (_sentence == null)
+		{
+			return;
+		}
+		_busy = true;
+		MiningResponseTransmission? response = await SendAsync(new MiningRequestTransmission { Action = MiningAction.Remove, Id = _sentence.Id });
+		_busy = false;
+		_confirmRemove = false;
+		if (response is { Error: null })
+		{
+			_removed = true;
+		}
+	}
+
+	/// <summary>
+	/// Failures end up in <see cref="_error"/> unless quiet; null means there is no response to work with.
+	/// </summary>
+	private async Task<MiningResponseTransmission?> SendAsync(MiningRequestTransmission transmission, bool quiet = false)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return null;
+		}
+		try
+		{
+			MiningResponseTransmission response = await new MiningRequest(transmission).Get(client, MiningRequest.Timeout);
+			if (!quiet)
+			{
+				_error = response.Error;
+			}
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			if (!quiet)
+			{
+				_error = "That took too long. Try again in a moment.";
+			}
+			return null;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_sentence == null && _offline && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+		_stop.Cancel();
+		_stop.Dispose();
+	}
+}

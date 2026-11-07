@@ -741,6 +741,11 @@ public class InsightAdvice
     /// </summary>
     [Key(4)]
     public string Word { get; set; } = string.Empty;
+    /// <summary>
+    /// What it suggests, e.g. "use-more:はねる", to ignore it by; empty when it cannot be ignored.
+    /// </summary>
+    [Key(5)]
+    public string Key { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -834,6 +839,11 @@ public class CallInsights
     /// </summary>
     [Key(14)]
     public int HiddenCalls { get; set; }
+    /// <summary>
+    /// The suggestions the user chose to ignore, newest first, so they can be shown again.
+    /// </summary>
+    [Key(15)]
+    public InsightAdvice[] IgnoredAdvice { get; set; } = [];
 }
 
 [MessagePackObject]

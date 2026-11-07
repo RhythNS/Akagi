@@ -259,9 +259,10 @@ else
 		if (response != null)
 		{
 			_error = response.Error;
-			if (response.Error == null)
+			if (response is { Error: null, Sentence: MinedSentenceView added })
 			{
-				_mined = response.Sentences;
+				// The line's button becomes the link to it
+				_mined = [added, .. _mined.Where(m => m.Id != added.Id)];
 			}
 		}
 	}

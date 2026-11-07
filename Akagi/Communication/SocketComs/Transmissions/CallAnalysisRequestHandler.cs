@@ -118,6 +118,20 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
                     break;
                 }
 
+                case CallAnalysisAction.IgnoreAdvice:
+                {
+                    JapaneseDiagnosis diagnosis = await _diagnoses.GetOrCreate(userId);
+                    await PrepareAsync(jobs, diagnosis);
+                    if (IgnoreAdvice(diagnosis, jobs, request))
+                    {
+                        diagnosis.Dirty = true;
+                        await _diagnoses.SaveDocumentAsync(diagnosis);
+                        _logger.LogInformation("Suggestion {Key} ignored: {Ignore} for user {UserId}", request.AdviceKey, request.Ignore, userId);
+                    }
+                    response.Insights = CallAnalysisViews.Insights(jobs, diagnosis, request.From, request.To);
+                    break;
+                }
+
                 case CallAnalysisAction.Advice:
                 {
                     if (_advisor == null || user == null)
@@ -325,5 +339,43 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
                 await _jobs.SaveDocumentAsync(job);
             }
         }
+    }
+
+    /// <summary>The most suggestions kept as ignored; the oldest go first.</summary>
+    internal const int MaxIgnoredAdvice = 500;
+
+    /// <summary>
+    /// Adds the suggestion to the ignored ones, with the title it has now, or takes it out again. Returns whether
+    /// anything changed.
+    /// </summary>
+    internal static bool IgnoreAdvice(JapaneseDiagnosis diagnosis, List<CallJob> jobs, CallAnalysisRequestTransmission request)
+    {
+        string key = request.AdviceKey.Trim();
+        if (key.Length == 0 || key.Length > 200)
+        {
+            return false;
+        }
+        if (!request.Ignore)
+        {
+            return diagnosis.IgnoredAdvice.RemoveAll(i => i.Key == key) > 0;
+        }
+        if (diagnosis.IgnoredAdvice.Any(i => i.Key == key))
+        {
+            return false;
+        }
+        InsightAdvice? shown = CallAnalysisViews.Insights(jobs, diagnosis, request.From, request.To).Advice.FirstOrDefault(a => a.Key == key);
+        int colon = key.IndexOf(':');
+        diagnosis.IgnoredAdvice.Add(new IgnoredAdvice
+        {
+            Key = key,
+            Kind = shown?.Kind ?? (colon > 0 ? key[..colon] : string.Empty),
+            Title = shown?.Title ?? (colon > 0 ? key[(colon + 1)..] : key),
+            IgnoredAt = DateTime.UtcNow
+        });
+        if (diagnosis.IgnoredAdvice.Count > MaxIgnoredAdvice)
+        {
+            diagnosis.IgnoredAdvice = [.. diagnosis.IgnoredAdvice.OrderByDescending(i => i.IgnoredAt).Take(MaxIgnoredAdvice)];
+        }
+        return true;
     }
 }

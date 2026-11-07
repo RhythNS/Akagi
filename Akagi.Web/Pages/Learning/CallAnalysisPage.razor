@@ -179,8 +179,8 @@
 	private bool _exporting;
 	private MinedSentenceView[] _mined = [];
 
-	private IReadOnlyCollection<double> MinedHere =>
-		[.. _mined.Where(m => m.CallId == _selectedId).Select(m => m.Start)];
+	private IReadOnlyCollection<MinedSentenceView> MinedHere =>
+		[.. _mined.Where(m => m.CallId == _selectedId)];
 
 	protected override void OnInitialized()
 	{
@@ -332,9 +332,10 @@
 			Time = line.Start,
 			Text = line.Text
 		}, MiningRequest.Timeout);
-		if (response?.Error == null && response?.Sentences is { Length: > 0 } sentences)
+		if (response is { Error: null, Sentence: MinedSentenceView added })
 		{
-			_mined = sentences;
+			// The line's button becomes the link to it
+			_mined = [added, .. _mined.Where(m => m.Id != added.Id)];
 		}
 	}
 

@@ -137,7 +137,12 @@ internal static partial class CallAnalysisViews
             .OrderByDescending(p => Date(p.Job))
             .DistinctBy(p => CallQuotes.Normalize(p.Finding.Said))
             .Select(p => new InsightPhrase { Phrase = p.Finding.Said, Meaning = p.Finding.Better, CallId = p.Job.Id!, CallName = Name(p.Job), Date = Date(p.Job) })];
-        insights.Advice = [.. Advise(finished, struggles, insights.FocusStruggles, words.Values.Select(w => (w.Word, w.Learner, w.Partner)), insights.HeardNotSaid)];
+        List<IgnoredAdvice> ignored = diagnosis?.IgnoredAdvice ?? [];
+        insights.Advice = [.. Advise(finished, struggles, insights.FocusStruggles, words.Values.Select(w => (w.Word, w.Learner, w.Partner)), insights.HeardNotSaid,
+            ignored.Select(i => i.Key).ToHashSet())];
+        insights.IgnoredAdvice = [.. ignored
+            .OrderByDescending(i => i.IgnoredAt)
+            .Select(i => new InsightAdvice { Key = i.Key, Kind = i.Kind, Title = i.Title, Word = AdviceWord(i.Key) })];
         return insights;
     }
 
@@ -202,8 +207,9 @@ internal static partial class CallAnalysisViews
     /// never says.
     /// </summary>
     internal static IEnumerable<InsightAdvice> Advise(List<CallJob> jobs, List<InsightStruggle> struggles, IEnumerable<InsightStruggle> focus,
-        IEnumerable<(CallWord Word, int Learner, int Partner)> words, IEnumerable<InsightWord> heardNotSaid)
+        IEnumerable<(CallWord Word, int Learner, int Partner)> words, IEnumerable<InsightWord> heardNotSaid, IReadOnlySet<string>? ignored = null)
     {
+        ignored ??= new HashSet<string>();
         List<CallJob> recent = [.. jobs.TakeLast(RecentCalls)];
         HashSet<string> recentIds = [.. recent.Select(j => j.Id!)];
 
@@ -235,7 +241,7 @@ internal static partial class CallAnalysisViews
 
         HashSet<string> focused = [.. focus.Select(f => f.IssueId)];
         foreach (var candidate in struggles
-            .Where(s => s.IssueId.Length > 0 && !focused.Contains(s.IssueId) && s.Status is "" or "active")
+            .Where(s => s.IssueId.Length > 0 && !focused.Contains(s.IssueId) && s.Status is "" or "active" && !ignored.Contains(AdviceKey("focus", s.IssueId)))
             .Select(s => (Struggle: s, Recent: s.Occurrences.Count(o => recentIds.Contains(o.CallId))))
             .Where(c => c.Recent >= 2)
             .OrderByDescending(c => c.Struggle.Severity * c.Recent)
@@ -251,7 +257,8 @@ internal static partial class CallAnalysisViews
                 Kind = "focus",
                 Title = $"Focus on: {struggle.Pattern}",
                 Detail = $"{candidate.Recent}× in your last {recent.Count} call{(recent.Count == 1 ? "" : "s")} ({struggle.Times}× in all), {SeverityWord(struggle.Severity)}.{example}",
-                IssueId = struggle.IssueId
+                IssueId = struggle.IssueId,
+                Key = AdviceKey("focus", struggle.IssueId)
             };
         }
 
@@ -263,7 +270,7 @@ internal static partial class CallAnalysisViews
             foreach ((CallWord word, int learner, int partner, double ratio) in counted
                 .Where(w => w.Learner >= MinOverusedCount)
                 .Select(w => (w.Word, w.Learner, w.Partner, Ratio: (double)w.Learner / learnerTotal / ((w.Partner + 0.5) / partnerTotal)))
-                .Where(w => w.Ratio >= MinOveruseRatio)
+                .Where(w => w.Ratio >= MinOveruseRatio && !ignored.Contains(AdviceKey("use-less", w.Word.Lemma)))
                 .OrderByDescending(w => w.Learner * Math.Log(w.Ratio))
                 .Take(MaxWordAdvice))
             {
@@ -272,13 +279,15 @@ internal static partial class CallAnalysisViews
                     Kind = "use-less",
                     Title = $"Use less: {word.Lemma}",
                     Detail = $"You said it {learner}× ({Number(learner * 1000.0 / learnerTotal)} per 1,000 words), your partners {partner}× ({Number(partner * 1000.0 / partnerTotal)} per 1,000).",
-                    Word = word.Lemma
+                    Word = word.Lemma,
+                    Key = AdviceKey("use-less", word.Lemma)
                 };
             }
         }
 
         foreach (InsightWord word in heardNotSaid
-            .Where(w => w.Partner >= MinHeardForAdvice && Enum.TryParse(w.Class, out WordClass wordClass) && UsefulClasses.Contains(wordClass))
+            .Where(w => w.Partner >= MinHeardForAdvice && Enum.TryParse(w.Class, out WordClass wordClass) && UsefulClasses.Contains(wordClass)
+                && !ignored.Contains(AdviceKey("use-more", w.Lemma)))
             .Take(MaxWordAdvice))
         {
             yield return new InsightAdvice
@@ -286,10 +295,22 @@ internal static partial class CallAnalysisViews
                 Kind = "use-more",
                 Title = $"Try using: {word.Lemma}",
                 Detail = $"Your partners said it {word.Partner}×; you never have. You already understand it, so it is an easy one to make your own.",
-                Word = word.Lemma
+                Word = word.Lemma,
+                Key = AdviceKey("use-more", word.Lemma)
             };
         }
     }
+
+    /// <summary>
+    /// What a suggestion is about, to ignore it by: the kind and the struggle or word.
+    /// </summary>
+    internal static string AdviceKey(string kind, string target) => $"{kind}:{target}";
+
+    /// <summary>
+    /// The word of a word suggestion's key, so an ignored one still links to its lines.
+    /// </summary>
+    private static string AdviceWord(string key) =>
+        key.StartsWith("use-", StringComparison.Ordinal) && key.IndexOf(':') is int colon and > 0 ? key[(colon + 1)..] : string.Empty;
 
     /// <summary>
     /// The numbers the insights follow, for one call next to the average of the user's other finished calls.

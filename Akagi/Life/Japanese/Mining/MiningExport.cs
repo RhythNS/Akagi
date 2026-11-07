@@ -18,7 +18,7 @@ internal enum MiningVoices
 }
 
 /// <summary>
-/// The text files of a mining export: an Anki import file for picked sentences and an SRT subtitle file for a call.
+/// The text files of a mining download: an Anki import file and SRT subtitles for a sentence, and an SRT for a call.
 /// Kept free of audio work so they can be checked on their own.
 /// </summary>
 internal static class MiningExport
@@ -62,7 +62,7 @@ internal static class MiningExport
         StringBuilder csv = new();
         csv.AppendLine("#separator:Comma");
         csv.AppendLine("#html:false");
-        csv.AppendLine("#columns:Sentence,Target,Audio,Source,Note");
+        csv.AppendLine("#columns:Sentence,Target,Audio,Source");
         foreach ((MinedSentence sentence, string? clip) in rows)
         {
             string source = string.Create(CultureInfo.InvariantCulture,
@@ -71,33 +71,43 @@ internal static class MiningExport
                 Field(sentence.Text),
                 Field(sentence.Target),
                 Field(clip == null ? string.Empty : $"[sound:{clip}]"),
-                Field(source),
-                Field(sentence.Note)));
+                Field(source)));
         }
         return csv.ToString();
     }
 
-    public static string Readme(int sentences, int clips, bool ffmpegMissing)
+    public static string Readme(string? clip, string? missingAudio)
     {
         StringBuilder text = new();
-        text.AppendLine($"{sentences} sentence(s), {clips} audio clip(s).");
-        text.AppendLine();
         text.AppendLine("Importing into Anki:");
-        text.AppendLine("1. Copy the .mp3 files into your Anki profile's collection.media folder");
-        text.AppendLine("   (Anki: Tools > Check Media > View Files shows where it is).");
-        text.AppendLine($"2. File > Import > {CsvFileName}. The columns are Sentence, Target, Audio, Source and Note;");
-        text.AppendLine("   map them to the fields of your sentence card type.");
-        if (ffmpegMissing)
+        if (clip != null)
         {
-            text.AppendLine();
-            text.AppendLine("No clips were cut because ffmpeg was not found on the server (CallAnalysis:FfmpegPath).");
+            text.AppendLine($"1. Copy {clip} into your Anki profile's collection.media folder");
+            text.AppendLine("   (Anki: Tools > Check Media > View Files shows where it is).");
+            text.AppendLine($"2. File > Import > {CsvFileName}. The columns are Sentence, Target, Audio and Source;");
         }
-        else if (clips < sentences)
+        else
+        {
+            text.AppendLine($"File > Import > {CsvFileName}. The columns are Sentence, Target, Audio and Source;");
+        }
+        text.AppendLine("   map them to the fields of your sentence card type.");
+        if (missingAudio != null)
         {
             text.AppendLine();
-            text.AppendLine("Some sentences have no clip: they come from a transcript without audio, or the recording is gone.");
+            text.AppendLine(missingAudio);
         }
         return text.ToString();
+    }
+
+    /// <summary>
+    /// The sentence as a one-cue SRT, timed to its clip: the clip starts <see cref="LeadSeconds"/> before the line.
+    /// </summary>
+    public static string SentenceSrt(MinedSentence sentence)
+    {
+        (double clipStart, double clipEnd) = ClipRange(sentence);
+        double start = sentence.Start - clipStart;
+        double end = Math.Min(Math.Max(sentence.End, sentence.Start + 1) - clipStart, clipEnd - clipStart);
+        return $"1{Environment.NewLine}{SrtTime(start)} --> {SrtTime(end)}{Environment.NewLine}{sentence.Text.Trim()}{Environment.NewLine}{Environment.NewLine}";
     }
 
     /// <summary>

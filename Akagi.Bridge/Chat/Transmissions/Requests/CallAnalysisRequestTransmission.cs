@@ -22,7 +22,12 @@ public enum CallAnalysisAction
     /// <summary>Marks the struggle <see cref="CallAnalysisRequestTransmission.IssueId"/> as a focus struggle, or unmarks it.</summary>
     SetFocus,
     /// <summary>Asks the Learning model for a written study plan; answers with the insights.</summary>
-    Advice
+    Advice,
+    /// <summary>
+    /// Hides the suggestion <see cref="CallAnalysisRequestTransmission.AdviceKey"/> from "What to work on", or shows it
+    /// again when <see cref="CallAnalysisRequestTransmission.Ignore"/> is false; answers with the insights.
+    /// </summary>
+    IgnoreAdvice
 }
 
 [MessagePackObject]
@@ -61,4 +66,11 @@ public class CallAnalysisRequestTransmission : Transmission
     public string IssueId { get; set; } = string.Empty;
     [Key(10)]
     public bool Focus { get; set; }
+    /// <summary>
+    /// <see cref="InsightAdvice.Key"/> of the suggestion to ignore.
+    /// </summary>
+    [Key(11)]
+    public string AdviceKey { get; set; } = string.Empty;
+    [Key(12)]
+    public bool Ignore { get; set; }
 }

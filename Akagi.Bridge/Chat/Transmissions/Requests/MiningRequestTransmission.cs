@@ -4,16 +4,35 @@ namespace Akagi.Bridge.Chat.Transmissions.Requests;
 
 public enum MiningAction
 {
-    /// <summary>The user's mined sentences, newest first.</summary>
+    /// <summary>The user's mined sentences, so lines already mined link to them.</summary>
     List,
-    /// <summary>Mines the line of <see cref="MiningRequestTransmission.CallId"/> at <see cref="MiningRequestTransmission.Time"/>.</summary>
+    /// <summary>
+    /// Mines the line of <see cref="MiningRequestTransmission.CallId"/> at <see cref="MiningRequestTransmission.Time"/>
+    /// and starts cutting its clip.
+    /// </summary>
     Add,
+    /// <summary>One sentence, to follow its clip being cut.</summary>
+    Get,
+    /// <summary>One of <see cref="MiningFileKind"/> for the sentence <see cref="MiningRequestTransmission.Id"/>.</summary>
+    Download,
+    /// <summary>Cuts the clip again after it failed.</summary>
+    Retry,
     Remove,
-    SetNote,
-    /// <summary>A zip of audio clips and an Anki import file, for <see cref="MiningRequestTransmission.Ids"/> or all.</summary>
-    ExportClips,
     /// <summary>A zip of one call's SRT subtitles and audio.</summary>
     ExportCall
+}
+
+/// <summary>
+/// The downloads of one mined sentence.
+/// </summary>
+public enum MiningFileKind
+{
+    /// <summary>The clip on its own.</summary>
+    Audio,
+    /// <summary>An SRT with the sentence, timed to the clip.</summary>
+    Subtitles,
+    /// <summary>A zip with the clip and a one-card Anki import file.</summary>
+    Anki
 }
 
 /// <summary>
@@ -49,11 +68,9 @@ public class MiningRequestTransmission : Transmission
     [Key(5)]
     public string Target { get; set; } = string.Empty;
     [Key(6)]
-    public string Note { get; set; } = string.Empty;
-    [Key(7)]
     public string Id { get; set; } = string.Empty;
+    [Key(7)]
+    public MiningFileKind File { get; set; }
     [Key(8)]
-    public string[] Ids { get; set; } = [];
-    [Key(9)]
     public MiningVoiceChoice Voices { get; set; }
 }

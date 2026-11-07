@@ -11,7 +11,7 @@ using Microsoft.Extensions.Options;
 namespace Akagi.Communication.SocketComs.Transmissions;
 
 /// <summary>
-/// The sentence mining list and its downloads.
+/// Mining a sentence, following its clip being cut, and its downloads; also a whole call's subtitles.
 /// </summary>
 internal class MiningRequestHandler : SocketTransmissionHandler
 {
@@ -21,7 +21,7 @@ internal class MiningRequestHandler : SocketTransmissionHandler
     private readonly ILogger<MiningRequestHandler> _logger;
 
     public MiningRequestHandler(ICallJobDatabase jobs, IMinedSentenceDatabase mined, IOptions<CallAnalysisOptions> options, ILogger<MiningRequestHandler> logger)
-        : this(new MiningService(jobs, mined, new AudioClipper(options.Value.FfmpegPath), logger), logger)
+        : this(new MiningService(jobs, mined, new AudioClipper(options.Value.FfmpegPath), options.Value.StorageDirectory, logger), logger)
     {
     }
 
@@ -37,7 +37,7 @@ internal class MiningRequestHandler : SocketTransmissionHandler
         MiningRequestTransmission request = GetTransmission<MiningRequestTransmission>(transmissionWrapper);
         SocketSession session = context.Session;
 
-        // Cutting clips takes a while, and the session reads nothing else until this returns
+        // A whole call's audio takes a while, and the session reads nothing else until this returns
         _ = Task.Run(async () => session.SendTransmission(await ProcessAsync(user.Id!, request)));
         return Task.CompletedTask;
     }
@@ -50,36 +50,37 @@ internal class MiningRequestHandler : SocketTransmissionHandler
             switch (request.Action)
             {
                 case MiningAction.List:
+                    response.Sentences = [.. (await _mining.ListAsync(userId)).Select(View)];
                     break;
 
                 case MiningAction.Add:
                 {
-                    (MinedSentence? sentence, string? error) = await _mining.AddAsync(userId, request.CallId, request.Time, request.Text, request.Target, request.Note);
+                    (MinedSentence? sentence, string? error) = await _mining.AddAsync(userId, request.CallId, request.Time, request.Text, request.Target);
                     response.Error = error;
-                    response.Added = sentence == null ? null : View(sentence);
+                    response.Sentence = sentence == null ? null : View(sentence);
                     break;
                 }
+
+                case MiningAction.Get:
+                    Found(response, await _mining.GetAsync(userId, request.Id));
+                    break;
+
+                case MiningAction.Retry:
+                    Found(response, await _mining.RetryAsync(userId, request.Id));
+                    break;
 
                 case MiningAction.Remove:
                     if (!await _mining.RemoveAsync(userId, request.Id))
                     {
-                        response.Error = "That sentence is not in your list.";
+                        response.Error = "That sentence was already removed.";
                     }
                     break;
 
-                case MiningAction.SetNote:
-                    if (!await _mining.SetNoteAsync(userId, request.Id, request.Note))
-                    {
-                        response.Error = "That sentence is not in your list.";
-                    }
-                    break;
-
-                case MiningAction.ExportClips:
+                case MiningAction.Download:
                 {
-                    (MiningFile? file, string? error) = await _mining.ExportClipsAsync(userId, request.Ids, CancellationToken.None);
+                    (MiningFile? file, string? error) = await _mining.DownloadAsync(userId, request.Id, request.File);
                     Attach(response, file, error);
-                    // The file is the answer; the list is unchanged
-                    return response;
+                    break;
                 }
 
                 case MiningAction.ExportCall:
@@ -87,14 +88,13 @@ internal class MiningRequestHandler : SocketTransmissionHandler
                     MiningVoices voices = request.Voices == MiningVoiceChoice.Partner ? MiningVoices.Partner : MiningVoices.Both;
                     (MiningFile? file, string? error) = await _mining.ExportCallAsync(userId, request.CallId, voices, CancellationToken.None);
                     Attach(response, file, error);
-                    return response;
+                    break;
                 }
 
                 default:
                     response.Error = "Unknown mining request.";
-                    return response;
+                    break;
             }
-            response.Sentences = [.. (await _mining.ListAsync(userId)).Select(View)];
         }
         catch (Exception ex)
         {
@@ -102,6 +102,15 @@ internal class MiningRequestHandler : SocketTransmissionHandler
             response.Error = "Something went wrong. Try again in a moment.";
         }
         return response;
+    }
+
+    private static void Found(MiningResponseTransmission response, MinedSentence? sentence)
+    {
+        response.Sentence = sentence == null ? null : View(sentence);
+        if (sentence == null)
+        {
+            response.Error = "This sentence does not exist, or it was removed.";
+        }
     }
 
     private static void Attach(MiningResponseTransmission response, MiningFile? file, string? error)
@@ -126,7 +135,9 @@ internal class MiningRequestHandler : SocketTransmissionHandler
         IsLearner = sentence.IsLearner,
         Text = sentence.Text,
         Target = sentence.Target,
-        Note = sentence.Note,
-        AddedAt = sentence.AddedAt
+        AddedAt = sentence.AddedAt,
+        State = sentence.State,
+        Error = sentence.Error,
+        ClipSeconds = sentence.ClipSeconds
     };
 }

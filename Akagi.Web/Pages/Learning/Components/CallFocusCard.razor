@@ -34,8 +34,11 @@
 								<span class="text-secondary">The trend shows up once a call after you picked it is analyzed.</span>
 							}
 						</div>
-						<TrendColumns Title="This struggle per call" Hint="@(struggle.Times > 0 ? $"{struggle.Times}× in the calls shown" : "Not once in the calls shown")"
-									  Points="Points(struggle)" Format="CallText.Number" />
+						@* Wrapped, since the chart card fills its parent's height and the column also holds the text above *@
+						<div>
+							<TrendColumns Title="This struggle per call" Hint="@(struggle.Times > 0 ? $"{struggle.Times}× in the calls shown" : "Not once in the calls shown")"
+										  Points="Points(struggle)" Format="CallText.Number" />
+						</div>
 					</div>
 				}
 			</div>

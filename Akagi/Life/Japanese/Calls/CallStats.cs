@@ -35,7 +35,7 @@ internal partial class CallStats
     /// <summary>
     /// Raised whenever the measuring changes; stored statistics of an older version are computed again.
     /// </summary>
-    public const int CurrentVersion = 3;
+    public const int CurrentVersion = 4;
     public const double WindowSeconds = 300;
     public const double LongPauseSeconds = 2.0;
     /// <summary>

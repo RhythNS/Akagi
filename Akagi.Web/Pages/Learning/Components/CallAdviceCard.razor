@@ -31,14 +31,41 @@
 							}
 							@if (advice.Word.Length > 0)
 							{
-								<a class="btn btn-sm btn-outline-secondary py-0" data-advice-word="@advice.Word"
-								   href="@(advice.Kind == "use-less" ? $"Learn/Vocabulary?expression={Uri.EscapeDataString(advice.Word)}" : $"Learn/Vocabulary?word={Uri.EscapeDataString(advice.Word)}")">
+								<a class="btn btn-sm btn-outline-secondary py-0" data-advice-word="@advice.Word" href="@WordUri(advice)">
 									@(advice.Kind == "use-less" ? "Where you say it" : "Hear it used")
 								</a>
+							}
+							@if (advice.Key.Length > 0)
+							{
+								<button type="button" class="btn btn-sm btn-ghost-secondary py-0" disabled="@Busy" data-advice-ignore="@advice.Key"
+										title="Hide this suggestion, e.g. when the word was misread. You can show it again below."
+										@onclick="() => OnIgnore.InvokeAsync(new IgnoreChange(advice.Key, true))">Ignore</button>
 							}
 						</span>
 					</div>
 					<div class="text-secondary small mt-1" lang="ja">@advice.Detail</div>
+				</div>
+			}
+		</div>
+	}
+	@if (Insights.IgnoredAdvice.Length > 0)
+	{
+		<div class="card-body border-top py-2" data-ignored-advice>
+			<button type="button" class="btn btn-sm btn-link text-secondary p-0" data-ignored-toggle @onclick="() => _showIgnored = !_showIgnored">
+				@(_showIgnored ? "Hide" : "Show") the @Insights.IgnoredAdvice.Length suggestion@(Insights.IgnoredAdvice.Length == 1 ? "" : "s") you ignored
+			</button>
+			@if (_showIgnored)
+			{
+				<div class="list-group list-group-flush mt-2">
+					@foreach (InsightAdvice ignored in Insights.IgnoredAdvice)
+					{
+						<div class="list-group-item d-flex align-items-center gap-2 px-0 py-1" data-ignored="@ignored.Key">
+							<span class="badge @KindClass(ignored.Kind)">@KindLabel(ignored.Kind)</span>
+							<span class="text-secondary small" lang="ja">@ignored.Title</span>
+							<button type="button" class="btn btn-sm btn-ghost-secondary py-0 ms-auto" disabled="@Busy" data-advice-unignore="@ignored.Key"
+									@onclick="() => OnIgnore.InvokeAsync(new IgnoreChange(ignored.Key, false))">Show again</button>
+						</div>
+					}
 				</div>
 			}
 		</div>
@@ -91,6 +118,20 @@
 
 	[Parameter]
 	public EventCallback OnWrite { get; set; }
+
+	/// <summary>
+	/// Hides a suggestion by its key, or shows it again.
+	/// </summary>
+	[Parameter]
+	public EventCallback<IgnoreChange> OnIgnore { get; set; }
+
+	public record IgnoreChange(string Key, bool Ignore);
+
+	private bool _showIgnored;
+
+	private static string WordUri(InsightAdvice advice) => advice.Kind == "use-less"
+		? $"Learn/Vocabulary?expression={Uri.EscapeDataString(advice.Word)}"
+		: $"Learn/Vocabulary?word={Uri.EscapeDataString(advice.Word)}";
 
 	private static string KindLabel(string kind) => kind switch
 	{

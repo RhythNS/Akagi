@@ -1,3 +1,4 @@
+using Akagi.Bridge.Chat.Models;
 using Akagi.Data;
 using Microsoft.Extensions.Options;
 using MongoDB.Bson.Serialization.Attributes;
@@ -7,12 +8,14 @@ namespace Akagi.Life.Japanese.Mining;
 
 /// <summary>
 /// A sentence from a call the user wants to learn from: a line they picked in a transcript, a search result, or an
-/// example of a word they hear but do not say. Exported as audio clips with an Anki import file.
+/// example of a word they hear but do not say. Its clip is cut once, kept in the call's folder, and downloaded as
+/// audio, subtitles or an Anki card.
 /// </summary>
+[BsonIgnoreExtraElements]
 internal class MinedSentence : Savable
 {
     private string _userId = string.Empty;
-    private string _note = string.Empty;
+    private MinedClipState _state;
 
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string UserId
@@ -32,12 +35,16 @@ internal class MinedSentence : Savable
     public string Text { get; set; } = string.Empty;
     /// <summary>The word or expression it was mined for, if any.</summary>
     public string Target { get; set; } = string.Empty;
-    public string Note
-    {
-        get => _note;
-        set => SetProperty(ref _note, value);
-    }
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
+    public MinedClipState State
+    {
+        get => _state;
+        set => SetProperty(ref _state, value);
+    }
+    /// <summary>Why the clip could not be cut.</summary>
+    public string Error { get; set; } = string.Empty;
+    /// <summary>Seconds of the cut clip.</summary>
+    public double ClipSeconds { get; set; }
 }
 
 internal interface IMinedSentenceDatabase : IDatabase<MinedSentence>

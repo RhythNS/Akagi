@@ -472,10 +472,10 @@
 	public EventCallback<CallTranscriptLine> OnMine { get; set; }
 
 	/// <summary>
-	/// Start times of this call's lines already in the mining list.
+	/// This call's sentences already mined.
 	/// </summary>
 	[Parameter]
-	public IReadOnlyCollection<double> Mined { get; set; } = [];
+	public IReadOnlyCollection<MinedSentenceView> Mined { get; set; } = [];
 
 	[Parameter]
 	public EventCallback<MiningVoiceChoice> OnExportSubtitles { get; set; }

@@ -11,17 +11,17 @@ public class MiningResponseTransmission : Transmission
     [Key(0)]
     public string RequestId { get; set; } = string.Empty;
     /// <summary>
-    /// All mined sentences after the action, newest first.
+    /// All mined sentences, for <c>List</c>.
     /// </summary>
     [Key(1)]
     public MinedSentenceView[] Sentences { get; set; } = [];
     /// <summary>
-    /// The sentence an add created or found.
+    /// The sentence an add created or found, or the one asked for.
     /// </summary>
     [Key(2)]
-    public MinedSentenceView? Added { get; set; }
+    public MinedSentenceView? Sentence { get; set; }
     /// <summary>
-    /// The export to save, with its name.
+    /// The download to save, with its name.
     /// </summary>
     [Key(3)]
     public string FileName { get; set; } = string.Empty;

@@ -201,6 +201,17 @@ internal class DiagnosisIssue
     }
 }
 
+/// <summary>
+/// A suggestion the user hid, with its title so the page can list it for showing it again.
+/// </summary>
+internal class IgnoredAdvice
+{
+    public string Key { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public DateTime IgnoredAt { get; set; }
+}
+
 internal class DiagnosisStrength
 {
     public string Text { get; set; } = string.Empty;
@@ -260,6 +271,10 @@ internal class JapaneseDiagnosis : Savable
     /// </summary>
     public string Advice { get; set; } = string.Empty;
     public DateTime? AdviceAt { get; set; }
+    /// <summary>
+    /// Suggestions from "What to work on" the user does not want to see, e.g. a word the dictionary misread.
+    /// </summary>
+    public List<IgnoredAdvice> IgnoredAdvice { get; set; } = [];
 
     public (DiagnosisIssue Issue, bool IsNew) RecordIssue(IssueCategory category, string pattern, string explanation, IssueExample? example,
         int severity, DateTime nowUtc)

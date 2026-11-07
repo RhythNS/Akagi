@@ -295,6 +295,41 @@ public sealed class CallToolsTests : IDisposable
     }
 
     [Fact]
+    public async Task IgnoreAdvice_HidesTheSuggestionUntilShownAgain()
+    {
+        for (int day = 1; day <= 3; day++)
+        {
+            Job("Yuki", Day(10, day * 5), ("Me", "仕事は忙しい。"), ("Yuki", "そうなんだ。やっぱり大変だね。やっぱり休んだ方がいいよ。"));
+        }
+        CallAnalysisRequestHandler handler = Handler();
+
+        CallAnalysisResponseTransmission ignored = await handler.ProcessAsync(UserId,
+            new CallAnalysisRequestTransmission { Action = CallAnalysisAction.IgnoreAdvice, AdviceKey = "use-more:やっぱり", Ignore = true });
+        CallAnalysisResponseTransmission again = await handler.ProcessAsync(UserId,
+            new CallAnalysisRequestTransmission { Action = CallAnalysisAction.IgnoreAdvice, AdviceKey = "use-more:やっぱり", Ignore = true });
+        int stored = _diagnoses.Items.Single().IgnoredAdvice.Count;
+        CallAnalysisResponseTransmission shown = await handler.ProcessAsync(UserId,
+            new CallAnalysisRequestTransmission { Action = CallAnalysisAction.IgnoreAdvice, AdviceKey = "use-more:やっぱり", Ignore = false });
+
+        Assert.DoesNotContain(ignored.Insights!.Advice, a => a.Key == "use-more:やっぱり");
+        InsightAdvice hidden = Assert.Single(ignored.Insights.IgnoredAdvice);
+        Assert.Equal(("use-more", "Try using: やっぱり", "やっぱり"), (hidden.Kind, hidden.Title, hidden.Word));
+        Assert.Equal(1, stored);
+        Assert.Single(again.Insights!.IgnoredAdvice);
+        Assert.Contains(shown.Insights!.Advice, a => a.Key == "use-more:やっぱり");
+        Assert.Empty(shown.Insights.IgnoredAdvice);
+    }
+
+    [Fact]
+    public void Tokenizer_ReadsTopicWaNeAsParticles_NotTheVerbHaneru()
+    {
+        Assert.DoesNotContain(JapaneseTokenizer.Tokenize("それはね、今日はね楽しかった。"), t => t.Lemma == "はねる");
+        Assert.Equal(["それ", "は", "ね", "、"], JapaneseTokenizer.Tokenize("それはね、").Select(t => t.Surface));
+        Assert.Contains(JapaneseTokenizer.Tokenize("ボールがはねた。"), t => t.Lemma == "はねる");
+        Assert.Contains(JapaneseTokenizer.Tokenize("魚がはねてる。"), t => t.Lemma == "はねる");
+    }
+
+    [Fact]
     public void Metrics_CompareTheCallWithTheAverageOfTheOthers()
     {
         CallJob quiet = Job("Yuki", Day(10, 1), ("Me", "うん。"), ("Yuki", "最近どう？仕事は大変？週末は何してた？"));
@@ -407,18 +442,22 @@ public sealed class CallToolsTests : IDisposable
 
     // Sentence mining
 
+    private MiningService Mining(IAudioClipper? clipper = null) =>
+        new(_jobs, _mined, clipper ?? new FakeClipper(), _storage, NullLogger.Instance);
+
     [Fact]
     public async Task Mining_AddFindsTheLineAndDoesNotAddTwice()
     {
         CallJob job = Job("Yuki", Day(10, 1), ("Me", "えーと。"), ("Yuki", "やっぱり休んだ方がいいよ。無理しないで。"));
-        MiningService mining = new(_jobs, _mined, new FakeClipper(), NullLogger.Instance);
+        MiningService mining = Mining();
 
-        (MinedSentence? first, string? error) = await mining.AddAsync(UserId, job.Id!, 5, "やっぱり休んだ方がいいよ。", "やっぱり", "");
-        (MinedSentence? again, _) = await mining.AddAsync(UserId, job.Id!, 5, "やっぱり休んだ方がいいよ。", "やっぱり", "");
-        (MinedSentence? missing, string? missingError) = await mining.AddAsync(UserId, job.Id!, 300, "nothing", "", "");
+        (MinedSentence? first, string? error) = await mining.AddAsync(UserId, job.Id!, 5, "やっぱり休んだ方がいいよ。", "やっぱり");
+        (MinedSentence? again, _) = await mining.AddAsync(UserId, job.Id!, 5, "やっぱり休んだ方がいいよ。", "やっぱり");
+        (MinedSentence? missing, string? missingError) = await mining.AddAsync(UserId, job.Id!, 300, "nothing", "");
+        await MiningService.WaitForClipAsync(first!.Id!);
 
         Assert.Null(error);
-        Assert.Equal("Yuki", first!.Speaker);
+        Assert.Equal("Yuki", first.Speaker);
         Assert.False(first.IsLearner);
         Assert.Equal(9, first.End);
         Assert.Same(first, again);
@@ -428,26 +467,101 @@ public sealed class CallToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task Mining_ExportClipsCutsEachSentenceFromItsSpeakersChannel()
+    public async Task Mining_AddCutsTheClipInTheBackgroundFromTheSpeakersChannel()
     {
         CallJob job = Job("Yuki", Day(10, 1), ("Me", "えーと、それもいいね。"), ("Yuki", "やっぱり休んだ方がいいよ。"));
         FakeClipper clipper = new();
-        MiningService mining = new(_jobs, _mined, clipper, NullLogger.Instance);
-        await mining.AddAsync(UserId, job.Id!, 5, "やっぱり休んだ方がいいよ。", "やっぱり", "had better rest");
-        await mining.AddAsync(UserId, job.Id!, 0, "えーと、それもいいね。", "", "");
+        MiningService mining = Mining(clipper);
 
-        (MiningFile? file, string? error) = await mining.ExportClipsAsync(UserId, [], CancellationToken.None);
+        (MinedSentence? partner, _) = await mining.AddAsync(UserId, job.Id!, 5, "やっぱり休んだ方がいいよ。", "やっぱり");
+        (MinedSentence? own, _) = await mining.AddAsync(UserId, job.Id!, 0, "えーと、それもいいね。", "");
+        await MiningService.WaitForClipAsync(partner!.Id!);
+        await MiningService.WaitForClipAsync(own!.Id!);
 
-        Assert.Null(error);
-        using ZipArchive zip = new(new MemoryStream(file!.Data));
+        MinedSentence cut = (await mining.GetAsync(UserId, partner.Id!))!;
+        Assert.Equal(MinedClipState.Ready, cut.State);
+        Assert.Equal(MinedClipState.Ready, (await mining.GetAsync(UserId, own.Id!))!.State);
+        Assert.True(File.Exists(Path.Combine(_storage, job.Id!, "mined", partner.Id + ".mp3")));
+        (double Start, double End, MiningVoices Voices) clip = Assert.Single(clipper.Clips, c => c.Voices == MiningVoices.Partner);
+        Assert.Equal(5 - MiningExport.LeadSeconds, clip.Start, 3);
+        Assert.Contains(clipper.Clips, c => c.Voices == MiningVoices.Learner);
+        Assert.Equal(clip.End - clip.Start, cut.ClipSeconds, 3);
+    }
+
+    [Fact]
+    public async Task Mining_WithoutARecordingThereIsNoAudio_AndWithoutFfmpegItFails()
+    {
+        CallJob job = Job("Yuki", Day(10, 1), ("Me", "えーと。"), ("Yuki", "やっぱりね。"));
+        (MinedSentence? failed, _) = await Mining(new FakeClipper(available: false)).AddAsync(UserId, job.Id!, 5, "やっぱりね。", "");
+        await MiningService.WaitForClipAsync(failed!.Id!);
+        File.Delete(job.SourcePath);
+        (MinedSentence? text, _) = await Mining().AddAsync(UserId, job.Id!, 0, "えーと。", "");
+
+        Assert.Equal(MinedClipState.Failed, failed.State);
+        Assert.Contains("ffmpeg", failed.Error);
+        Assert.Equal(MinedClipState.NoAudio, text!.State);
+        (MiningFile? audio, string? audioError) = await Mining().DownloadAsync(UserId, text.Id!, MiningFileKind.Audio);
+        Assert.Null(audio);
+        Assert.NotNull(audioError);
+        (MiningFile? anki, _) = await Mining().DownloadAsync(UserId, text.Id!, MiningFileKind.Anki);
+        using ZipArchive zip = new(new MemoryStream(anki!.Data));
+        Assert.Equal([MiningExport.CsvFileName, MiningExport.ReadmeFileName], zip.Entries.Select(e => e.Name));
+    }
+
+    [Fact]
+    public async Task Mining_RetryCutsAFailedClipAgain()
+    {
+        CallJob job = Job("Yuki", Day(10, 1), ("Me", "えーと。"), ("Yuki", "やっぱりね。"));
+        (MinedSentence? sentence, _) = await Mining(new FakeClipper(available: false)).AddAsync(UserId, job.Id!, 5, "やっぱりね。", "");
+        await MiningService.WaitForClipAsync(sentence!.Id!);
+
+        await Mining().RetryAsync(UserId, sentence.Id!);
+        await MiningService.WaitForClipAsync(sentence.Id!);
+
+        Assert.Equal(MinedClipState.Ready, sentence.State);
+        Assert.Empty(sentence.Error);
+    }
+
+    [Fact]
+    public async Task Mining_DownloadsTheClipSubtitlesTimedToItAndAnAnkiCard()
+    {
+        CallJob job = Job("Yuki", Day(10, 1), ("Me", "えーと。"), ("Yuki", "やっぱり休んだ方がいいよ。"));
+        MiningService mining = Mining();
+        (MinedSentence? sentence, _) = await mining.AddAsync(UserId, job.Id!, 5, "やっぱり休んだ方がいいよ。", "やっぱり");
+        await MiningService.WaitForClipAsync(sentence!.Id!);
+
+        (MiningFile? audio, _) = await mining.DownloadAsync(UserId, sentence.Id!, MiningFileKind.Audio);
+        (MiningFile? srt, _) = await mining.DownloadAsync(UserId, sentence.Id!, MiningFileKind.Subtitles);
+        (MiningFile? anki, _) = await mining.DownloadAsync(UserId, sentence.Id!, MiningFileKind.Anki);
+
+        Assert.StartsWith("akagi_yuki_20261001_0005_", audio!.FileName);
+        Assert.Equal([1, 2, 3], audio.Data);
+        Assert.Equal(Path.ChangeExtension(audio.FileName, ".srt"), srt!.FileName);
+        // The clip starts a quarter second before the line, which runs four seconds
+        Assert.Equal($"1{Environment.NewLine}00:00:00,250 --> 00:00:04,250{Environment.NewLine}やっぱり休んだ方がいいよ。{Environment.NewLine}{Environment.NewLine}",
+            Encoding.UTF8.GetString(srt.Data));
+        using ZipArchive zip = new(new MemoryStream(anki!.Data));
+        Assert.Equal([MiningExport.CsvFileName, MiningExport.ReadmeFileName, audio.FileName], zip.Entries.Select(e => e.Name));
         string csv = new StreamReader(zip.GetEntry(MiningExport.CsvFileName)!.Open()).ReadToEnd();
-        Assert.Equal(2, zip.Entries.Count(e => e.Name.EndsWith(".mp3", StringComparison.Ordinal)));
-        Assert.NotNull(zip.GetEntry(MiningExport.ReadmeFileName));
-        Assert.Contains("#columns:Sentence,Target,Audio,Source,Note", csv);
-        Assert.Contains("やっぱり休んだ方がいいよ。,やっぱり,[sound:akagi_yuki_20261001_0005_", csv);
-        Assert.Contains("\"Call with Yuki, 2026-10-01 00:05\",had better rest", csv);
-        Assert.Equal([MiningVoices.Learner, MiningVoices.Partner], clipper.Clips.Select(c => c.Voices));
-        Assert.Equal(5 - MiningExport.LeadSeconds, clipper.Clips[1].Start, 3);
+        Assert.Contains("#columns:Sentence,Target,Audio,Source", csv);
+        Assert.Contains($"やっぱり休んだ方がいいよ。,やっぱり,[sound:{audio.FileName}],\"Call with Yuki, 2026-10-01 00:05\"", csv);
+    }
+
+    [Fact]
+    public async Task Mining_RemoveDeletesTheClip_AndOthersCannotSeeIt()
+    {
+        CallJob job = Job("Yuki", Day(10, 1), ("Me", "えーと。"), ("Yuki", "やっぱりね。"));
+        MiningService mining = Mining();
+        (MinedSentence? sentence, _) = await mining.AddAsync(UserId, job.Id!, 5, "やっぱりね。", "");
+        await MiningService.WaitForClipAsync(sentence!.Id!);
+        string clip = mining.ClipPath(sentence)!;
+
+        Assert.Null(await mining.GetAsync("6adcc28c4f351a3450e30ab7", sentence.Id!));
+        Assert.False(await mining.RemoveAsync("6adcc28c4f351a3450e30ab7", sentence.Id!));
+        Assert.True(await mining.RemoveAsync(UserId, sentence.Id!));
+
+        Assert.False(File.Exists(clip));
+        Assert.Empty(_mined.Items);
     }
 
     [Fact]
@@ -455,7 +569,7 @@ public sealed class CallToolsTests : IDisposable
     {
         CallJob job = Job("Yuki", Day(10, 1), ("Me", "えーと。"), ("Yuki", "やっぱりね。"));
         FakeClipper clipper = new();
-        MiningService mining = new(_jobs, _mined, clipper, NullLogger.Instance);
+        MiningService mining = Mining(clipper);
 
         (MiningFile? file, _) = await mining.ExportCallAsync(UserId, job.Id!, MiningVoices.Partner, CancellationToken.None);
         File.Delete(job.SourcePath);
@@ -477,11 +591,11 @@ public sealed class CallToolsTests : IDisposable
     [Fact]
     public void AnkiCsv_QuotesFieldsWithCommasAndQuotes()
     {
-        MinedSentence sentence = new() { Text = "そう、\"いい\"ね", CallName = "Call", Date = Day(10, 1), Start = 65, Note = "#tag" };
+        MinedSentence sentence = new() { Text = "そう、\"いい\"ね", Target = "#tag", CallName = "Call", Date = Day(10, 1), Start = 65 };
 
         string csv = MiningExport.AnkiCsv([(sentence, null)]);
 
-        Assert.EndsWith("\"そう、\"\"いい\"\"ね\",,,\"Call, 2026-10-01 01:05\",\"#tag\"" + Environment.NewLine, csv);
+        Assert.EndsWith("\"そう、\"\"いい\"\"ね\",\"#tag\",,\"Call, 2026-10-01 01:05\"" + Environment.NewLine, csv);
     }
 
     [Theory]
@@ -498,16 +612,23 @@ public sealed class CallToolsTests : IDisposable
     }
 
     [Fact]
-    public async Task MiningHandler_ListsAddsAndRemoves()
+    public async Task MiningHandler_AddsGetsListsAndRemoves()
     {
         CallJob job = Job("Yuki", Day(10, 1), ("Me", "えーと。"), ("Yuki", "やっぱりね。"));
-        MiningRequestHandler handler = new(new MiningService(_jobs, _mined, new FakeClipper(), NullLogger.Instance), NullLogger<MiningRequestHandler>.Instance);
+        MiningRequestHandler handler = new(Mining(), NullLogger<MiningRequestHandler>.Instance);
 
         MiningResponseTransmission added = await handler.ProcessAsync(UserId, new MiningRequestTransmission { Action = MiningAction.Add, CallId = job.Id!, Time = 5, Text = "やっぱりね。" });
-        MiningResponseTransmission removed = await handler.ProcessAsync(UserId, new MiningRequestTransmission { Action = MiningAction.Remove, Id = added.Added!.Id });
+        await MiningService.WaitForClipAsync(added.Sentence!.Id);
+        MiningResponseTransmission got = await handler.ProcessAsync(UserId, new MiningRequestTransmission { Action = MiningAction.Get, Id = added.Sentence.Id });
+        MiningResponseTransmission listed = await handler.ProcessAsync(UserId, new MiningRequestTransmission { Action = MiningAction.List });
+        MiningResponseTransmission removed = await handler.ProcessAsync(UserId, new MiningRequestTransmission { Action = MiningAction.Remove, Id = added.Sentence.Id });
+        MiningResponseTransmission gone = await handler.ProcessAsync(UserId, new MiningRequestTransmission { Action = MiningAction.Get, Id = added.Sentence.Id });
 
-        Assert.Equal("やっぱりね。", Assert.Single(added.Sentences).Text);
-        Assert.Empty(removed.Sentences);
+        Assert.Equal("やっぱりね。", added.Sentence.Text);
+        Assert.Equal(MinedClipState.Ready, got.Sentence!.State);
+        Assert.Single(listed.Sentences);
         Assert.Null(removed.Error);
+        Assert.Null(gone.Sentence);
+        Assert.NotNull(gone.Error);
     }
 }

@@ -49,13 +49,23 @@
 					</div>
 					@if (OnMine.HasDelegate)
 					{
-						bool mined = IsMined(line);
-						<button type="button" class="btn btn-sm @(mined ? "btn-green" : "btn-ghost-secondary") flex-shrink-0 align-self-start py-0 px-1"
-								title="@(mined ? "In your mining list" : "Add this line to your mining list")" disabled="@mined"
-								data-mine-line="@index" @onclick="() => OnMine.InvokeAsync(line)">
-							<Icon IconType="@Akagi.Web.Icons.Icons.Bookmark" Size="14" />
-							<span class="small ms-1">@(mined ? "Mined" : "Mine")</span>
-						</button>
+						@if (MinedFor(line) is MinedSentenceView mined)
+						{
+							<a class="btn btn-sm btn-green flex-shrink-0 align-self-start py-0 px-1" href="@CallText.MineUri(mined.Id)" target="_blank"
+							   title="Open the mined sentence: its clip and downloads" data-mined-line="@index">
+								<Icon IconType="@Akagi.Web.Icons.Icons.Bookmark" Size="14" />
+								<span class="small ms-1">Mined ↗</span>
+							</a>
+						}
+						else
+						{
+							<button type="button" class="btn btn-sm btn-ghost-secondary flex-shrink-0 align-self-start py-0 px-1"
+									title="Mine this line: cut its audio for subtitles or Anki"
+									data-mine-line="@index" @onclick="() => OnMine.InvokeAsync(line)">
+								<Icon IconType="@Akagi.Web.Icons.Icons.Bookmark" Size="14" />
+								<span class="small ms-1">Mine</span>
+							</button>
+						}
 					}
 				</div>
 			}
@@ -74,18 +84,18 @@
 	public string CallId { get; set; } = string.Empty;
 
 	/// <summary>
-	/// Adds a line to the sentence mining list; without it the lines have no mine button.
+	/// Mines a line; without it the lines have no mine button.
 	/// </summary>
 	[Parameter]
 	public EventCallback<CallTranscriptLine> OnMine { get; set; }
 
 	/// <summary>
-	/// Start times of the lines of this call already in the mining list.
+	/// The sentences of this call already mined; their lines link to them.
 	/// </summary>
 	[Parameter]
-	public IReadOnlyCollection<double> Mined { get; set; } = [];
+	public IReadOnlyCollection<MinedSentenceView> Mined { get; set; } = [];
 
-	private bool IsMined(CallTranscriptLine line) => Mined.Any(start => Math.Abs(start - line.Start) < 0.01);
+	private MinedSentenceView? MinedFor(CallTranscriptLine line) => Mined.FirstOrDefault(m => Math.Abs(m.Start - line.Start) < 0.01);
 
 	private ElementReference _card;
 	private IJSObjectReference? _module;

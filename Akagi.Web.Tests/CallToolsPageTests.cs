@@ -14,8 +14,8 @@ using System.Net;
 namespace Akagi.Web.Tests;
 
 /// <summary>
-/// The timeframe, focus struggles and advice on the insights page, deleting and mining on the call page, the mining
-/// page and the expression search, against a client whose requests the test answers itself.
+/// The timeframe, focus struggles and advice on the insights page, deleting and mining on the call page, a mined
+/// sentence's page and the expression search, against a client whose requests the test answers itself.
 /// </summary>
 public class CallToolsPageTests : BunitContext
 {
@@ -155,6 +155,51 @@ public class CallToolsPageTests : BunitContext
         cut.WaitForAssertion(() => Assert.Contains("Drop それも", cut.Find("[data-written-advice-text]").TextContent));
     }
 
+    [Fact]
+    public async Task Insights_IgnoringASuggestionHidesItAndItCanBeShownAgain()
+    {
+        CallInsights withWord = Insights();
+        withWord.Advice = [.. withWord.Advice, new InsightAdvice { Kind = "use-more", Title = "Try using: はねる", Word = "はねる", Key = "use-more:はねる" }];
+        IRenderedComponent<CallInsightsPage> cut = Render<CallInsightsPage>();
+        RespondCall(_ => new CallAnalysisResponseTransmission { Insights = withWord });
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-advice-ignore='use-more:はねる']")));
+        cut.Settled();
+        // Without a key there is nothing to ignore it by
+        Assert.Single(cut.FindAll("[data-advice-ignore]"));
+
+        Task click = cut.Find("[data-advice-ignore='use-more:はねる']").ClickAsync(new());
+        CallAnalysisRequestTransmission ignored = RespondCall(_ =>
+        {
+            CallInsights without = Insights();
+            without.IgnoredAdvice = [new InsightAdvice { Kind = "use-more", Title = "Try using: はねる", Word = "はねる", Key = "use-more:はねる" }];
+            return new CallAnalysisResponseTransmission { Insights = without };
+        });
+        await click;
+
+        Assert.Equal((CallAnalysisAction.IgnoreAdvice, "use-more:はねる", true), (ignored.Action, ignored.AdviceKey, ignored.Ignore));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-advice-ignore]")));
+        Assert.Contains("1 suggestion you ignored", cut.Find("[data-ignored-toggle]").TextContent);
+
+        await cut.Find("[data-ignored-toggle]").ClickAsync(new());
+        Task again = cut.Find("[data-advice-unignore='use-more:はねる']").ClickAsync(new());
+        CallAnalysisRequestTransmission shown = RespondCall(_ => new CallAnalysisResponseTransmission { Insights = withWord });
+        await again;
+
+        Assert.Equal(("use-more:はねる", false), (shown.AdviceKey, shown.Ignore));
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-advice-ignore='use-more:はねる']")));
+        Assert.Empty(cut.FindAll("[data-ignored-advice]"));
+    }
+
+    [Fact]
+    public void FocusCard_KeepsTheChartInsideItsColumn()
+    {
+        IRenderedComponent<CallFocusCard> cut = Render<CallFocusCard>(p => p.Add(c => c.Struggles, Insights(focused: true).FocusStruggles));
+
+        // The chart card is 100% high; straight in the column it would be as tall as the column plus the text above it
+        Assert.Equal("DIV", cut.Find("[data-focus='i1'] [data-trend]").ParentElement!.TagName);
+        Assert.Null(cut.Find("[data-focus='i1'] [data-trend]").ParentElement!.GetAttribute("data-focus"));
+    }
+
     // Call page
 
     private static CallAnalysisSummary Summary(string id, string partner) => new()
@@ -228,7 +273,7 @@ public class CallToolsPageTests : BunitContext
     }
 
     [Fact]
-    public async Task CallPage_MinesATranscriptLine()
+    public async Task CallPage_MiningALineTurnsItsButtonIntoALinkToTheSentence()
     {
         IRenderedComponent<CallAnalysisPage> cut = RenderCall();
         await cut.Find("[data-transcript-toggle]").ClickAsync(new());
@@ -236,15 +281,17 @@ public class CallToolsPageTests : BunitContext
         Task click = cut.Find("[data-mine-line='1']").ClickAsync(new());
         MiningRequestTransmission asked = RespondMining(r => new MiningResponseTransmission
         {
-            Sentences = [new MinedSentenceView { Id = "m1", CallId = "a", Start = r.Time, Text = r.Text }]
+            Sentence = new MinedSentenceView { Id = "m1", CallId = "a", Start = r.Time, Text = r.Text, State = MinedClipState.Queued }
         });
         await click;
 
         Assert.Equal(MiningAction.Add, asked.Action);
         Assert.Equal(5, asked.Time);
         Assert.Equal("やっぱり休んだ方がいいよ。", asked.Text);
-        cut.WaitForAssertion(() => Assert.Contains("Mined", cut.Find("[data-mine-line='1']").TextContent));
-        Assert.Contains("Mine", cut.Find("[data-mine-line='0']").TextContent);
+        cut.WaitForAssertion(() => Assert.Equal("Learn/Mine/m1", cut.Find("[data-mined-line='1']").GetAttribute("href")));
+        Assert.Equal("_blank", cut.Find("[data-mined-line='1']").GetAttribute("target"));
+        Assert.Empty(cut.FindAll("[data-mine-line='1']"));
+        Assert.NotEmpty(cut.FindAll("[data-mine-line='0']"));
     }
 
     [Fact]
@@ -263,33 +310,130 @@ public class CallToolsPageTests : BunitContext
         Assert.Contains(JSInterop.Invocations, i => i.Identifier == "downloadStream");
     }
 
-    // Mining page
+    // A mined sentence's page
+
+    private static MinedSentenceView Mined(MinedClipState state) => new()
+    {
+        Id = "m1", CallId = "a", CallName = "Call with Yuki", Date = October, Start = 65, End = 69, Speaker = "Yuki",
+        Text = "やっぱり休んだ方がいいよ。", Target = "やっぱり", State = state, ClipSeconds = 4.7
+    };
+
+    private IRenderedComponent<MinedSentencePage> RenderMined()
+    {
+        MinedSentencePage.PollInterval = TimeSpan.FromMilliseconds(10);
+        return Render<MinedSentencePage>(p => p.Add(c => c.Id, "m1"));
+    }
 
     [Fact]
-    public async Task MiningPage_ListsSentencesAndExportsTheSelectedOnes()
+    public async Task MinedPage_ShowsTheCutThenPlaysAndDownloads()
+    {
+        IRenderedComponent<MinedSentencePage> cut = RenderMined();
+        MiningRequestTransmission first = RespondMining(_ => new MiningResponseTransmission { Sentence = Mined(MinedClipState.Cutting) });
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-mined-progress]")));
+        Assert.Contains("<mark>やっぱり</mark>", cut.Find("[data-mined-text]").InnerHtml);
+        Assert.Contains("Yuki's channel", cut.Find("[data-mined-progress]").TextContent);
+
+        // The page asks again by itself until the clip is cut, then fetches it for the player
+        MiningRequestTransmission again = RespondMining(_ => new MiningResponseTransmission { Sentence = Mined(MinedClipState.Ready) });
+        MiningRequestTransmission audio = RespondMining(_ => new MiningResponseTransmission { FileName = "clip.mp3", Data = [1, 2, 3] });
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-mined-audio]")));
+        cut.WaitForAssertion(() => Assert.Contains(JSInterop.Invocations, i => i.Identifier == "setAudio"));
+
+        Assert.Equal(MiningAction.Get, first.Action);
+        Assert.Equal("m1", first.Id);
+        Assert.Equal(MiningAction.Get, again.Action);
+        Assert.Equal((MiningAction.Download, MiningFileKind.Audio), (audio.Action, audio.File));
+
+        // The audio is already here; the others are made on the server
+        await cut.Find("[data-download='Audio']").ClickAsync(new());
+        Assert.Single(JSInterop.Invocations, i => i.Identifier == "downloadStream");
+        Task click = cut.Find("[data-download='Anki']").ClickAsync(new());
+        MiningRequestTransmission anki = RespondMining(_ => new MiningResponseTransmission { FileName = "clip.zip", Data = [4] });
+        await click;
+        Assert.Equal(MiningFileKind.Anki, anki.File);
+        Assert.Equal(2, JSInterop.Invocations.Count(i => i.Identifier == "downloadStream"));
+        Assert.NotEmpty(cut.FindAll("[data-download='Subtitles']"));
+    }
+
+    [Fact]
+    public void MinedPage_WithoutARecordingOffersOnlyTheText()
+    {
+        IRenderedComponent<MinedSentencePage> cut = RenderMined();
+        RespondMining(_ => new MiningResponseTransmission { Sentence = Mined(MinedClipState.NoAudio) });
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-mined-no-audio]")));
+        Assert.Empty(cut.FindAll("[data-download='Audio']"));
+        Assert.Equal(["Subtitles", "Anki"], cut.FindAll("[data-download]").Select(b => b.GetAttribute("data-download")));
+    }
+
+    [Fact]
+    public async Task MinedPage_RetriesAFailedCut()
+    {
+        IRenderedComponent<MinedSentencePage> cut = RenderMined();
+        MinedSentenceView failed = Mined(MinedClipState.Failed);
+        failed.Error = "ffmpeg was not found on the server (CallAnalysis:FfmpegPath).";
+        RespondMining(_ => new MiningResponseTransmission { Sentence = failed });
+        cut.WaitForAssertion(() => Assert.Contains("ffmpeg was not found", cut.Find("[data-mined-failed]").TextContent));
+
+        Task click = cut.Find("[data-mined-retry]").ClickAsync(new());
+        MiningRequestTransmission retry = RespondMining(_ => new MiningResponseTransmission { Sentence = Mined(MinedClipState.Queued) });
+        await click;
+
+        Assert.Equal(MiningAction.Retry, retry.Action);
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-mined-progress]")));
+    }
+
+    [Fact]
+    public async Task MinedPage_RemoveAsksFirst()
+    {
+        IRenderedComponent<MinedSentencePage> cut = RenderMined();
+        RespondMining(_ => new MiningResponseTransmission { Sentence = Mined(MinedClipState.NoAudio) });
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-remove]")));
+
+        await cut.Find("[data-remove]").ClickAsync(new());
+        Task click = cut.Find("[data-remove-yes]").ClickAsync(new());
+        MiningRequestTransmission removed = RespondMining(_ => new MiningResponseTransmission());
+        await click;
+
+        Assert.Equal(MiningAction.Remove, removed.Action);
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-mined-removed]")));
+    }
+
+    [Fact]
+    public void MinedPage_SaysWhenTheSentenceIsGone()
+    {
+        IRenderedComponent<MinedSentencePage> cut = RenderMined();
+        RespondMining(_ => new MiningResponseTransmission { Error = "This sentence does not exist, or it was removed." });
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-mined-missing]")));
+    }
+
+    // All mined sentences
+
+    [Fact]
+    public async Task MiningPage_ListsWhatWasMinedAndRemovesAfterAsking()
     {
         IRenderedComponent<MiningPage> cut = Render<MiningPage>();
         RespondMining(_ => new MiningResponseTransmission
         {
-            Sentences =
-            [
-                new MinedSentenceView { Id = "m1", CallId = "a", CallName = "Call with Yuki", Date = October, Start = 65, Speaker = "Yuki", Text = "やっぱり休んだ方がいいよ。", Target = "やっぱり" },
-                new MinedSentenceView { Id = "m2", CallId = "a", CallName = "Call with Yuki", Date = October, Start = 70, Speaker = "Yuki", Text = "無理しないで。" }
-            ]
+            Sentences = [Mined(MinedClipState.Ready), new MinedSentenceView { Id = "m2", CallId = "a", CallName = "Call with Yuki", Text = "無理しないで。", State = MinedClipState.Failed }]
         });
-        RespondCall(_ => new CallAnalysisResponseTransmission { Calls = [Summary("a", "Yuki")] });
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-sentence]").Count));
         cut.Settled();
-        Assert.Contains("<mark>やっぱり</mark>", cut.Find("[data-sentence='m1']").InnerHtml);
 
-        await cut.Find("[data-sentence='m2'] input[type=checkbox]").ChangeAsync(new() { Value = true });
-        Task click = cut.Find("[data-export-clips]").ClickAsync(new());
-        MiningRequestTransmission asked = RespondMining(_ => new MiningResponseTransmission { FileName = "akagi-mining.zip", Data = [1] });
+        Assert.Equal("Learn/Mine/m1", cut.Find("[data-open='m1']").GetAttribute("href"));
+        Assert.Contains("<mark>やっぱり</mark>", cut.Find("[data-sentence='m1']").InnerHtml);
+        Assert.Equal("ready", cut.Find("[data-sentence='m1'] [data-clip-state]").TextContent);
+        Assert.Equal("failed", cut.Find("[data-sentence='m2'] [data-clip-state]").TextContent);
+
+        await cut.Find("[data-remove='m2']").ClickAsync(new());
+        Task click = cut.Find("[data-remove-yes='m2']").ClickAsync(new());
+        MiningRequestTransmission removed = RespondMining(_ => new MiningResponseTransmission());
         await click;
 
-        Assert.Equal(MiningAction.ExportClips, asked.Action);
-        Assert.Equal(["m2"], asked.Ids);
-        Assert.Contains(JSInterop.Invocations, i => i.Identifier == "downloadStream");
+        Assert.Equal((MiningAction.Remove, "m2"), (removed.Action, removed.Id));
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-sentence]")));
+        Assert.NotEmpty(cut.FindAll("[data-sentence='m1']"));
     }
 
     // Expression search

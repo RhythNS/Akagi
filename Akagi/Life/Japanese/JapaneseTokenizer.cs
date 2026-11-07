@@ -95,7 +95,33 @@ internal static class JapaneseTokenizer
                 Field(node.PartsOfSpeech), Field(node.PartsOfSpeechSection1), Field(node.PartsOfSpeechSection2),
                 Field(node.ConjugatedForm), Field(node.Inflection)));
         }
+        SplitTopicNe(tokens);
         return tokens;
+    }
+
+    /// <summary>
+    /// In speech 「それはね、」 is the topic は and the ね of "you know", but the dictionary reads はね as the verb はねる
+    /// (to bounce). It is only that verb when something conjugating it follows: はねた, はねて, はねてる.
+    /// </summary>
+    private static void SplitTopicNe(List<DetailedToken> tokens)
+    {
+        for (int i = tokens.Count - 1; i >= 0; i--)
+        {
+            DetailedToken token = tokens[i];
+            if (token.Surface != "はね" || token.Lemma != "はねる")
+            {
+                continue;
+            }
+            DetailedToken? next = i + 1 < tokens.Count ? tokens[i + 1] : null;
+            bool conjugated = next is DetailedToken following
+                && (following.Pos is "助動詞" or "動詞" || following is { Pos: "助詞", Pos1: "接続助詞" });
+            if (conjugated)
+            {
+                continue;
+            }
+            tokens[i] = new DetailedToken("は", "は", "ハ", null, "助詞", "係助詞", string.Empty, string.Empty, string.Empty);
+            tokens.Insert(i + 1, new DetailedToken("ね", "ね", "ネ", null, "助詞", "終助詞", string.Empty, string.Empty, string.Empty));
+        }
     }
 
     private static string Field(string? value) => string.IsNullOrEmpty(value) || value == "*" ? string.Empty : value;

@@ -11,3 +11,14 @@ export async function downloadStream(fileName, streamRef) {
     anchor.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+
+// Lets an <audio> element play mp3 bytes streamed from the server.
+export async function setAudio(element, streamRef) {
+    const buffer = await streamRef.arrayBuffer();
+    const url = URL.createObjectURL(new Blob([buffer], { type: 'audio/mpeg' }));
+    if (element.dataset.blobUrl) {
+        URL.revokeObjectURL(element.dataset.blobUrl);
+    }
+    element.dataset.blobUrl = url;
+    element.src = url;
+}
