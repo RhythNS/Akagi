@@ -76,17 +76,8 @@
 				@(Word.TotalLines > Word.Lines.Length ? $"(the newest {Word.Lines.Length} of {Word.TotalLines})" : $"({Word.TotalLines})")
 			</span>
 		</div>
-		<div style="max-height: 24rem; overflow-y: auto;" data-word-lines>
-			@foreach (VocabLine line in Word.Lines)
-			{
-				<div class="d-flex gap-3 py-1 border-bottom small @(line.IsLearner ? "line-mine" : "")">
-					<a class="text-secondary font-monospace flex-shrink-0 text-nowrap" href="@VocabText.CallUri(line.CallId, line.Time)" title="Open the call at this line">
-						@line.Date.ToString("d") @CallText.Timestamp(line.Time)
-					</a>
-					<span class="text-secondary flex-shrink-0" style="min-width: 3rem;">@line.Speaker</span>
-					<span lang="ja">@Marked(line)</span>
-				</div>
-			}
+		<div data-word-lines>
+			<VocabLineList Lines="Word.Lines" OnMine="OnMine" Mined="Mined" />
 		</div>
 	</div>
 </div>
@@ -99,29 +90,11 @@
 	public EventCallback OnClose { get; set; }
 
 	/// <summary>
-	/// The line with the word's forms marked.
+	/// Mines one of the word's lines; without it lines have no mine button.
 	/// </summary>
-	private static MarkupString Marked(VocabLine line)
-	{
-		StringBuilder html = new();
-		int position = 0;
-		string text = line.Text;
-		while (position < text.Length)
-		{
-			(int at, string mark) = line.Marks
-				.Select(m => (At: text.IndexOf(m, position, StringComparison.Ordinal), Mark: m))
-				.Where(m => m.At >= 0 && m.Mark.Length > 0)
-				.OrderBy(m => m.At)
-				.ThenByDescending(m => m.Mark.Length)
-				.FirstOrDefault((-1, string.Empty));
-			if (at < 0)
-			{
-				break;
-			}
-			html.Append(WebUtility.HtmlEncode(text[position..at])).Append("<mark>").Append(WebUtility.HtmlEncode(mark)).Append("</mark>");
-			position = at + mark.Length;
-		}
-		html.Append(WebUtility.HtmlEncode(text[position..]));
-		return new MarkupString(html.ToString());
-	}
+	[Parameter]
+	public EventCallback<VocabLine> OnMine { get; set; }
+
+	[Parameter]
+	public IReadOnlyCollection<MinedSentenceView> Mined { get; set; } = [];
 }

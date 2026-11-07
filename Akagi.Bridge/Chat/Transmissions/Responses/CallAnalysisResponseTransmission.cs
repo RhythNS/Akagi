@@ -28,4 +28,9 @@ public class CallAnalysisResponseTransmission : Transmission
     public PersonSummary[] People { get; set; } = [];
     [Key(6)]
     public PersonDetail? Person { get; set; }
+    /// <summary>
+    /// What an action did, e.g. what deleting a call took back.
+    /// </summary>
+    [Key(7)]
+    public string? Message { get; set; }
 }

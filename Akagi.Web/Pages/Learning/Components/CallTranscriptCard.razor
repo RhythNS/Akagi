@@ -39,7 +39,7 @@
 				<div class="d-flex gap-3 px-3 py-2 border-bottom @(line.IsLearner ? "line-mine" : "") @(index == _target ? "call-line-target" : "")"
 					 data-line="@index">
 					<span class="text-secondary small font-monospace flex-shrink-0" style="min-width: 3.5rem;">@CallText.Timestamp(line.Start)</span>
-					<div class="min-w-0">
+					<div class="min-w-0 flex-grow-1">
 						<div class="small fw-medium text-secondary">@line.Speaker</div>
 						<div lang="ja">@Highlight(line.Text)</div>
 						@if (!string.IsNullOrWhiteSpace(line.Disputed))
@@ -47,6 +47,16 @@
 							<div class="small text-secondary fst-italic">Second hearing: @line.Disputed</div>
 						}
 					</div>
+					@if (OnMine.HasDelegate)
+					{
+						bool mined = IsMined(line);
+						<button type="button" class="btn btn-sm @(mined ? "btn-green" : "btn-ghost-secondary") flex-shrink-0 align-self-start py-0 px-1"
+								title="@(mined ? "In your mining list" : "Add this line to your mining list")" disabled="@mined"
+								data-mine-line="@index" @onclick="() => OnMine.InvokeAsync(line)">
+							<Icon IconType="@Akagi.Web.Icons.Icons.Bookmark" Size="14" />
+							<span class="small ms-1">@(mined ? "Mined" : "Mine")</span>
+						</button>
+					}
 				</div>
 			}
 		</div>
@@ -62,6 +72,20 @@
 	/// </summary>
 	[Parameter]
 	public string CallId { get; set; } = string.Empty;
+
+	/// <summary>
+	/// Adds a line to the sentence mining list; without it the lines have no mine button.
+	/// </summary>
+	[Parameter]
+	public EventCallback<CallTranscriptLine> OnMine { get; set; }
+
+	/// <summary>
+	/// Start times of the lines of this call already in the mining list.
+	/// </summary>
+	[Parameter]
+	public IReadOnlyCollection<double> Mined { get; set; } = [];
+
+	private bool IsMined(CallTranscriptLine line) => Mined.Any(start => Math.Abs(start - line.Start) < 0.01);
 
 	private ElementReference _card;
 	private IJSObjectReference? _module;

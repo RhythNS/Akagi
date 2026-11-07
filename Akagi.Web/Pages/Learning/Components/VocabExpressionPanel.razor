@@ -1,0 +1,152 @@
+@using Akagi.Bridge.Chat.Models
+@using System.Globalization
+
+<div class="card mb-3" data-expression>
+	<div class="card-header flex-wrap gap-2">
+		<h3 class="card-title m-0">Find an expression</h3>
+		<form class="ms-auto d-flex gap-2" @onsubmit="SearchAsync" @onsubmit:preventDefault>
+			<input type="search" class="form-control form-control-sm" style="min-width: 12rem;" placeholder="e.g. それも, みたいな感じ" lang="ja"
+				   @bind="_query" aria-label="Expression to find" data-expression-input />
+			<button type="submit" class="btn btn-sm btn-primary" disabled="@(Loading || _query.Trim().Length == 0)" data-expression-search>Find</button>
+		</form>
+	</div>
+	@if (Loading)
+	{
+		<div class="card-body text-center py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>
+	}
+	else if (Result is VocabExpressionResult result)
+	{
+		<div class="card-body">
+			<div class="row g-3 text-center mb-3">
+				<div class="col-6 col-md-3">
+					<div class="h2 m-0" data-expression-you>@result.Learner</div>
+					<div class="text-secondary small">times you said it</div>
+				</div>
+				<div class="col-6 col-md-3">
+					<div class="h2 m-0" data-expression-partners>@result.Partner</div>
+					<div class="text-secondary small">times your partners did</div>
+				</div>
+				<div class="col-6 col-md-3">
+					<div class="h4 m-0">@PerHour(result.LearnerPerHour)</div>
+					<div class="text-secondary small">per hour you spoke</div>
+				</div>
+				<div class="col-6 col-md-3">
+					<div class="h4 m-0">@PerHour(result.PartnerPerHour)</div>
+					<div class="text-secondary small">per hour your partners spoke</div>
+				</div>
+			</div>
+			@if (Verdict(result) is string verdict)
+			{
+				<div class="alert alert-secondary small py-2" data-expression-verdict>@verdict</div>
+			}
+
+			@if (result.Calls.Any(c => c.Learner + c.Partner > 0))
+			{
+				<div class="form-label">Per call</div>
+				<div class="table-responsive mb-3">
+					<table class="table table-sm table-vcenter mb-0" data-expression-calls>
+						<thead>
+							<tr>
+								<th>Call</th>
+								<th class="text-end">You</th>
+								<th class="text-end">Per hour</th>
+								<th class="text-end">Partner</th>
+								<th class="text-end">Per hour</th>
+							</tr>
+						</thead>
+						<tbody>
+							@foreach (VocabExpressionCall call in result.Calls.AsEnumerable().Reverse())
+							{
+								<tr data-expression-call="@call.CallId">
+									<td><a href="@($"Learn/Calls/{call.CallId}")">@call.Name</a> <span class="text-secondary small">@call.Date.ToString("d")</span></td>
+									<td class="text-end">@call.Learner</td>
+									<td class="text-end text-secondary">@PerHour(call.LearnerPerHour)</td>
+									<td class="text-end">@(call.HasPartner ? call.Partner.ToString(CultureInfo.InvariantCulture) : "-")</td>
+									<td class="text-end text-secondary">@PerHour(call.PartnerPerHour)</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+
+				<div class="form-label">
+					Every line
+					<span class="text-secondary fw-normal small">
+						@(result.TotalLines > result.Lines.Length ? $"(the newest {result.Lines.Length} of {result.TotalLines})" : $"({result.TotalLines})")
+					</span>
+				</div>
+				<VocabLineList Lines="result.Lines" OnMine="OnMine" Mined="Mined" />
+			}
+			else
+			{
+				<div class="text-secondary small">「@result.Query」 was not said in the calls in view.</div>
+			}
+		</div>
+	}
+	else
+	{
+		<div class="card-body text-secondary small py-2">
+			Any piece of text, also more than one word. Counts what you and your partners said in the calls the filter shows, with the time of every line.
+		</div>
+	}
+</div>
+
+@code {
+	[Parameter]
+	public VocabExpressionResult? Result { get; set; }
+
+	[Parameter]
+	public bool Loading { get; set; }
+
+	[Parameter]
+	public string Query { get; set; } = string.Empty;
+
+	[Parameter]
+	public EventCallback<string> OnSearch { get; set; }
+
+	[Parameter]
+	public EventCallback<VocabLine> OnMine { get; set; }
+
+	[Parameter]
+	public IReadOnlyCollection<MinedSentenceView> Mined { get; set; } = [];
+
+	private string _query = string.Empty;
+	private string? _queryParameter;
+
+	protected override void OnParametersSet()
+	{
+		// A query from the address bar fills the box once
+		if (_queryParameter != Query)
+		{
+			_queryParameter = Query;
+			_query = Query;
+		}
+	}
+
+	private Task SearchAsync() => OnSearch.InvokeAsync(_query.Trim());
+
+	private static string PerHour(double? value) => value is double v ? v.ToString("0.#", CultureInfo.InvariantCulture) : "-";
+
+	/// <summary>
+	/// One sentence on whether the user leans on it or avoids it compared with partners.
+	/// </summary>
+	public static string? Verdict(VocabExpressionResult result)
+	{
+		if (result.LearnerPerHour is not double you || result.PartnerPerHour is not double partners || result.Learner + result.Partner < 5)
+		{
+			return null;
+		}
+		if (partners == 0)
+		{
+			return you > 0 ? "Only you say this; your partners never did." : null;
+		}
+		double ratio = you / partners;
+		return ratio switch
+		{
+			>= 2 => $"You say it {ratio.ToString("0.#", CultureInfo.InvariantCulture)} times as often as your partners.",
+			<= 0.5 when you == 0 => "Your partners use it and you never do: a good one to make your own.",
+			<= 0.5 => $"Your partners say it {(1 / ratio).ToString("0.#", CultureInfo.InvariantCulture)} times as often as you.",
+			_ => "You use it about as often as your partners."
+		};
+	}
+}

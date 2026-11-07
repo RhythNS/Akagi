@@ -83,6 +83,12 @@ internal class DiagnosisIssue
     public DateTime FirstSeen { get; set; } = DateTime.UtcNow;
     public DateTime LastSeen { get; set; } = DateTime.UtcNow;
     public DateTime? LastCorrect { get; set; }
+    /// <summary>
+    /// The user picked this struggle to work on; it is shown first and its trend is followed.
+    /// </summary>
+    public bool Focus { get; set; }
+    /// <summary>When the user started focusing on it, to compare before and after.</summary>
+    public DateTime? FocusSince { get; set; }
 
     public void RecordMistake(IssueExample? example, DateTime nowUtc)
     {
@@ -249,6 +255,11 @@ internal class JapaneseDiagnosis : Savable
     public List<DiagnosisStrength> Strengths { get; set; } = [];
     public List<PatternUsage> PatternUsage { get; set; } = [];
     public List<SpeechSnapshot> Snapshots { get; set; } = [];
+    /// <summary>
+    /// The last written study advice the user asked for, kept until they ask again.
+    /// </summary>
+    public string Advice { get; set; } = string.Empty;
+    public DateTime? AdviceAt { get; set; }
 
     public (DiagnosisIssue Issue, bool IsNew) RecordIssue(IssueCategory category, string pattern, string explanation, IssueExample? example,
         int severity, DateTime nowUtc)
@@ -367,7 +378,10 @@ internal class JapaneseDiagnosis : Savable
     /// The issues most worth working on now.
     /// </summary>
     public List<DiagnosisIssue> Focus(int count, DateTime nowUtc) =>
-        [.. Issues.Where(i => i.Status != IssueStatus.Resolved).OrderByDescending(i => i.Weight(nowUtc)).Take(count)];
+        [.. Issues.Where(i => i.Focus || i.Status != IssueStatus.Resolved)
+            .OrderByDescending(i => i.Focus)
+            .ThenByDescending(i => i.Weight(nowUtc))
+            .Take(count)];
 
     /// <summary>
     /// Issues that got better within the window, newest progress first.
@@ -387,7 +401,8 @@ internal class JapaneseDiagnosis : Savable
             text.AppendLine("Focus areas:");
             foreach (DiagnosisIssue issue in focus)
             {
-                text.AppendLine("- " + issue.Describe(withExamples));
+                // The user picked these himself, so the tutor and the companion bring them up first
+                text.AppendLine("- " + (issue.Focus ? "[he chose to focus on this] " : string.Empty) + issue.Describe(withExamples));
             }
         }
 
@@ -442,7 +457,7 @@ internal class JapaneseDiagnosis : Savable
     {
         while (Issues.Count > MaxIssues)
         {
-            Issues.Remove(Issues.OrderBy(i => i.Weight(nowUtc)).First());
+            Issues.Remove(Issues.OrderBy(i => i.Focus).ThenBy(i => i.Weight(nowUtc)).First());
         }
     }
 }

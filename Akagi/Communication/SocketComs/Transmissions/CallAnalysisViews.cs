@@ -106,7 +106,12 @@ internal static partial class CallAnalysisViews
         {
             detail.Flow = Flow(stats);
             detail.Vocabulary = Vocabulary(stats, EarlierLearnerWords(job, allJobs));
+            if (job.Status == CallJobStatus.Completed)
+            {
+                detail.Metrics = Metrics(job, allJobs);
+            }
         }
+        detail.HasAudio = !job.IsTranscript && !string.IsNullOrEmpty(job.SourcePath) && File.Exists(job.SourcePath);
         return detail;
     }
 
@@ -262,80 +267,6 @@ internal static partial class CallAnalysisViews
             .SelectMany(j => j.Stats!.Words.Where(w => w.Learner > 0).Select(w => w.Lemma))];
     }
 
-    public static CallInsights Insights(IReadOnlyCollection<CallJob> jobs, JapaneseDiagnosis? diagnosis)
-    {
-        List<CallJob> finished = [.. jobs.Where(j => j.Status == CallJobStatus.Completed && j.Stats != null)
-            .OrderBy(Date).ThenBy(j => j.CreatedAt)];
-        CallInsights insights = new() { MixedCalls = finished.Count(j => !j.Stats!.Separated) };
-
-        Dictionary<string, (CallWord Word, int Learner, int Partner, int Calls, DateTime? First)> words = [];
-        List<CallTrendPoint> points = [];
-        foreach (CallJob job in finished)
-        {
-            CallStats stats = job.Stats!;
-            int fresh = 0;
-            // Without separate voices the partner's words would count as the learner's, so such calls stay out of the
-            // vocabulary; they still show as points on the trends
-            foreach (CallWord word in stats.Separated ? stats.Words : [])
-            {
-                int partner = word.Partner;
-                if (!words.TryGetValue(word.Lemma, out var total))
-                {
-                    total = (word, 0, 0, 0, null);
-                }
-                if (word.Learner > 0 && total.First == null)
-                {
-                    fresh++;
-                    total.First = Date(job);
-                }
-                total = (total.Word, total.Learner + word.Learner, total.Partner + partner, total.Calls + (word.Learner > 0 ? 1 : 0), total.First);
-                words[word.Lemma] = total;
-            }
-
-            points.Add(new CallTrendPoint
-            {
-                CallId = job.Id!,
-                Name = Name(job),
-                Date = Date(job),
-                DurationSeconds = job.DurationSeconds,
-                LearnerShare = stats.Separated ? stats.LearnerShare : null,
-                MedianResponseSeconds = stats.Separated ? stats.MedianResponseSeconds : null,
-                FillersPer100 = job.HasLearnerSeparation ? Math.Round(SpeechAnalysis.Analyze(job.LearnerText(), job.Register).Fillers.Per100, 2) : null,
-                LearnerWords = stats.LearnerWords,
-                LearnerDistinct = stats.LearnerDistinct,
-                NewWords = fresh,
-                IssueCount = job.IssueCount,
-                LearnerCharactersPerTurn = Math.Round(stats.LearnerCharactersPerTurn, 1),
-                Separated = stats.Separated,
-                LearnerQuestions = stats.LearnerQuestions
-            });
-        }
-
-        insights.Calls = [.. points];
-        insights.LearnerWords = words.Values.Sum(w => w.Learner);
-        insights.LearnerDistinct = words.Values.Count(w => w.Learner > 0);
-        insights.Words = [.. words.Values
-            .Where(w => w.Learner > 0)
-            .OrderByDescending(w => w.Learner)
-            .ThenBy(w => w.Word.Lemma, StringComparer.Ordinal)
-            .Take(MaxInsightWords)
-            .Select(w => Word(w.Word, w.Learner, w.Partner, w.Calls, w.First))];
-        insights.HeardNotSaid = [.. words.Values
-            .Where(w => w.Learner == 0 && w.Partner >= MinHeard && w.Word.Class != WordClass.Interjection)
-            .OrderByDescending(w => w.Partner)
-            .ThenBy(w => w.Word.Lemma, StringComparer.Ordinal)
-            .Take(MaxHeardNotSaid)
-            .Select(w => Word(w.Word, 0, w.Partner, 0, null))];
-
-        insights.Struggles = [.. InsightStruggles(finished, diagnosis)];
-        insights.Phrases = [.. finished
-            .SelectMany(j => j.Findings.Where(f => f.Kind == FindingKind.Phrase && f.Counts).Select(f => (Job: j, Finding: f)))
-            .OrderByDescending(p => Date(p.Job))
-            .DistinctBy(p => CallQuotes.Normalize(p.Finding.Said))
-            .Select(p => new InsightPhrase { Phrase = p.Finding.Said, Meaning = p.Finding.Better, CallId = p.Job.Id!, CallName = Name(p.Job), Date = Date(p.Job) })];
-        return insights;
-    }
-
     private static InsightWord Word(CallWord word, int learner, int partner, int calls, DateTime? first) => new()
     {
         Lemma = word.Lemma,
@@ -364,6 +295,8 @@ internal static partial class CallAnalysisViews
                 DiagnosisIssue? issue = diagnosis?.GetIssue(latest.IssueId);
                 return new InsightStruggle
                 {
+                    Focus = issue?.Focus == true,
+                    FocusSince = issue?.FocusSince,
                     IssueId = issue?.Id ?? string.Empty,
                     Category = Humanize(latest.Category.ToString()),
                     Pattern = issue?.Pattern ?? latest.Pattern,
@@ -388,8 +321,7 @@ internal static partial class CallAnalysisViews
                 };
             })
             .OrderByDescending(s => s.Severity * s.Times)
-            .ThenByDescending(s => s.LastSeen)
-            .Take(MaxInsightStruggles);
+            .ThenByDescending(s => s.LastSeen);
     }
 
     public static PersonSummary Person(PersonProfile profile) => new()

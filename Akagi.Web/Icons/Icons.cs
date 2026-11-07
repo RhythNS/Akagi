@@ -69,6 +69,18 @@ public static class Icons
     public static IIconType Trash => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M4 7l16 0' /><path d='M10 11l0 6' /><path d='M14 11l0 6' /><path d='M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12' /><path d='M9 7v-3a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3' />");
 
+    public static IIconType Target => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M12 12m-1 0a1 1 0 1 0 2 0a1 1 0 1 0 -2 0' /><path d='M12 12m-5 0a5 5 0 1 0 10 0a5 5 0 1 0 -10 0' /><path d='M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0 -18 0' />");
+
+    public static IIconType Bookmark => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M18 7v14l-6 -4l-6 4v-14a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4z' />");
+
+    public static IIconType Bulb => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7' /><path d='M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3' /><path d='M9.7 17l4.6 0' />");
+
+    public static IIconType Calendar => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12z' /><path d='M16 3v4' /><path d='M8 3v4' /><path d='M4 11h16' />");
+
     // Status
     public static IIconType Power => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M7 6a7.75 7.75 0 1 0 10 0' /><path d='M12 4l0 8' />");

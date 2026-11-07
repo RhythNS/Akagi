@@ -1,0 +1,112 @@
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Web.Icons
+
+<div class="card mb-3" data-advice-card>
+	<div class="card-header">
+		<Icon IconType="@Icons.Bulb" Size="18" class="text-yellow me-2" />
+		<h3 class="card-title m-0">What to work on</h3>
+		<span class="ms-auto text-secondary small">worked out from the calls shown</span>
+	</div>
+	@if (Insights.Advice.Length == 0)
+	{
+		<div class="card-body text-secondary small">Nothing stands out yet. Recommendations appear once struggles or word habits repeat across calls.</div>
+	}
+	else
+	{
+		<div class="list-group list-group-flush" data-advice>
+			@foreach (InsightAdvice advice in Insights.Advice)
+			{
+				<div class="list-group-item" data-advice-kind="@advice.Kind">
+					<div class="d-flex flex-wrap align-items-center gap-2">
+						<span class="badge @KindClass(advice.Kind)">@KindLabel(advice.Kind)</span>
+						<span class="fw-medium" lang="ja">@advice.Title</span>
+						<span class="ms-auto d-flex gap-1">
+							@if (advice.Kind == "focus" && advice.IssueId.Length > 0)
+							{
+								<button type="button" class="btn btn-sm btn-outline-blue py-0" disabled="@Busy" data-advice-focus="@advice.IssueId"
+										@onclick="() => OnFocus.InvokeAsync(advice.IssueId)">
+									<Icon IconType="@Icons.Target" Size="14" />
+									<span class="ms-1">Focus on it</span>
+								</button>
+							}
+							@if (advice.Word.Length > 0)
+							{
+								<a class="btn btn-sm btn-outline-secondary py-0" data-advice-word="@advice.Word"
+								   href="@(advice.Kind == "use-less" ? $"Learn/Vocabulary?expression={Uri.EscapeDataString(advice.Word)}" : $"Learn/Vocabulary?word={Uri.EscapeDataString(advice.Word)}")">
+									@(advice.Kind == "use-less" ? "Where you say it" : "Hear it used")
+								</a>
+							}
+						</span>
+					</div>
+					<div class="text-secondary small mt-1" lang="ja">@advice.Detail</div>
+				</div>
+			}
+		</div>
+	}
+	<div class="card-body border-top" data-written-advice>
+		<div class="d-flex flex-wrap align-items-center gap-2">
+			<div class="me-auto">
+				<div class="fw-medium">A written study plan</div>
+				<div class="text-secondary small">
+					Your Learning model reads all of the above and writes a short plan. This is one paid request.
+					@if (Insights.WrittenAdviceAt is DateTime written)
+					{
+						<span>Last written @written.ToLocalTime().ToString("g").</span>
+					}
+				</div>
+			</div>
+			<button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-2" disabled="@(Busy || Insights.Calls.Length == 0)"
+					data-write-advice @onclick="() => OnWrite.InvokeAsync()">
+				@if (Writing)
+				{
+					<span class="spinner-border spinner-border-sm" role="status"></span>
+					<span>Writing...</span>
+				}
+				else
+				{
+					<Icon IconType="@Icons.Sparkles" Size="16" />
+					<span>@(Insights.WrittenAdvice.Length > 0 ? "Write it again" : "Write a plan")</span>
+				}
+			</button>
+		</div>
+		@if (Insights.WrittenAdvice.Length > 0)
+		{
+			<div class="mt-3 small" style="white-space: pre-wrap;" lang="ja" data-written-advice-text>@Insights.WrittenAdvice</div>
+		}
+	</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public CallInsights Insights { get; set; } = default!;
+
+	[Parameter]
+	public bool Busy { get; set; }
+
+	[Parameter]
+	public bool Writing { get; set; }
+
+	[Parameter]
+	public EventCallback<string> OnFocus { get; set; }
+
+	[Parameter]
+	public EventCallback OnWrite { get; set; }
+
+	private static string KindLabel(string kind) => kind switch
+	{
+		"focus" => "focus",
+		"progress" => "progress",
+		"use-less" => "use less",
+		"use-more" => "use more",
+		_ => kind
+	};
+
+	private static string KindClass(string kind) => kind switch
+	{
+		"focus" => "bg-blue-lt",
+		"progress" => "bg-green-lt",
+		"use-less" => "bg-orange-lt",
+		"use-more" => "bg-teal-lt",
+		_ => "bg-secondary-lt"
+	};
+}

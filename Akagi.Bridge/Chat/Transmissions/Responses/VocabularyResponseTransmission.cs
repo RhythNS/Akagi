@@ -21,4 +21,6 @@ public class VocabularyResponseTransmission : Transmission
     /// </summary>
     [Key(4)]
     public string? Error { get; set; }
+    [Key(5)]
+    public VocabExpressionResult? Expression { get; set; }
 }

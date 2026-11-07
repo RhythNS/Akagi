@@ -78,6 +78,26 @@ internal class VocabularyRequestHandler : SocketTransmissionHandler
                     response.Report = report.Run(view, request.Options);
                     break;
 
+                case VocabularyAction.Expression:
+                {
+                    string query = request.Query.Trim();
+                    if (query.Length == 0 || query.Length > ExpressionSearch.MaxQueryLength)
+                    {
+                        response.Error = $"Type an expression of 1 to {ExpressionSearch.MaxQueryLength} characters.";
+                        break;
+                    }
+                    VocabularyView searched = new(calls, request.Filter, _dictionary);
+                    if (searched.Calls.Count == 0)
+                    {
+                        response.Error = calls.Count == 0
+                            ? "No finished call with your voice recorded separately yet."
+                            : "No call matches the filter.";
+                        break;
+                    }
+                    response.Expression = ExpressionSearch.Run(searched, query);
+                    break;
+                }
+
                 case VocabularyAction.Word:
                     response.Word = WordDetail.Build(new VocabularyView(calls, request.Filter, _dictionary), request.Lemma);
                     if (response.Word == null)

@@ -1,0 +1,71 @@
+@using Akagi.Bridge.Chat.Models
+@using System.Globalization
+
+<div class="card mb-3" data-call-metrics>
+	<div class="card-header">
+		<h3 class="card-title m-0">Compared with your other calls</h3>
+		<a class="ms-auto small" href="Learn/Insights">See the trends</a>
+	</div>
+	<div class="card-body">
+		<div class="row g-3">
+			@foreach (CallMetric metric in Metrics)
+			{
+				<div class="col-6 col-md-4 col-xl-3" data-metric="@metric.Key">
+					<div class="text-secondary small" title="@metric.Hint">@metric.Label</div>
+					<div class="d-flex align-items-baseline gap-2">
+						<span class="h2 m-0">@(metric.Value is double value ? Show(metric, value) : "-")</span>
+						@if (Comparison(metric) is (string text, string css))
+						{
+							<span class="small @css" data-metric-change>@text</span>
+						}
+					</div>
+					<div class="text-secondary small">
+						@(metric.Average is double average
+							? $"average {Show(metric, average)} over {metric.AverageOver} call{(metric.AverageOver == 1 ? "" : "s")}"
+							: "no other call to compare")
+					</div>
+				</div>
+			}
+		</div>
+	</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public CallMetric[] Metrics { get; set; } = [];
+
+	internal static string Show(CallMetric metric, double value) => metric.Format switch
+	{
+		"percent" => CallText.Percent(value),
+		"seconds" => CallText.Seconds(value),
+		"duration" => CallText.Duration(value),
+		"decimal" => CallText.Number(value),
+		_ => value.ToString("0", CultureInfo.InvariantCulture)
+	};
+
+	/// <summary>
+	/// The difference to the average as an arrow, green when it is the better direction and red when worse. A change
+	/// under five percent counts as the same.
+	/// </summary>
+	internal static (string Text, string Css)? Comparison(CallMetric metric)
+	{
+		if (metric.Value is not double value || metric.Average is not double average || metric.AverageOver == 0)
+		{
+			return null;
+		}
+		double scale = Math.Max(Math.Abs(average), 1e-9);
+		if (Math.Abs(value - average) / scale < 0.05)
+		{
+			return ("about average", "text-secondary");
+		}
+		bool higher = value > average;
+		string arrow = higher ? "▲" : "▼";
+		string css = metric.HigherIsBetter is bool better
+			? (higher == better ? "text-green" : "text-red")
+			: "text-secondary";
+		string change = metric.Format == "percent"
+			? $"{Math.Abs(value - average) * 100:0} pts"
+			: $"{Math.Abs(value - average) / scale * 100:0}%";
+		return ($"{arrow} {change}", css);
+	}
+}

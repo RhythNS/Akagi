@@ -1,4 +1,5 @@
 @using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
 @using Akagi.Web.Icons
 
 @{
@@ -43,13 +44,59 @@
 					}
 				</div>
 			</div>
+			@if (Detail.Transcript.Length > 0 && OnExportSubtitles.HasDelegate)
+			{
+				@if (_subtitles)
+				{
+					<span class="btn-group btn-group-sm" role="group" data-subtitles-choice>
+						<button type="button" class="btn btn-outline-primary" disabled="@Exporting" data-subtitles="partner"
+								title="@(Detail.HasAudio ? $"{partner}'s lines and voice only" : $"{partner}'s lines only (no recording)")"
+								@onclick="() => ExportSubtitlesAsync(MiningVoiceChoice.Partner)">@partner only</button>
+						<button type="button" class="btn btn-outline-primary" disabled="@Exporting" data-subtitles="both"
+								title="@(Detail.HasAudio ? "The whole conversation" : "All lines (no recording)")"
+								@onclick="() => ExportSubtitlesAsync(MiningVoiceChoice.Both)">Both voices</button>
+						<button type="button" class="btn btn-outline-secondary" @onclick="() => _subtitles = false">Cancel</button>
+					</span>
+				}
+				else
+				{
+					<button type="button" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" disabled="@Exporting"
+							title="Download SRT subtitles@(Detail.HasAudio ? " with the audio" : "") for subtitle mining tools" data-subtitles-open
+							@onclick="() => _subtitles = true">
+						<Icon IconType="@Icons.Download" Size="14" />
+						<span>@(Exporting ? "Preparing..." : "Subtitles")</span>
+					</button>
+				}
+			}
 			<a class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" href="@($"Learn/Context?add=call:{call.Id}")"
 			   title="Add this call to the context you can download for another AI" data-export-call>
 				<Icon IconType="@Icons.FileExport" Size="14" />
 				<span>Export for AI</span>
 			</a>
+			@if (OnDelete.HasDelegate && call.State is CallAnalysisState.Completed or CallAnalysisState.Failed)
+			{
+				<button type="button" class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1" title="Delete this call"
+						disabled="@Busy" data-delete-call @onclick="() => _confirmDelete = true">
+					<Icon IconType="@Icons.Trash" Size="14" />
+					<span>Delete</span>
+				</button>
+			}
 			<span class="badge @CallText.StateClass(call.State)">@CallText.StateLabel(call.State)</span>
 		</div>
+
+		@if (_confirmDelete)
+		{
+			<div class="alert alert-danger mt-3 mb-0" data-delete-confirm>
+				<div class="fw-medium">Delete @CallText.Name(call) for good?</div>
+				<div class="small mb-2">
+					This removes the recording, transcript and analysis, and takes back what the call added: its mistakes,
+					correct uses and strengths in your Japanese diagnosis, the facts on @partner's page, your companion's notes and
+					memories from it, and sentences you mined from it. It cannot be undone.
+				</div>
+				<button type="button" class="btn btn-sm btn-danger" disabled="@Busy" data-delete-yes @onclick="DeleteAsync">Delete the call</button>
+				<button type="button" class="btn btn-sm btn-ghost-secondary" data-delete-no @onclick="() => _confirmDelete = false">Keep it</button>
+			</div>
+		}
 
 		@if (call.State == CallAnalysisState.Failed && !string.IsNullOrWhiteSpace(call.Error))
 		{
@@ -91,6 +138,11 @@
 		</div>
 	</div>
 </div>
+
+@if (Detail.Metrics.Length > 0)
+{
+	<CallMetricsCard Metrics="Detail.Metrics" />
+}
 
 @if (Detail.Legacy)
 {
@@ -394,7 +446,7 @@
 
 @if (Detail.Transcript.Length > 0)
 {
-	<CallTranscriptCard @ref="_transcript" Lines="Detail.Transcript" CallId="@call.Id" />
+	<CallTranscriptCard @ref="_transcript" Lines="Detail.Transcript" CallId="@call.Id" OnMine="OnMine" Mined="Mined" />
 }
 
 @code {
@@ -409,6 +461,45 @@
 
 	[Parameter]
 	public EventCallback<DateTime> OnDateChange { get; set; }
+
+	/// <summary>
+	/// Deletes the call after the user confirmed; without it there is no delete button.
+	/// </summary>
+	[Parameter]
+	public EventCallback OnDelete { get; set; }
+
+	[Parameter]
+	public EventCallback<CallTranscriptLine> OnMine { get; set; }
+
+	/// <summary>
+	/// Start times of this call's lines already in the mining list.
+	/// </summary>
+	[Parameter]
+	public IReadOnlyCollection<double> Mined { get; set; } = [];
+
+	[Parameter]
+	public EventCallback<MiningVoiceChoice> OnExportSubtitles { get; set; }
+
+	/// <summary>
+	/// A download is being prepared.
+	/// </summary>
+	[Parameter]
+	public bool Exporting { get; set; }
+
+	private bool _confirmDelete;
+	private bool _subtitles;
+
+	private async Task DeleteAsync()
+	{
+		_confirmDelete = false;
+		await OnDelete.InvokeAsync();
+	}
+
+	private async Task ExportSubtitlesAsync(MiningVoiceChoice voices)
+	{
+		_subtitles = false;
+		await OnExportSubtitles.InvokeAsync(voices);
+	}
 
 	/// <summary>
 	/// Seconds into the call to open the transcript at once the call is shown.
@@ -461,6 +552,8 @@
 			_showFiltered = false;
 			_showReport = false;
 			_editingDate = false;
+			_confirmDelete = false;
+			_subtitles = false;
 		}
 	}
 

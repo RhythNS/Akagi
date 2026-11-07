@@ -1,0 +1,75 @@
+@using Akagi.Bridge.Chat.Models
+@using System.Net
+@using System.Text
+
+<div style="max-height: @MaxHeight; overflow-y: auto;" data-lines>
+	@foreach (VocabLine line in Lines)
+	{
+		bool mined = IsMined(line);
+		<div class="d-flex gap-3 py-1 border-bottom small @(line.IsLearner ? "line-mine" : "")" data-line-at="@line.Time">
+			<a class="text-secondary font-monospace flex-shrink-0 text-nowrap" href="@VocabText.CallUri(line.CallId, line.Time)" title="Open the call at this line">
+				@line.Date.ToString("d") @CallText.Timestamp(line.Time)
+			</a>
+			<span class="text-secondary flex-shrink-0" style="min-width: 3rem;">@line.Speaker</span>
+			<span class="flex-grow-1" lang="ja">@Marked(line)</span>
+			@if (OnMine.HasDelegate)
+			{
+				<button type="button" class="btn btn-sm @(mined ? "btn-green" : "btn-ghost-secondary") flex-shrink-0 py-0 px-1"
+						title="@(mined ? "In your mining list" : "Add this sentence to your mining list")" disabled="@mined"
+						data-mine="@line.CallId" @onclick="() => OnMine.InvokeAsync(line)">
+					@(mined ? "Mined" : "Mine")
+				</button>
+			}
+		</div>
+	}
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public VocabLine[] Lines { get; set; } = [];
+
+	[Parameter]
+	public string MaxHeight { get; set; } = "24rem";
+
+	/// <summary>
+	/// Adds a line to the mining list; without it lines have no mine button.
+	/// </summary>
+	[Parameter]
+	public EventCallback<VocabLine> OnMine { get; set; }
+
+	/// <summary>
+	/// What is already mined, to mark those lines.
+	/// </summary>
+	[Parameter]
+	public IReadOnlyCollection<MinedSentenceView> Mined { get; set; } = [];
+
+	private bool IsMined(VocabLine line) =>
+		Mined.Any(m => m.CallId == line.CallId && Math.Abs(m.Start - line.Time) < 0.01 && m.Text == line.Text);
+
+	/// <summary>
+	/// The line with the marked forms highlighted.
+	/// </summary>
+	internal static MarkupString Marked(VocabLine line)
+	{
+		StringBuilder html = new();
+		int position = 0;
+		string text = line.Text;
+		while (position < text.Length)
+		{
+			(int at, string mark) = line.Marks
+				.Select(m => (At: text.IndexOf(m, position, StringComparison.OrdinalIgnoreCase), Mark: m))
+				.Where(m => m.At >= 0 && m.Mark.Length > 0)
+				.OrderBy(m => m.At)
+				.ThenByDescending(m => m.Mark.Length)
+				.FirstOrDefault((-1, string.Empty));
+			if (at < 0)
+			{
+				break;
+			}
+			html.Append(WebUtility.HtmlEncode(text[position..at])).Append("<mark>").Append(WebUtility.HtmlEncode(text.Substring(at, mark.Length))).Append("</mark>");
+			position = at + mark.Length;
+		}
+		html.Append(WebUtility.HtmlEncode(text[position..]));
+		return new MarkupString(html.ToString());
+	}
+}

@@ -77,6 +77,9 @@ else
 		<div class="text-secondary small mb-2">@_catalog.MixedCalls call@(_catalog.MixedCalls == 1 ? " is" : "s are") left out because the voices were not recorded separately.</div>
 	}
 
+	<VocabExpressionPanel Result="_expression" Loading="_expressionLoading" Query="@(ExpressionQuery ?? string.Empty)" OnSearch="ExpressionAsync"
+						  OnMine="MineAsync" Mined="_mined" />
+
 	<div class="row g-3">
 		<div class="col-12 col-lg-3">
 			<div class="card">
@@ -100,7 +103,7 @@ else
 		<div class="col-12 col-lg-9">
 			@if (_word != null)
 			{
-				<VocabWordPanel Word="_word" OnClose="() => _word = null" />
+				<VocabWordPanel Word="_word" OnClose="() => _word = null" OnMine="MineAsync" Mined="_mined" />
 			}
 			else if (_wordLoading)
 			{
@@ -151,6 +154,22 @@ else
 	[SupplyParameterFromQuery(Name = "report")]
 	public string? ReportQuery { get; set; }
 
+	/// <summary>
+	/// A word to open at once, e.g. from the insights page.
+	/// </summary>
+	[SupplyParameterFromQuery(Name = "word")]
+	public string? WordQuery { get; set; }
+
+	/// <summary>
+	/// An expression to look for at once.
+	/// </summary>
+	[SupplyParameterFromQuery(Name = "expression")]
+	public string? ExpressionQuery { get; set; }
+
+	private VocabExpressionResult? _expression;
+	private bool _expressionLoading;
+	private MinedSentenceView[] _mined = [];
+
 	private VocabCatalog? _catalog;
 	private VocabFilter _filter = new();
 	private string _reportKey = DefaultReport;
@@ -190,7 +209,77 @@ else
 		}
 		if (_catalog.Calls.Length > 0)
 		{
+			// Only marks lines as mined, so the page does not wait for it
+			_ = LoadMinedAsync();
+			if (!string.IsNullOrWhiteSpace(WordQuery))
+			{
+				await WordAsync(WordQuery.Trim());
+			}
+			if (!string.IsNullOrWhiteSpace(ExpressionQuery))
+			{
+				await ExpressionAsync(ExpressionQuery.Trim());
+			}
 			await RunAsync();
+		}
+	}
+
+	private async Task ExpressionAsync(string query)
+	{
+		if (query.Length == 0)
+		{
+			return;
+		}
+		_expressionLoading = true;
+		StateHasChanged();
+		VocabularyResponseTransmission? response = await SendAsync(new VocabularyRequestTransmission { Action = VocabularyAction.Expression, Query = query, Filter = _filter });
+		_expressionLoading = false;
+		_expression = response?.Expression;
+	}
+
+	private async Task LoadMinedAsync()
+	{
+		MiningResponseTransmission? response = await SendMiningAsync(new MiningRequestTransmission { Action = MiningAction.List });
+		if (response?.Sentences is { Length: > 0 } sentences)
+		{
+			_mined = sentences;
+			await InvokeAsync(StateHasChanged);
+		}
+	}
+
+	private async Task MineAsync(VocabLine line)
+	{
+		MiningResponseTransmission? response = await SendMiningAsync(new MiningRequestTransmission
+		{
+			Action = MiningAction.Add,
+			CallId = line.CallId,
+			Time = line.Time,
+			Text = line.Text,
+			Target = _expression?.Lines.Contains(line) == true ? _expression.Query : _word?.Lemma ?? string.Empty
+		});
+		if (response != null)
+		{
+			_error = response.Error;
+			if (response.Error == null)
+			{
+				_mined = response.Sentences;
+			}
+		}
+	}
+
+	private async Task<MiningResponseTransmission?> SendMiningAsync(MiningRequestTransmission transmission)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return null;
+		}
+		try
+		{
+			return await new MiningRequest(transmission).Get(client, MiningRequest.Timeout);
+		}
+		catch (TimeoutException)
+		{
+			return null;
 		}
 	}
 
@@ -204,7 +293,13 @@ else
 	{
 		_filter = filter;
 		string? open = _word?.Lemma;
+		string? searched = _expression?.Query;
 		await RunAsync();
+		// A shown search follows the filter too
+		if (searched != null)
+		{
+			await ExpressionAsync(searched);
+		}
 		// An open word follows the filter too
 		if (open != null)
 		{

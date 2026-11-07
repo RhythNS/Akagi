@@ -6,11 +6,14 @@
 @using Akagi.Bridge.Chat.Transmissions.Responses
 @using Akagi.Web.Icons
 @using Akagi.Web.Pages.Learning.Components
+@using Akagi.Web.Services
 @using Akagi.Web.Services.Sockets
 @using Akagi.Web.Services.Sockets.Requests
 
 @implements IDisposable
 @inject ISocketClientContainer SocketClientContainer
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>Call Analysis - Akagi</PageTitle>
 
@@ -37,6 +40,13 @@
 @if (_error != null)
 {
 	<div class="alert alert-danger" role="alert">@_error</div>
+}
+@if (_message != null)
+{
+	<div class="alert alert-success alert-dismissible" role="status" data-call-message>
+		@_message
+		<button type="button" class="btn-close" aria-label="Close" @onclick="() => _message = null"></button>
+	</div>
 }
 
 @switch (_state)
@@ -132,7 +142,8 @@
 				}
 				else if (_detail != null)
 				{
-					<CallAnalysisDetailView Detail="_detail" Busy="_feedbackBusy" OnFeedback="FeedbackAsync" OnDateChange="SetDateAsync" InitialTime="At" />
+					<CallAnalysisDetailView Detail="_detail" Busy="_feedbackBusy" OnFeedback="FeedbackAsync" OnDateChange="SetDateAsync" InitialTime="At"
+											OnDelete="DeleteAsync" OnMine="MineAsync" Mined="MinedHere" OnExportSubtitles="ExportSubtitlesAsync" Exporting="_exporting" />
 				}
 			</div>
 		</div>
@@ -163,7 +174,13 @@
 	private bool _detailLoading;
 	private bool _feedbackBusy;
 	private string? _error;
+	private string? _message;
 	private bool _loaded;
+	private bool _exporting;
+	private MinedSentenceView[] _mined = [];
+
+	private IReadOnlyCollection<double> MinedHere =>
+		[.. _mined.Where(m => m.CallId == _selectedId).Select(m => m.Start)];
 
 	protected override void OnInitialized()
 	{
@@ -196,6 +213,8 @@
 
 		_calls = response.Calls;
 		_state = State.Ready;
+		// Only marks lines as mined, so the page does not wait for it
+		_ = LoadMinedAsync();
 		string? pick = CallId ?? _selectedId ?? (_calls.FirstOrDefault(c => c.State == CallAnalysisState.Completed) ?? _calls.FirstOrDefault())?.Id;
 		if (pick != null)
 		{
@@ -259,6 +278,110 @@
 			_detail = updated;
 			// The list shows the same count
 			_calls = [.. _calls.Select(c => c.Id == updated.Summary.Id ? updated.Summary : c)];
+		}
+	}
+
+	private async Task DeleteAsync()
+	{
+		if (_detail == null)
+		{
+			return;
+		}
+		string deleted = _detail.Summary.Id;
+		_feedbackBusy = true;
+		CallAnalysisResponseTransmission? response = await SendAsync(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.Delete, CallId = deleted });
+		_feedbackBusy = false;
+		if (response == null || response.Error != null)
+		{
+			return;
+		}
+		_message = response.Message;
+		_calls = response.Calls;
+		_mined = [.. _mined.Where(m => m.CallId != deleted)];
+		_detail = null;
+		_selectedId = null;
+		string? next = (_calls.FirstOrDefault(c => c.State == CallAnalysisState.Completed) ?? _calls.FirstOrDefault())?.Id;
+		if (next != null)
+		{
+			// Selected first, so the address change finds it already shown
+			await SelectAsync(next);
+		}
+		Navigation.NavigateTo(next == null ? "Learn/Calls" : $"Learn/Calls/{next}", replace: true);
+	}
+
+	private async Task LoadMinedAsync()
+	{
+		MiningResponseTransmission? response = await SendMiningAsync(new MiningRequestTransmission { Action = MiningAction.List }, MiningRequest.Timeout, quiet: true);
+		if (response?.Sentences is { Length: > 0 } sentences)
+		{
+			_mined = sentences;
+			await InvokeAsync(StateHasChanged);
+		}
+	}
+
+	private async Task MineAsync(CallTranscriptLine line)
+	{
+		if (_detail == null)
+		{
+			return;
+		}
+		MiningResponseTransmission? response = await SendMiningAsync(new MiningRequestTransmission
+		{
+			Action = MiningAction.Add,
+			CallId = _detail.Summary.Id,
+			Time = line.Start,
+			Text = line.Text
+		}, MiningRequest.Timeout);
+		if (response?.Error == null && response?.Sentences is { Length: > 0 } sentences)
+		{
+			_mined = sentences;
+		}
+	}
+
+	private async Task ExportSubtitlesAsync(MiningVoiceChoice voices)
+	{
+		if (_detail == null)
+		{
+			return;
+		}
+		_exporting = true;
+		StateHasChanged();
+		MiningResponseTransmission? response = await SendMiningAsync(new MiningRequestTransmission
+		{
+			Action = MiningAction.ExportCall,
+			CallId = _detail.Summary.Id,
+			Voices = voices
+		}, MiningRequest.ExportTimeout);
+		_exporting = false;
+		if (response is { Error: null, Data.Length: > 0 })
+		{
+			await FileDownloads.SaveAsync(JS, response.FileName, response.Data);
+		}
+	}
+
+	private async Task<MiningResponseTransmission?> SendMiningAsync(MiningRequestTransmission transmission, TimeSpan timeout, bool quiet = false)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return null;
+		}
+		try
+		{
+			MiningResponseTransmission response = await new MiningRequest(transmission).Get(client, timeout);
+			if (!quiet)
+			{
+				_error = response.Error;
+			}
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			if (!quiet)
+			{
+				_error = "That took too long. Try again in a moment.";
+			}
+			return null;
 		}
 	}
 

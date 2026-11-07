@@ -43,6 +43,28 @@
 	<div class="alert alert-danger" role="alert">@_error</div>
 }
 
+<div class="d-flex flex-wrap align-items-center gap-2 mb-3" data-timeframe>
+	<Icon IconType="@Icons.Calendar" Size="16" class="text-secondary" />
+	<div class="btn-group btn-group-sm" role="group" aria-label="Timeframe">
+		@foreach ((string key, string label) in Ranges)
+		{
+			<button type="button" class="btn @(_range == key ? "btn-primary" : "btn-outline-primary")" data-range="@key" disabled="@_loading"
+					@onclick="() => SetRangeAsync(key)">@label</button>
+		}
+	</div>
+	@if (_range == "custom")
+	{
+		<input type="date" class="form-control form-control-sm w-auto" @bind="_customFrom" aria-label="From" data-range-from />
+		<span class="text-secondary small">to</span>
+		<input type="date" class="form-control form-control-sm w-auto" @bind="_customTo" aria-label="To" data-range-to />
+		<button type="button" class="btn btn-sm btn-outline-primary" disabled="@_loading" data-range-apply @onclick="LoadAsync">Apply</button>
+	}
+	@if (_insights is { HiddenCalls: > 0 } shownInsights)
+	{
+		<span class="text-secondary small" data-range-hidden>@shownInsights.HiddenCalls call@(shownInsights.HiddenCalls == 1 ? "" : "s") outside this timeframe</span>
+	}
+</div>
+
 @if (_loading)
 {
 	<div class="card">
@@ -78,8 +100,8 @@ else if (_insights.Calls.Length == 0)
 			<div class="text-secondary mb-2">
 				<Icon IconType="@Icons.Phone" Size="36" />
 			</div>
-			<h3 class="h4 mb-1">No finished calls yet</h3>
-			<p class="text-secondary m-0">Insights appear once a call analysis is done.</p>
+			<h3 class="h4 mb-1">@(_insights.HiddenCalls > 0 ? "No calls in this timeframe" : "No finished calls yet")</h3>
+			<p class="text-secondary m-0">@(_insights.HiddenCalls > 0 ? "Pick a longer timeframe to see your calls." : "Insights appear once a call analysis is done.")</p>
 		</div>
 	</div>
 }
@@ -123,6 +145,10 @@ else
 			@insights.MixedCalls call@(insights.MixedCalls == 1 ? " was" : "s were") recorded without separate voices. They have no speaking share and are left out of the vocabulary, because your partner's words could not be told apart from yours.
 		</div>
 	}
+
+	<CallFocusCard Struggles="insights.FocusStruggles" Busy="_busy" OnUnfocus="id => SetFocusAsync(id, false)" />
+
+	<CallAdviceCard Insights="insights" Busy="_busy" Writing="_writing" OnFocus="id => SetFocusAsync(id, true)" OnWrite="WriteAdviceAsync" />
 
 	<h3 class="mt-2">Trends</h3>
 	<div class="row row-cards mb-3">
@@ -218,9 +244,23 @@ else
 								{
 									<span class="badge @CallText.StatusClass(status)">@status</span>
 								}
+								@if (struggle.Focus)
+								{
+									<span class="badge bg-blue-lt" data-focus-badge>focus</span>
+								}
 								<span class="ms-auto text-secondary small">
 									@struggle.Times&times; in @struggle.Calls call@(struggle.Calls == 1 ? "" : "s")@(struggle.CorrectUses > 0 ? $", right {struggle.CorrectUses}×" : ""), last @struggle.LastSeen.ToLocalTime().ToString("d")
 								</span>
+								@if (struggle.IssueId.Length > 0)
+								{
+									<button type="button" class="btn btn-sm @(struggle.Focus ? "btn-blue" : "btn-ghost-secondary") py-0 px-1"
+											title="@(struggle.Focus ? "Stop focusing on this struggle" : "Focus on this struggle: it is shown first and its trend is followed")"
+											disabled="@_busy" data-focus-toggle="@struggle.IssueId"
+											@onclick="() => SetFocusAsync(struggle.IssueId, !struggle.Focus)" @onclick:stopPropagation="true">
+										<Icon IconType="@Icons.Target" Size="14" />
+										<span class="small ms-1">@(struggle.Focus ? "Focused" : "Focus")</span>
+									</button>
+								}
 								<span class="text-secondary d-inline-flex" style="transition: transform .15s; @(open ? "transform: rotate(180deg);" : "")">
 									<Icon IconType="@Icons.ChevronDown" Size="16" />
 								</span>
@@ -321,7 +361,7 @@ else
 		</div>
 		<div class="card-body py-2 text-secondary small border-bottom">
 			@(_heard
-				? "Words your partners used again and again that you never said in a call: you understand them, so they are the easiest to make your own."
+				? "Words your partners used again and again that you never said in a call: you understand them, so they are the easiest to make your own. Open one to mine sentences with it."
 				: "The words you said most, over all calls with separate voices.")
 		</div>
 		@{
@@ -353,7 +393,7 @@ else
 						{
 							<tr data-insight-word="@word.Lemma">
 								<td lang="ja">
-									<span class="fw-medium">@word.Lemma</span>
+									<a class="fw-medium" href="@($"Learn/Vocabulary?word={Uri.EscapeDataString(word.Lemma)}")" title="See every line with it, and mine sentences">@word.Lemma</a>
 									@if (!string.IsNullOrEmpty(word.Reading) && word.Reading != word.Lemma)
 									{
 										<span class="text-secondary small ms-1">@word.Reading</span>
@@ -411,6 +451,94 @@ else
 	private string _class = CallText.ContentFilter;
 	private string _search = string.Empty;
 	private readonly HashSet<string> _openStruggles = [];
+	private string _range = "all";
+	private DateTime? _customFrom;
+	private DateTime? _customTo;
+	private bool _busy;
+	private bool _writing;
+
+	private static readonly (string Key, string Label)[] Ranges =
+	[
+		("all", "All time"), ("7", "7 days"), ("30", "30 days"), ("90", "90 days"), ("365", "Year"), ("custom", "Custom")
+	];
+
+	/// <summary>
+	/// The timeframe as UTC instants: from the start of the first local day, up to the start of the day after the last.
+	/// </summary>
+	internal (DateTime? From, DateTime? To) Timeframe(DateTime today)
+	{
+		if (_range == "custom")
+		{
+			return (_customFrom is DateTime from ? Start(from) : null, _customTo is DateTime to ? Start(to.AddDays(1)) : null);
+		}
+		return int.TryParse(_range, out int days) ? (Start(today.AddDays(1 - days)), null) : (null, null);
+	}
+
+	private static DateTime Start(DateTime day) => DateTime.SpecifyKind(day.Date, DateTimeKind.Local).ToUniversalTime();
+
+	private async Task SetRangeAsync(string key)
+	{
+		_range = key;
+		if (key == "custom")
+		{
+			// The custom range starts as the last month, ready to adjust
+			_customTo ??= DateTime.Today;
+			_customFrom ??= DateTime.Today.AddDays(-29);
+			return;
+		}
+		await LoadAsync();
+	}
+
+	private CallAnalysisRequestTransmission Request(CallAnalysisAction action)
+	{
+		(DateTime? from, DateTime? to) = Timeframe(DateTime.Today);
+		return new CallAnalysisRequestTransmission { Action = action, From = from, To = to };
+	}
+
+	private async Task SetFocusAsync(string issueId, bool focus)
+	{
+		CallAnalysisRequestTransmission request = Request(CallAnalysisAction.SetFocus);
+		request.IssueId = issueId;
+		request.Focus = focus;
+		_busy = true;
+		await SendAsync(request, CallAnalysisRequest.Timeout);
+		_busy = false;
+	}
+
+	private async Task WriteAdviceAsync()
+	{
+		_busy = true;
+		_writing = true;
+		StateHasChanged();
+		await SendAsync(Request(CallAnalysisAction.Advice), AdviceTimeout);
+		_writing = false;
+		_busy = false;
+	}
+
+	/// <summary>
+	/// The plan is one model request over the whole picture, which can take a while.
+	/// </summary>
+	private static readonly TimeSpan AdviceTimeout = TimeSpan.FromMinutes(3);
+
+	private async Task SendAsync(CallAnalysisRequestTransmission transmission, TimeSpan timeout)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			_error = "Unable to reach the Akagi backend.";
+			return;
+		}
+		try
+		{
+			CallAnalysisResponseTransmission response = await new CallAnalysisRequest(transmission).Get(client, timeout);
+			_error = response.Error;
+			_insights = response.Insights ?? _insights;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Try again in a moment.";
+		}
+	}
 
 	/// <summary>
 	/// Keeps a struggle open across refreshes; struggles the diagnosis no longer has fall back to their place in the list.
@@ -477,7 +605,7 @@ else
 
 		try
 		{
-			CallAnalysisResponseTransmission response = await new CallAnalysisRequest(new CallAnalysisRequestTransmission { Action = CallAnalysisAction.Insights })
+			CallAnalysisResponseTransmission response = await new CallAnalysisRequest(Request(CallAnalysisAction.Insights))
 				.Get(client, CallAnalysisRequest.Timeout);
 			_error = response.Error;
 			_insights = response.Insights;

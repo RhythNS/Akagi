@@ -16,7 +16,13 @@ public enum CallAnalysisAction
     /// <summary>Everything known about one person, by <see cref="CallAnalysisRequestTransmission.Name"/>.</summary>
     Person,
     /// <summary>Corrects the day a call took place to <see cref="CallAnalysisRequestTransmission.Date"/>.</summary>
-    SetDate
+    SetDate,
+    /// <summary>Deletes a finished call and takes back everything it added to the diagnosis, people and memories.</summary>
+    Delete,
+    /// <summary>Marks the struggle <see cref="CallAnalysisRequestTransmission.IssueId"/> as a focus struggle, or unmarks it.</summary>
+    SetFocus,
+    /// <summary>Asks the Learning model for a written study plan; answers with the insights.</summary>
+    Advice
 }
 
 [MessagePackObject]
@@ -41,4 +47,18 @@ public class CallAnalysisRequestTransmission : Transmission
     public string Name { get; set; } = string.Empty;
     [Key(6)]
     public DateTime? Date { get; set; }
+    /// <summary>
+    /// Insights only over calls from this moment on (UTC, inclusive), e.g. the start of a local day.
+    /// </summary>
+    [Key(7)]
+    public DateTime? From { get; set; }
+    /// <summary>
+    /// Insights only over calls before this moment (UTC, exclusive), e.g. the start of the day after the last one.
+    /// </summary>
+    [Key(8)]
+    public DateTime? To { get; set; }
+    [Key(9)]
+    public string IssueId { get; set; } = string.Empty;
+    [Key(10)]
+    public bool Focus { get; set; }
 }

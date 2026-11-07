@@ -10,7 +10,9 @@ public enum VocabularyAction
     /// <summary>One report under the filter.</summary>
     Report,
     /// <summary>Everything about one word under the filter.</summary>
-    Word
+    Word,
+    /// <summary>Where an expression (any text, e.g. それも) was said, by whom and how often.</summary>
+    Expression
 }
 
 [MessagePackObject]
@@ -33,4 +35,9 @@ public class VocabularyRequestTransmission : Transmission
     public Dictionary<string, string> Options { get; set; } = [];
     [Key(5)]
     public string Lemma { get; set; } = string.Empty;
+    /// <summary>
+    /// The expression to look for.
+    /// </summary>
+    [Key(6)]
+    public string Query { get; set; } = string.Empty;
 }

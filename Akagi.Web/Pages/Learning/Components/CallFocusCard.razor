@@ -1,0 +1,77 @@
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Web.Icons
+
+@if (Struggles.Length > 0)
+{
+	<div class="card mb-3 border-blue" data-focus-card>
+		<div class="card-header">
+			<Icon IconType="@Icons.Target" Size="18" class="text-blue me-2" />
+			<h3 class="card-title m-0">Your focus struggles</h3>
+			<span class="ms-auto text-secondary small">times per 1,000 characters you spoke, per call</span>
+		</div>
+		<div class="card-body">
+			<div class="row row-cards">
+				@foreach (InsightStruggle struggle in Struggles)
+				{
+					<div class="col-12 col-xl-6" data-focus="@struggle.IssueId">
+						<div class="d-flex flex-wrap align-items-center gap-1 mb-1">
+							<span class="badge bg-purple-lt">@struggle.Category</span>
+							@if (struggle.FocusSince is DateTime since)
+							{
+								<span class="text-secondary small">focus since @since.ToLocalTime().ToString("d")</span>
+							}
+							<button type="button" class="btn btn-sm btn-ghost-secondary py-0 ms-auto" disabled="@Busy" data-unfocus="@struggle.IssueId"
+									@onclick="() => OnUnfocus.InvokeAsync(struggle.IssueId)">Stop focusing</button>
+						</div>
+						<div class="fw-medium mb-1" lang="ja">@struggle.Pattern</div>
+						<div class="small mb-2" data-focus-change>
+							@if (Change(struggle) is (string text, string css))
+							{
+								<span class="@css">@text</span>
+							}
+							else
+							{
+								<span class="text-secondary">The trend shows up once a call after you picked it is analyzed.</span>
+							}
+						</div>
+						<TrendColumns Title="This struggle per call" Hint="@(struggle.Times > 0 ? $"{struggle.Times}× in the calls shown" : "Not once in the calls shown")"
+									  Points="Points(struggle)" Format="CallText.Number" />
+					</div>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+@code {
+	[Parameter, EditorRequired]
+	public InsightStruggle[] Struggles { get; set; } = [];
+
+	[Parameter]
+	public bool Busy { get; set; }
+
+	[Parameter]
+	public EventCallback<string> OnUnfocus { get; set; }
+
+	private static List<TrendColumns.Point> Points(InsightStruggle struggle) =>
+		[.. struggle.Trend.Select(p => new TrendColumns.Point(p.CallId, p.Name, p.Date, p.Rate))];
+
+	/// <summary>
+	/// Before and since focusing, green when it went down by a fifth or more and red when it went up.
+	/// </summary>
+	internal static (string Text, string Css)? Change(InsightStruggle struggle)
+	{
+		if (struggle.RateBefore is not double before || struggle.RateSince is not double since)
+		{
+			return null;
+		}
+		string numbers = $"{CallText.Number(before)} before you focused on it, {CallText.Number(since)} since";
+		if (since < before * 0.8)
+		{
+			return ($"▼ Going down: {numbers}.", "text-green");
+		}
+		return since > before * 1.2
+			? ($"▲ Going up: {numbers}.", "text-red")
+			: ($"About the same: {numbers}.", "text-secondary");
+	}
+}

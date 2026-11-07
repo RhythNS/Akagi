@@ -499,6 +499,49 @@ public class CallAnalysisDetail
     /// </summary>
     [Key(24)]
     public CallCostView[] Costs { get; set; } = [];
+    /// <summary>
+    /// Every number the insights follow, for this call next to the average of the other calls.
+    /// </summary>
+    [Key(25)]
+    public CallMetric[] Metrics { get; set; } = [];
+    /// <summary>
+    /// The call has a recording, so its audio can be exported with the subtitles.
+    /// </summary>
+    [Key(26)]
+    public bool HasAudio { get; set; }
+}
+
+/// <summary>
+/// One measured number of a call, with the average over the user's other calls to compare.
+/// </summary>
+[MessagePackObject]
+public class CallMetric
+{
+    [Key(0)]
+    public string Key { get; set; } = string.Empty;
+    [Key(1)]
+    public string Label { get; set; } = string.Empty;
+    [Key(2)]
+    public string Hint { get; set; } = string.Empty;
+    [Key(3)]
+    public double? Value { get; set; }
+    [Key(4)]
+    public double? Average { get; set; }
+    /// <summary>
+    /// How to show it: percent (0..1), seconds, decimal or whole.
+    /// </summary>
+    [Key(5)]
+    public string Format { get; set; } = "whole";
+    /// <summary>
+    /// Whether more is better (true), worse (false), or neither (null).
+    /// </summary>
+    [Key(6)]
+    public bool? HigherIsBetter { get; set; }
+    /// <summary>
+    /// How many other calls the average is over.
+    /// </summary>
+    [Key(7)]
+    public int AverageOver { get; set; }
 }
 
 [MessagePackObject]
@@ -631,6 +674,73 @@ public class InsightStruggle
     /// </summary>
     [Key(10)]
     public InsightOccurrence[] Occurrences { get; set; } = [];
+    /// <summary>
+    /// The user picked this struggle to work on.
+    /// </summary>
+    [Key(11)]
+    public bool Focus { get; set; }
+    [Key(12)]
+    public DateTime? FocusSince { get; set; }
+    /// <summary>
+    /// For focus struggles: how often it happened in each call, per 1,000 characters the user spoke.
+    /// </summary>
+    [Key(13)]
+    public StruggleTrendPoint[] Trend { get; set; } = [];
+    /// <summary>
+    /// Times per 1,000 spoken characters before the user started focusing on it, and since.
+    /// </summary>
+    [Key(14)]
+    public double? RateBefore { get; set; }
+    [Key(15)]
+    public double? RateSince { get; set; }
+}
+
+/// <summary>
+/// One call on a struggle's trend.
+/// </summary>
+[MessagePackObject]
+public class StruggleTrendPoint
+{
+    [Key(0)]
+    public string CallId { get; set; } = string.Empty;
+    [Key(1)]
+    public string Name { get; set; } = string.Empty;
+    [Key(2)]
+    public DateTime Date { get; set; }
+    [Key(3)]
+    public int Times { get; set; }
+    /// <summary>
+    /// Times per 1,000 characters the user spoke; null when the user's voice was not recorded on its own.
+    /// </summary>
+    [Key(4)]
+    public double? Rate { get; set; }
+}
+
+/// <summary>
+/// One recommendation worked out from the calls: a struggle to focus on, a word to use less, or one to start using.
+/// </summary>
+[MessagePackObject]
+public class InsightAdvice
+{
+    /// <summary>
+    /// focus, progress, use-less or use-more.
+    /// </summary>
+    [Key(0)]
+    public string Kind { get; set; } = string.Empty;
+    [Key(1)]
+    public string Title { get; set; } = string.Empty;
+    [Key(2)]
+    public string Detail { get; set; } = string.Empty;
+    /// <summary>
+    /// The struggle it is about, so the page can offer to focus on it.
+    /// </summary>
+    [Key(3)]
+    public string IssueId { get; set; } = string.Empty;
+    /// <summary>
+    /// The word it is about, so the page can link to it.
+    /// </summary>
+    [Key(4)]
+    public string Word { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -695,6 +805,35 @@ public class CallInsights
     /// </summary>
     [Key(7)]
     public int MixedCalls { get; set; }
+    /// <summary>
+    /// The timeframe the insights cover; null for open ends.
+    /// </summary>
+    [Key(8)]
+    public DateTime? From { get; set; }
+    [Key(9)]
+    public DateTime? To { get; set; }
+    /// <summary>
+    /// The struggles the user chose to work on, also those that did not happen in the timeframe.
+    /// </summary>
+    [Key(10)]
+    public InsightStruggle[] FocusStruggles { get; set; } = [];
+    /// <summary>
+    /// What to work on, worked out from the calls in the timeframe.
+    /// </summary>
+    [Key(11)]
+    public InsightAdvice[] Advice { get; set; } = [];
+    /// <summary>
+    /// The last study plan the Learning model wrote, and when.
+    /// </summary>
+    [Key(12)]
+    public string WrittenAdvice { get; set; } = string.Empty;
+    [Key(13)]
+    public DateTime? WrittenAdviceAt { get; set; }
+    /// <summary>
+    /// Finished calls outside the timeframe, so the page can say some are hidden.
+    /// </summary>
+    [Key(14)]
+    public int HiddenCalls { get; set; }
 }
 
 [MessagePackObject]
