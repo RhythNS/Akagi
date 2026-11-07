@@ -5,7 +5,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Akagi.Receivers.Commands;
 
-internal class RemindCommand : Command
+internal class RemindCommand : Command, IUserFactCommand
 {
     public override string Name => "Remind";
 
@@ -26,7 +26,8 @@ internal class RemindCommand : Command
             Description = "The time to remind the user (in minutes).",
             IsRequired = true,
             ArgumentType = Argument.Type.Int
-        }
+        },
+        Grounding.EvidenceArgument()
     ];
 
     public override bool ContinueAfterExecution => true;

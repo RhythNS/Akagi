@@ -51,7 +51,11 @@ internal class PersonaStrategy : GroupStrategy
             LLMFactory = context.LLMFactory,
             DatabaseFactory = context.DatabaseFactory,
             EmbeddingService = context.EmbeddingService,
-            Group = context.Group
+            Group = context.Group,
+            Turn = context.Turn,
+            // Advisors' answers reach the persona as Consult results; their raw replies would read as its own words
+            OtherMembers = MemberSpeech.Hide,
+            MemberNames = context.Members.Where(m => !string.IsNullOrEmpty(m.Id)).GroupBy(m => m.Id!).ToDictionary(g => g.Key, g => g.First().Name)
         };
 
         logger.LogInformation("Persona {PersonaId} answering for group {GroupId}", persona.Id, context.Group.Id);

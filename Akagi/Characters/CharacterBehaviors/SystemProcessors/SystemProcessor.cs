@@ -83,6 +83,16 @@ internal class SystemProcessor : Savable
     public Command[] Commands { get; set; } = [];
 
     /// <summary>
+    /// The tools offered to the model for the current turn; null offers all <see cref="Commands"/>. Set per turn,
+    /// for example to leave out state changing tools when the character reaches out on its own.
+    /// </summary>
+    [BsonIgnore]
+    public Command[]? OfferedCommands { get; set; }
+
+    [BsonIgnore]
+    public Command[] CurrentCommands => OfferedCommands ?? Commands;
+
+    /// <summary>
     /// How much the model may think (none, minimal, low, medium, high); empty leaves it to the model. Set in code for
     /// processors built on the fly, such as the call review passes.
     /// </summary>

@@ -1,5 +1,6 @@
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
 using Akagi.Characters.VoiceClips;
 using Akagi.Receivers;
 using Akagi.Receivers.Commands;
@@ -116,7 +117,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
 
     private async Task<OpenRouterPayload> GetPayload(SystemProcessor systemProcessor, Context context)
     {
-        Characters.Conversations.Message[] messages = await systemProcessor.MessageCompiler.CompileAsync(context);
+        Characters.Conversations.Message[] messages = GroupView.For(await systemProcessor.MessageCompiler.CompileAsync(context), context);
 
         List<OpenRouterPayload.Message> input = [];
 
@@ -187,7 +188,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
                             break;
                         }
                     }
-                    input.AddRange(BuildToolExchange(commandMessages, systemProcessor.CommandNames, ref toolCallSequence));
+                    input.AddRange(BuildToolExchange(commandMessages, systemProcessor.CurrentCommands.Select(c => c.Name), ref toolCallSequence));
                     break;
 
                 default:
@@ -197,7 +198,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         }
 
         List<Tool> tools = [];
-        foreach (Command command in systemProcessor.Commands)
+        foreach (Command command in systemProcessor.CurrentCommands)
         {
             Dictionary<string, object> properties = [];
             List<string> required = [];
@@ -314,8 +315,9 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
                     argument.Value = jsonElement.GetString()!;
                     break;
                 case JsonValueKind.Number:
+                    // Models send 7.0 or 6.5 for integers too; round instead of failing the whole turn
                     if (argument.ArgumentType == Argument.Type.Int)
-                        argument.IntValue = jsonElement.GetInt32();
+                        argument.IntValue = jsonElement.TryGetInt32(out int integer) ? integer : (int)Math.Round(jsonElement.GetDouble());
                     else
                         argument.FloatValue = jsonElement.GetSingle();
                     break;

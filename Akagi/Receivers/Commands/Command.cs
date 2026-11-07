@@ -64,7 +64,7 @@ internal abstract class Command
         return value != null && bool.TryParse(value, out bool result) ? result : null;
     }
 
-    protected CommandMessage CreateCommandMessage(string output)
+    protected internal CommandMessage CreateCommandMessage(string output)
     {
         return new CommandMessage
         {

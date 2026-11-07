@@ -3,7 +3,7 @@ using Akagi.Life.Work;
 
 namespace Akagi.Receivers.Commands.Life;
 
-internal class StartWorkCommand : LifeCommand
+internal class StartWorkCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "StartWork";
 
@@ -13,7 +13,8 @@ internal class StartWorkCommand : LifeCommand
     public override Argument[] GetDefaultArguments() =>
     [
         Text("Project", "Project name, e.g. 'Akagi' or 'N2 study'.", required: true),
-        Text("Task", "What exactly they are doing.")
+        Text("Task", "What exactly they are doing."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -37,7 +38,7 @@ internal class StartWorkCommand : LifeCommand
     }
 }
 
-internal class StopWorkCommand : LifeCommand
+internal class StopWorkCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "StopWork";
 
@@ -45,7 +46,8 @@ internal class StopWorkCommand : LifeCommand
 
     public override Argument[] GetDefaultArguments() =>
     [
-        Text("Notes", "What got done, in a few words.")
+        Text("Notes", "What got done, in a few words."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -68,13 +70,13 @@ internal class StopWorkCommand : LifeCommand
     }
 }
 
-internal class TakeBreakCommand : LifeCommand
+internal class TakeBreakCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "TakeBreak";
 
     public override string Description => "Note that the user took a break, which resets the break reminder for the running session.";
 
-    public override Argument[] GetDefaultArguments() => [];
+    public override Argument[] GetDefaultArguments() => [Grounding.EvidenceArgument()];
 
     public override async Task<Command[]> Execute(Context context)
     {

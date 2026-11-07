@@ -8,7 +8,7 @@ using System.Text;
 
 namespace Akagi.Receivers.Commands.Life;
 
-internal class AddVocabularyCommand : LifeCommand
+internal class AddVocabularyCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "AddVocabulary";
 
@@ -19,7 +19,8 @@ internal class AddVocabularyCommand : LifeCommand
     [
         Text("Term", "The word as written, e.g. '影響'.", required: true),
         Text("Reading", "Kana reading, e.g. 'えいきょう'."),
-        Text("Meaning", "Short meaning in the user's language.")
+        Text("Meaning", "Short meaning in the user's language."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -40,7 +41,7 @@ internal class AddVocabularyCommand : LifeCommand
     }
 }
 
-internal class ReviewVocabularyCommand : LifeCommand
+internal class ReviewVocabularyCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "ReviewVocabulary";
 
@@ -50,7 +51,8 @@ internal class ReviewVocabularyCommand : LifeCommand
     public override Argument[] GetDefaultArguments() =>
     [
         Text("Term", "The word that was reviewed.", required: true),
-        Flag("Correct", "Whether the user knew it.", required: true)
+        Flag("Correct", "Whether the user knew it.", required: true),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -110,7 +112,7 @@ internal class DueVocabularyCommand : LifeCommand
     }
 }
 
-internal class RecordGrammarMistakeCommand : LifeCommand
+internal class RecordGrammarMistakeCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "RecordGrammarMistake";
 
@@ -122,7 +124,8 @@ internal class RecordGrammarMistakeCommand : LifeCommand
         Text("Pattern", "The grammar point, e.g. '〜わけではない'.", required: true),
         Text("Explanation", "What went wrong, briefly."),
         Text("Example", "The user's incorrect sentence."),
-        Text("Correction", "The corrected sentence.")
+        Text("Correction", "The corrected sentence."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -143,7 +146,7 @@ internal class RecordGrammarMistakeCommand : LifeCommand
     }
 }
 
-internal class LogStudyCommand : LifeCommand
+internal class LogStudyCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "LogStudy";
 
@@ -152,7 +155,8 @@ internal class LogStudyCommand : LifeCommand
     public override Argument[] GetDefaultArguments() =>
     [
         Integer("Minutes", "Minutes studied.", required: true),
-        Text("Activity", "What they did, e.g. 'reading NHK Easy', 'shadowing', 'mock exam'.")
+        Text("Activity", "What they did, e.g. 'reading NHK Easy', 'shadowing', 'mock exam'."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)

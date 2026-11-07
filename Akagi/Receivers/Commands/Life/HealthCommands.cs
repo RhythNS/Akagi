@@ -3,7 +3,7 @@ using Akagi.Life.Health;
 
 namespace Akagi.Receivers.Commands.Life;
 
-internal class LogSleepCommand : LifeCommand
+internal class LogSleepCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "LogSleep";
 
@@ -12,7 +12,8 @@ internal class LogSleepCommand : LifeCommand
     public override Argument[] GetDefaultArguments() =>
     [
         Number("Hours", "Hours of sleep, e.g. 6.5.", required: true),
-        Text("WokeUpAt", "Local wake-up time 'HH:mm' (today) or 'yyyy-MM-dd HH:mm'. Defaults to now.")
+        Text("WokeUpAt", "Local wake-up time 'HH:mm' (today) or 'yyyy-MM-dd HH:mm'. Defaults to now."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -40,7 +41,7 @@ internal class LogSleepCommand : LifeCommand
     }
 }
 
-internal class LogStepsCommand : LifeCommand
+internal class LogStepsCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "LogSteps";
 
@@ -49,7 +50,8 @@ internal class LogStepsCommand : LifeCommand
     public override Argument[] GetDefaultArguments() =>
     [
         Integer("Steps", "Number of steps.", required: true),
-        Text("Date", "Local date 'yyyy-MM-dd'. Defaults to today.")
+        Text("Date", "Local date 'yyyy-MM-dd'. Defaults to today."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)

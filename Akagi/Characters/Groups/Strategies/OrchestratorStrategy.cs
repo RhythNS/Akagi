@@ -57,7 +57,8 @@ internal class OrchestratorStrategy : GroupStrategy
                 Communicator = managerCommunicator,
                 LLMFactory = context.LLMFactory,
                 DatabaseFactory = context.DatabaseFactory,
-                Group = context.Group
+                Group = context.Group,
+                Turn = context.Turn
             };
 
             await GroupMemberRunner.RunAsync(manager, managerContext);
@@ -96,7 +97,8 @@ internal class OrchestratorStrategy : GroupStrategy
                 Communicator = workerCommunicator,
                 LLMFactory = context.LLMFactory,
                 DatabaseFactory = context.DatabaseFactory,
-                Group = context.Group
+                Group = context.Group,
+                Turn = context.Turn
             };
 
             await GroupMemberRunner.RunAsync(delegateTo, workerContext);

@@ -41,6 +41,11 @@ internal class Receiver : IReceiver, ICleanable
     private static readonly ConcurrentDictionary<(string userId, string characterId), SemaphoreSlim> _locks = new();
     private static readonly ConcurrentDictionary<(string userId, string characterId), AsyncLocal<int>> _lockCounts = new();
     private static readonly ConcurrentDictionary<(string userId, string groupId), SemaphoreSlim> _groupLocks = new();
+    /// <summary>
+    /// The group whose turn is running in this async flow, so a reflection fired inside it reuses that instance
+    /// instead of loading (and later overwriting) a second copy.
+    /// </summary>
+    private static readonly AsyncLocal<CharacterGroup?> _runningGroup = new();
     private static readonly ConcurrentDictionary<(string userId, string groupId), CancellationTokenSource> _groupCancellations = new();
     private readonly IPuppeteerDatabase _puppeteerDatabase;
     private readonly IReflectorDatabase _reflectorDatabase;
@@ -122,9 +127,22 @@ internal class Receiver : IReceiver, ICleanable
                 return;
             }
             await using Context context = GetContext(character, user, communicator);
+            context.Turn = Receivers.Commands.TurnSource.Reflection;
+            // What advisors said to the persona is not something the user told anyone
+            context.OtherMembers = MemberSpeech.Hide;
             if (conversation != null)
             {
                 context.Conversation = conversation;
+            }
+            else
+            {
+                // A group persona's own conversation never gets the user's messages; those live in the group
+                CharacterGroup? group = RunningPersonaGroup(character);
+                if (group != null)
+                {
+                    context.Group = group;
+                    context.Conversation = group.Conversations.GetCurrentConversation();
+                }
             }
             bool reflected = false;
             foreach (string id in character.ReflectorIds)
@@ -133,6 +151,12 @@ internal class Receiver : IReceiver, ICleanable
                         ?? throw new Exception($"Reflector with ID {id} not found for character {character.Id}");
                 if (!filter(reflector))
                 {
+                    continue;
+                }
+                if (reflector.OnlyAfterUserMessages && !Reflector.LatestTurnStartedByUser(context.Conversation.Messages))
+                {
+                    _logger.LogInformation("Skipping reflector {ReflectorName} for character {CharacterId}: the latest turn was not started by the user",
+                        reflector.Name, character.Id);
                     continue;
                 }
                 ILogger logger = Globals.Instance.ServiceProvider.GetRequiredService<ILogger<Reflector>>();
@@ -155,6 +179,16 @@ internal class Receiver : IReceiver, ICleanable
             ReleaseLock(character, user);
         }
     }
+    /// <summary>
+    /// The persona group whose turn is running right now, when the character speaks for it. Reflections fired inside
+    /// a group turn read the group conversation (the character's own never gets the user's messages) and reuse the
+    /// live group instance, so nothing is saved over it. Outside a group turn the character's conversation is used.
+    /// </summary>
+    private static CharacterGroup? RunningPersonaGroup(Character character)
+    {
+        CharacterGroup? running = _runningGroup.Value;
+        return running != null && running.MemberCharacterIds.Contains(character.Id) ? running : null;
+    }
     public async Task OnSystemEvent(Character character, User user, Message message)
     {
         if (message.From != Message.Type.System)
@@ -173,6 +207,7 @@ internal class Receiver : IReceiver, ICleanable
                 return;
             }
             await using Context context = GetContext(character, user, communicator);
+            context.Turn = Receivers.Commands.TurnSource.System;
             context.Conversation.AddMessage(message);
             await ProcessCharacterMessageAsync(context);
         }
@@ -196,6 +231,7 @@ internal class Receiver : IReceiver, ICleanable
         try
         {
             await using Context context = GetContext(character, user, from);
+            context.Turn = message.From == Message.Type.User ? Receivers.Commands.TurnSource.User : Receivers.Commands.TurnSource.System;
             context.Conversation.AddMessage(message);
             await ProcessCharacterMessageAsync(context);
         }
@@ -278,7 +314,10 @@ internal class Receiver : IReceiver, ICleanable
             DatabaseFactory = _databaseFactory,
                 EmbeddingService = _embeddingService,
                 CancellationToken = cts.Token,
+                Turn = message.From == Message.Type.User ? Receivers.Commands.TurnSource.User : Receivers.Commands.TurnSource.System,
             };
+            CharacterGroup? outerGroup = _runningGroup.Value;
+            _runningGroup.Value = group;
             try
             {
                 await strategy.ProcessAsync(groupContext);
@@ -293,6 +332,10 @@ internal class Receiver : IReceiver, ICleanable
                 _logger.LogError(ex, "Error during group processing for user {UserId} and group {GroupId}", user.Id, group.Id);
                 string errorMessage = group.ErrorMessage.Replace("{{error}}", ex.Message);
                 await from.SendMessage(user, errorMessage);
+            }
+            finally
+            {
+                _runningGroup.Value = outerGroup;
             }
         }
         catch (Exception ex)
@@ -325,6 +368,8 @@ internal class Receiver : IReceiver, ICleanable
                 return;
             }
             await using Context context = GetContext(character, user, from);
+            // The user asked the character to go on, but said nothing new
+            context.Turn = Receivers.Commands.TurnSource.User;
             await ProcessCharacterMessageAsync(context);
         }
         catch (Exception ex)

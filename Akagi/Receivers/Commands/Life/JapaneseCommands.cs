@@ -45,7 +45,7 @@ internal abstract class JapaneseCommand : LifeCommand
     protected static string CategoryList => string.Join(", ", Enum.GetNames<IssueCategory>());
 }
 
-internal class RecordJapaneseIssueCommand : JapaneseCommand
+internal class RecordJapaneseIssueCommand : JapaneseCommand, IUserFactCommand
 {
     public override string Name => "RecordJapaneseIssue";
 
@@ -63,7 +63,8 @@ internal class RecordJapaneseIssueCommand : JapaneseCommand
         Text("Better", "What a native speaker would say instead."),
         Text("Explanation", "One sentence on why, focused on nuance and naturalness."),
         Integer("Severity", "1 minor polish, 2 noticeable, 3 confusing or rude. Default 2."),
-        Text("Source", "Where it came from, e.g. 'chat' or 'call with Yuki'.")
+        Text("Source", "Where it came from, e.g. 'chat' or 'call with Yuki'."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -99,7 +100,7 @@ internal class RecordJapaneseIssueCommand : JapaneseCommand
     }
 }
 
-internal class RecordCorrectUsageCommand : JapaneseCommand
+internal class RecordCorrectUsageCommand : JapaneseCommand, IUserFactCommand
 {
     public override string Name => "RecordCorrectUsage";
 
@@ -110,7 +111,8 @@ internal class RecordCorrectUsageCommand : JapaneseCommand
     public override Argument[] GetDefaultArguments() =>
     [
         Text("Issue", "Issue id or pattern from the diagnosis.", required: true),
-        Text("Example", "What the user said correctly.")
+        Text("Example", "What the user said correctly."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -132,7 +134,7 @@ internal class RecordCorrectUsageCommand : JapaneseCommand
     }
 }
 
-internal class RecordJapaneseStrengthCommand : JapaneseCommand
+internal class RecordJapaneseStrengthCommand : JapaneseCommand, IUserFactCommand
 {
     public override string Name => "RecordJapaneseStrength";
 
@@ -140,7 +142,8 @@ internal class RecordJapaneseStrengthCommand : JapaneseCommand
 
     public override Argument[] GetDefaultArguments() =>
     [
-        Text("Strength", "The strength in a few words, e.g. 'natural aizuchi with friends'.", required: true)
+        Text("Strength", "The strength in a few words, e.g. 'natural aizuchi with friends'.", required: true),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -179,7 +182,11 @@ internal class AnalyzeJapaneseCommand : JapaneseCommand
 
         SpeechReport report = SpeechAnalysis.Analyze(RequireArgument("Text"), register.Value);
         string output = report.Describe();
-        if (GetBoolArgument("Record") == true)
+        if (GetBoolArgument("Record") == true && !MayRecord(context))
+        {
+            output += Environment.NewLine + "Not recorded: only text the user wrote himself in this conversation goes into the diagnosis.";
+        }
+        else if (GetBoolArgument("Record") == true)
         {
             JapaneseDiagnosis diagnosis = await LoadDiagnosis(context);
             int recorded = SpeechAnalysis.Apply(diagnosis, report, GetArgument("Source") ?? "chat", DateTime.UtcNow);
@@ -187,6 +194,21 @@ internal class AnalyzeJapaneseCommand : JapaneseCommand
             output += Environment.NewLine + $"Recorded {recorded} issue(s) in the diagnosis.";
         }
         return Reply(context, output);
+    }
+
+    /// <summary>
+    /// Measuring is always fine; storing needs a turn the user started and text he actually wrote, so quotes from
+    /// call reports or the persona's retelling never land in the diagnosis.
+    /// </summary>
+    private bool MayRecord(Context context)
+    {
+        return context.Turn switch
+        {
+            TurnSource.Unknown => true,
+            TurnSource.User or TurnSource.Reflection =>
+                Grounding.IsQuoted(GetArgument("Text"), Grounding.RecentUserTexts(context.Conversation.Messages, DateTime.UtcNow)),
+            _ => false
+        };
     }
 }
 

@@ -37,6 +37,9 @@ internal static class RoutineEngine
             builder.AppendLine("Relevant details:");
             builder.AppendLine(decision.Details);
         }
+        // Nothing he said comes with this message, so the model must not invent what his day holds
+        builder.AppendLine("Only mention things he actually told you or that your context lists. If you know nothing specific, keep it " +
+                           "small and true (how are you, what are you up to) instead of guessing about his day, plans, health or work.");
         builder.Append("Write naturally in your own voice and keep it short. Do not mention schedules, routines or system messages.");
         return builder.ToString();
     }

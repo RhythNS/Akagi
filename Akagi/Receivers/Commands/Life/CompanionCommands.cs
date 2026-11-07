@@ -40,7 +40,7 @@ internal abstract class CompanionCommand : LifeCommand
     }
 }
 
-internal class ChangeOutfitCommand : CompanionCommand
+internal class ChangeOutfitCommand : CompanionCommand, IStateCommand
 {
     public override string Name => "ChangeOutfit";
 
@@ -66,7 +66,7 @@ internal class ChangeOutfitCommand : CompanionCommand
     }
 }
 
-internal class StartActivityCommand : CompanionCommand
+internal class StartActivityCommand : CompanionCommand, IUserFactCommand
 {
     public override string Name => "StartActivity";
 
@@ -78,7 +78,8 @@ internal class StartActivityCommand : CompanionCommand
     [
         Text("Mode", "movie, anime, cowork, gaming, study, walk, cooking, bedtime or other.", required: true),
         Text("Title", "What exactly, e.g. 'Frieren episode 12' or 'thesis chapter 3'."),
-        Text("Note", "Anything to remember about it.")
+        Text("Note", "Anything to remember about it."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -94,7 +95,7 @@ internal class StartActivityCommand : CompanionCommand
     }
 }
 
-internal class EndActivityCommand : CompanionCommand
+internal class EndActivityCommand : CompanionCommand, IStateCommand
 {
     public override string Name => "EndActivity";
 
@@ -119,7 +120,7 @@ internal class EndActivityCommand : CompanionCommand
     }
 }
 
-internal class RememberPersonCommand : CompanionCommand
+internal class RememberPersonCommand : CompanionCommand, IUserFactCommand
 {
     public override string Name => "RememberPerson";
 
@@ -132,7 +133,8 @@ internal class RememberPersonCommand : CompanionCommand
         Text("Name", "Their name as the user calls them.", required: true),
         Text("Relation", "Who they are to the user, e.g. 'Japanese friend from Osaka', 'coworker', 'sister'."),
         Text("Gender", "female, male, other or unknown."),
-        Text("Note", "What you learned this time.")
+        Text("Note", "What you learned this time."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -146,8 +148,15 @@ internal class RememberPersonCommand : CompanionCommand
         };
 
         CompanionState state = await LoadState(context);
-        bool known = state.FindPerson(RequireArgument("Name")) != null;
-        Person person = state.RememberPerson(RequireArgument("Name"), GetArgument("Relation") ?? string.Empty, gender, GetArgument("Note") ?? string.Empty, DateTime.UtcNow);
+        Person? existing = state.FindPerson(RequireArgument("Name"));
+        bool known = existing != null;
+        string note = GetArgument("Note") ?? string.Empty;
+        // The same thing retold in other words is not a new note
+        if (existing != null && existing.Notes.Any(n => Grounding.Similarity(n, note) >= 0.75))
+        {
+            note = string.Empty;
+        }
+        Person person = state.RememberPerson(RequireArgument("Name"), GetArgument("Relation") ?? string.Empty, gender, note, DateTime.UtcNow);
         await SaveState(context, state);
 
         string relation = string.IsNullOrWhiteSpace(person.Relation) ? string.Empty : $" ({person.Relation})";

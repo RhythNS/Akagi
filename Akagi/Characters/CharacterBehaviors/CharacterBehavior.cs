@@ -90,6 +90,7 @@ internal abstract class CharacterBehavior : Savable
     {
         bool shouldContinue;
         int maxSteps = MaxSteps;
+        systemProcessor.OfferedCommands = ToolGuard.Offered(systemProcessor.Commands, Context.Turn);
 
         do
         {
@@ -99,6 +100,8 @@ internal abstract class CharacterBehavior : Savable
                     Character.Id, User.Id, systemProcessor.Name);
                 break;
             }
+
+            Context.Guard.BeginStep();
 
             bool canStream = Communicator is IStreamingCommunicator
                 && systemProcessor.RunMode != ILLM.RunMode.CommandsOnly
@@ -175,7 +178,30 @@ internal abstract class CharacterBehavior : Savable
 
         foreach (Command command in commands)
         {
-            Command[] next = await command.Execute(Context);
+            if (command is not MessageCommand)
+            {
+                string? refusal = Context.Guard.Check(command, Context);
+                if (refusal != null)
+                {
+                    Logger.LogInformation("Refused {Command} for character {CharacterId} ({Turn} turn): {Refusal}",
+                        command.Name, Character.Id, Context.Turn, refusal);
+                    Context.Conversation.AddMessage(command.CreateCommandMessage(refusal));
+                    continue;
+                }
+            }
+
+            Command[] next;
+            try
+            {
+                next = await command.Execute(Context);
+            }
+            catch (Exception ex) when (command is not MessageCommand && ex is not OperationCanceledException)
+            {
+                // A bad argument should come back to the model as a tool error, not end the turn half done
+                Logger.LogWarning(ex, "Tool {Command} failed for character {CharacterId}", command.Name, Character.Id);
+                Context.Conversation.AddMessage(command.CreateCommandMessage($"Error: {ex.Message}"));
+                continue;
+            }
 
             if (command is MessageCommand response)
             {

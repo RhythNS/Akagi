@@ -21,6 +21,9 @@ internal class MemoryConsolidationReflector : Reflector
     private float _minImportanceToSave = 3.0f;
     private ILLM.LLMUsage _usage = ILLM.LLMUsage.ReflectionRoleplay;
 
+    // Consolidation reads a whole finished conversation, which often ends with a reminder or routine message
+    protected override bool DefaultOnlyAfterUserMessages => false;
+
     [NodeReference(typeof(SystemProcessor))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string SystemProcessorId

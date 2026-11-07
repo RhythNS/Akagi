@@ -2,6 +2,7 @@ using Akagi.Characters.Companions;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Groups;
 using Akagi.Life;
+using Akagi.Life.Work;
 using Akagi.Users;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -86,6 +87,13 @@ internal class RoutineRunner
         List<Routine> routines = await LoadRoutines(_routines, character);
         await PruneFinished(routines, nowUtc);
         (DateTime? lastUser, DateTime? lastCharacter) = RoutineEngine.LastMessageTimes(character);
+        WorkSession? closed = profile.Work.CloseIfIdle(nowUtc, lastUser);
+        if (closed != null)
+        {
+            _logger.LogInformation("Closed idle work session {Project} for user {UserId} at {EndUtc}", closed.Project, user.Id, closed.EndUtc);
+            profile.MarkChanged();
+            await _profiles.SaveAsync(profile);
+        }
 
         CompanionState? companion = _companions == null ? null : await _companions.Get(user.Id!, character.Id!);
         RoutineState state = new()

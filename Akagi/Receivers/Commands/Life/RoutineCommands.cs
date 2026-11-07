@@ -64,7 +64,7 @@ internal abstract class RoutineCommand : LifeCommand
     }
 }
 
-internal class ScheduleCheckInCommand : RoutineCommand
+internal class ScheduleCheckInCommand : RoutineCommand, IUserFactCommand
 {
     public override string Name => "ScheduleCheckIn";
 
@@ -79,7 +79,8 @@ internal class ScheduleCheckInCommand : RoutineCommand
         Number("InMinutes", "Alternative to At: reach out after this many minutes."),
         Number("InHours", "Alternative to At: reach out after this many hours."),
         Text("Repeat", "'once' (default), 'daily', 'weekdays', 'weekends' or days like 'mon,wed,fri' for a recurring routine at the same local time."),
-        Text("Name", "Short label, e.g. 'Dentist follow-up'.")
+        Text("Name", "Short label, e.g. 'Dentist follow-up'."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -103,6 +104,12 @@ internal class ScheduleCheckInCommand : RoutineCommand
         }
 
         List<Routine> existing = await LoadRoutines(context);
+        Routine? same = FindSimilar(existing, about, GetArgument("Name"), due.Value);
+        if (same != null)
+        {
+            return Reply(context, $"You already have [{same.ShortId}] {same.Name}: {same.DescribeSchedule(profile)}. " +
+                                  "Use AdjustRoutine to change it instead of scheduling it again.");
+        }
         if (existing.Count(r => r.CreatedBySelf && r.Enabled) >= MaxSelfMadeRoutines)
         {
             return Reply(context, $"You already have {MaxSelfMadeRoutines} active self-made routines. Cancel some with CancelRoutine first.");
@@ -138,6 +145,33 @@ internal class ScheduleCheckInCommand : RoutineCommand
         await Routines(context).SaveDocumentAsync(routine);
 
         return Reply(context, $"Scheduled [{routine.ShortId}] {routine.Name}: {routine.DescribeSchedule(profile)}.");
+    }
+
+    /// <summary>
+    /// An enabled self-made check-in that is the same one again: due within half an hour, or due the same day with
+    /// a similar note.
+    /// </summary>
+    internal static Routine? FindSimilar(IEnumerable<Routine> routines, string about, string? name, DateTime dueUtc)
+    {
+        foreach (OneTimeRoutine routine in routines.OfType<OneTimeRoutine>().Where(r => r.CreatedBySelf && r.Enabled))
+        {
+            if (routine.DueUtc == null)
+            {
+                continue;
+            }
+            TimeSpan apart = (routine.DueUtc.Value - dueUtc).Duration();
+            if (apart <= TimeSpan.FromMinutes(30))
+            {
+                return routine;
+            }
+            bool similar = Grounding.Similarity(routine.Instruction, about) >= 0.6
+                || (!string.IsNullOrWhiteSpace(name) && Grounding.Similarity(routine.Name, name) >= 0.8);
+            if (apart <= TimeSpan.FromHours(18) && similar)
+            {
+                return routine;
+            }
+        }
+        return null;
     }
 
     private DateTime? ParseDue(LifeProfile profile, DateTime now)
@@ -198,7 +232,7 @@ internal class ListRoutinesCommand : RoutineCommand
     }
 }
 
-internal class AdjustRoutineCommand : RoutineCommand
+internal class AdjustRoutineCommand : RoutineCommand, IUserFactCommand
 {
     public override string Name => "AdjustRoutine";
 
@@ -217,7 +251,8 @@ internal class AdjustRoutineCommand : RoutineCommand
         Text("At", "New local time 'yyyy-MM-dd HH:mm' for a one-time check-in."),
         Text("QuietHours", "Local quiet hours like '23:00-08:00', or 'off'."),
         Text("Setting", "Any other setting by name, e.g. 'AfterHours', 'WorkMinutes', 'MinSleepHours'."),
-        Text("Value", "Value for Setting.")
+        Text("Value", "Value for Setting."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -415,7 +450,7 @@ internal class AdjustRoutineCommand : RoutineCommand
     }
 }
 
-internal class CancelRoutineCommand : RoutineCommand
+internal class CancelRoutineCommand : RoutineCommand, IStateCommand
 {
     public override string Name => "CancelRoutine";
 

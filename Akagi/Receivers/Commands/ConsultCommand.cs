@@ -77,7 +77,7 @@ internal class ConsultCommand : Command
             From = Message.Type.System,
             Time = DateTime.UtcNow,
             CharacterId = null,
-            Text = $"{TextMessage.SystemMessagePrefix}[Consultation for {advisor.Name} from {context.Character.Name}] {request}" + Environment.NewLine +
+            Text = $"{TextMessage.SystemMessagePrefix}{ConsultationTag}{advisor.Name} from {context.Character.Name}] {request}" + Environment.NewLine +
                    $"{advisor.Name}: answer {context.Character.Name} directly and concisely; {context.Character.Name} will talk to the user."
         });
         int before = context.Conversation.Messages.Count;
@@ -94,7 +94,14 @@ internal class ConsultCommand : Command
                 LLMFactory = context.LLMFactory,
                 DatabaseFactory = context.DatabaseFactory,
                 EmbeddingService = context.EmbeddingService,
-                Group = context.Group
+                Group = context.Group,
+                // Advisors answer; only the persona changes stored state, and only when the user told it something
+                Turn = TurnSource.Consultation,
+                OtherMembers = MemberSpeech.Label,
+                MemberNames = members.Append(context.Character)
+                    .Where(m => !string.IsNullOrEmpty(m.Id))
+                    .GroupBy(m => m.Id!)
+                    .ToDictionary(g => g.Key, g => g.First().Name)
             };
             await GroupMemberRunner.RunAsync(advisor, advisorContext);
         }
@@ -107,6 +114,27 @@ internal class ConsultCommand : Command
         return Reply(context, string.IsNullOrWhiteSpace(answer)
             ? $"{advisor.Name} had nothing to add."
             : $"{advisor.Name} answered:{Environment.NewLine}{answer}");
+    }
+
+    /// <summary>
+    /// The system message opening a consultation reads "[System] [Consultation for {advisor} from {persona}] ...".
+    /// </summary>
+    public const string ConsultationTag = "[Consultation for ";
+
+    public static bool IsConsultation(string text, out string advisorName)
+    {
+        advisorName = string.Empty;
+        string body = text.StartsWith(TextMessage.SystemMessagePrefix, StringComparison.Ordinal)
+            ? text[TextMessage.SystemMessagePrefix.Length..]
+            : text;
+        if (!body.StartsWith(ConsultationTag, StringComparison.Ordinal))
+        {
+            return false;
+        }
+        string rest = body[ConsultationTag.Length..];
+        int from = rest.IndexOf(" from ", StringComparison.Ordinal);
+        advisorName = from > 0 ? rest[..from] : string.Empty;
+        return true;
     }
 
     internal static Character? FindMember(IReadOnlyList<Character> members, string name)

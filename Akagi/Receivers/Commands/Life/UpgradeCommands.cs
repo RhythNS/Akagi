@@ -2,7 +2,7 @@ using Akagi.Characters.Upgrades;
 
 namespace Akagi.Receivers.Commands.Life;
 
-internal class SuggestUpgradeCommand : LifeCommand
+internal class SuggestUpgradeCommand : LifeCommand, IStateCommand
 {
     public const double DuplicateSimilarity = 0.75;
 

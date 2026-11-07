@@ -3,7 +3,7 @@ using Akagi.Life.Mood;
 
 namespace Akagi.Receivers.Commands.Life;
 
-internal class RecordMoodCommand : LifeCommand
+internal class RecordMoodCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "RecordMood";
 
@@ -20,7 +20,8 @@ internal class RecordMoodCommand : LifeCommand
         Integer("Stress", "Stress from 0 (relaxed) to 10 (overwhelmed)."),
         Text("Note", "Short description in your own words, e.g. 'nervous about the N2 mock exam'.", required: true),
         Text("FollowUpAt", "For worries and events: local time to check back, 'yyyy-MM-dd HH:mm' or 'yyyy-MM-dd'."),
-        Number("FollowUpInHours", "For worries and events: check back after this many hours (alternative to FollowUpAt).")
+        Number("FollowUpInHours", "For worries and events: check back after this many hours (alternative to FollowUpAt)."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -30,6 +31,12 @@ internal class RecordMoodCommand : LifeCommand
         MoodKind kind = ParseKind(GetArgument("Kind"));
 
         LifeProfile profile = await LoadProfile(context);
+        string? duplicate = FindDuplicate(profile, kind, note, now);
+        if (duplicate != null)
+        {
+            return Reply(context, duplicate);
+        }
+
         MoodEntry entry = new()
         {
             Timestamp = now,
@@ -69,6 +76,33 @@ internal class RecordMoodCommand : LifeCommand
         return Reply(context, output);
     }
 
+    /// <summary>How close two notes must be to count as the same thing said again.</summary>
+    public const double DuplicateSimilarity = 0.75;
+
+    /// <summary>How long a recorded mood keeps a near-identical note from being recorded again.</summary>
+    public static readonly TimeSpan DuplicateWindow = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// Why the note is not recorded again, or null when it is new: a near-identical mood in the last hours, or for
+    /// worries and events a near-identical concern that is still open.
+    /// </summary>
+    internal static string? FindDuplicate(LifeProfile profile, MoodKind kind, string note, DateTime nowUtc)
+    {
+        if (kind is MoodKind.Worry or MoodKind.Event)
+        {
+            Concern? open = profile.Concerns.FirstOrDefault(c => !c.Resolved && Grounding.Similarity(c.Text, note) >= DuplicateSimilarity);
+            if (open != null)
+            {
+                return $"Already tracking concern {open.Id}: {open.Text}. Use ResolveConcern when you learn how it went.";
+            }
+        }
+        MoodEntry? recent = profile.Mood.LastOrDefault(m => nowUtc - m.Timestamp < DuplicateWindow
+            && Grounding.Similarity(m.Note, note) >= DuplicateSimilarity);
+        return recent == null
+            ? null
+            : $"Already recorded at {profile.ToLocal(recent.Timestamp):yyyy-MM-dd HH:mm}: {recent.Note}";
+    }
+
     internal static MoodKind ParseKind(string? kind)
     {
         return kind?.Trim().ToLowerInvariant() switch
@@ -81,7 +115,7 @@ internal class RecordMoodCommand : LifeCommand
     }
 }
 
-internal class ResolveConcernCommand : LifeCommand
+internal class ResolveConcernCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "ResolveConcern";
 
@@ -92,7 +126,8 @@ internal class ResolveConcernCommand : LifeCommand
     [
         Text("Concern", "The concern id shown in brackets, or words from its text.", required: true),
         Text("Outcome", "How it turned out, in a few words."),
-        Flag("StillOpen", "True if you only followed up and it is not settled yet.")
+        Flag("StillOpen", "True if you only followed up and it is not settled yet."),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)
@@ -132,7 +167,7 @@ internal class ResolveConcernCommand : LifeCommand
     }
 }
 
-internal class SetTimeZoneCommand : LifeCommand
+internal class SetTimeZoneCommand : LifeCommand, IUserFactCommand
 {
     public override string Name => "SetTimeZone";
 
@@ -140,7 +175,8 @@ internal class SetTimeZoneCommand : LifeCommand
 
     public override Argument[] GetDefaultArguments() =>
     [
-        Text("TimeZone", "IANA time zone id such as 'Europe/Berlin' or 'Asia/Tokyo'.", required: true)
+        Text("TimeZone", "IANA time zone id such as 'Europe/Berlin' or 'Asia/Tokyo'.", required: true),
+        Grounding.EvidenceArgument()
     ];
 
     public override async Task<Command[]> Execute(Context context)

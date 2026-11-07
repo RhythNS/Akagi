@@ -28,6 +28,37 @@ internal class WorkLog
         return Active;
     }
 
+    /// <summary>A session with no sign of the user for this long is closed on its own.</summary>
+    public static readonly TimeSpan MaxIdle = TimeSpan.FromHours(12);
+
+    /// <summary>
+    /// Closes the running session when nothing has been heard from the user for <see cref="MaxIdle"/>: no message,
+    /// no break and no start since. It ends at that last sign, so a forgotten StopWork does not count as a day of work.
+    /// </summary>
+    public WorkSession? CloseIfIdle(DateTime nowUtc, DateTime? lastUserMessageUtc)
+    {
+        if (Active == null)
+        {
+            return null;
+        }
+        DateTime lastSign = Active.StartUtc;
+        foreach (DateTime? sign in new[] { Active.LastBreakUtc, lastUserMessageUtc })
+        {
+            if (sign.HasValue && sign.Value > lastSign && sign.Value <= nowUtc)
+            {
+                lastSign = sign.Value;
+            }
+        }
+        if (nowUtc - lastSign < MaxIdle)
+        {
+            return null;
+        }
+        string note = string.IsNullOrWhiteSpace(Active.Notes)
+            ? "Closed automatically: nothing heard from him for 12 hours."
+            : Active.Notes + " (closed automatically: nothing heard from him for 12 hours)";
+        return Stop(lastSign, note);
+    }
+
     public WorkSession? Stop(DateTime nowUtc, string notes)
     {
         if (Active == null)
