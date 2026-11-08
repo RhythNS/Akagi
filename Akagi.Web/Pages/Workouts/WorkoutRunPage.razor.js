@@ -5,7 +5,12 @@ const sounds = {
     Go: 'audio/workout/go.mp3',
     RestTime: 'audio/workout/rest-time.mp3',
     AlmostThere: 'audio/workout/almost-there.mp3',
-    GreatJob: 'audio/workout/great-job.mp3'
+    GreatJob: 'audio/workout/great-job.mp3',
+    Count1: 'audio/workout/1.mp3',
+    Count2: 'audio/workout/2.mp3',
+    Count3: 'audio/workout/3.mp3',
+    Count4: 'audio/workout/4.mp3',
+    Count5: 'audio/workout/5.mp3'
 };
 const players = {};
 let wakeLock = null;

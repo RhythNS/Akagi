@@ -70,8 +70,8 @@ public class WorkoutTests : BunitContext
             plan.Segments.Select(s => (s.Kind, s.Start, s.Duration)));
         Assert.Equal(85, plan.Total);
         Assert.Equal(
-            [(0.0, WorkoutCue.GetReady), (15, WorkoutCue.Go), (35, WorkoutCue.AlmostThere), (45, WorkoutCue.RestTime), (55, WorkoutCue.Go),
-             (75, WorkoutCue.AlmostThere), (85, WorkoutCue.GreatJob)],
+            [(0.0, WorkoutCue.GetReady), .. Countdown(15), (15, WorkoutCue.Go), (35, WorkoutCue.AlmostThere), .. Countdown(45),
+             (45, WorkoutCue.RestTime), .. Countdown(55), (55, WorkoutCue.Go), (75, WorkoutCue.AlmostThere), .. Countdown(85), (85, WorkoutCue.GreatJob)],
             plan.Cues());
 
         WorkoutPlan withLastRest = new(Example(skipLastRest: false));
@@ -83,7 +83,34 @@ public class WorkoutTests : BunitContext
     public void Short_works_and_no_countdown_leave_out_their_sounds()
     {
         WorkoutPlan plan = new(new WorkoutRoutine { StartSeconds = 0, WorkSeconds = 10, RestSeconds = 0, Rounds = 2 });
-        Assert.Equal([(0.0, WorkoutCue.Go), (10, WorkoutCue.Go), (20, WorkoutCue.GreatJob)], plan.Cues());
+        Assert.Equal([(0.0, WorkoutCue.Go), .. Countdown(10), (10, WorkoutCue.Go), .. Countdown(20), (20, WorkoutCue.GreatJob)], plan.Cues());
+    }
+
+    /// <summary>
+    /// 5, 4, 3, 2, 1 in the last five seconds of a stage that ends at <paramref name="end"/>.
+    /// </summary>
+    private static (double, WorkoutCue)[] Countdown(double end) =>
+        [(end - 5, WorkoutCue.Count5), (end - 4, WorkoutCue.Count4), (end - 3, WorkoutCue.Count3), (end - 2, WorkoutCue.Count2), (end - 1, WorkoutCue.Count1)];
+
+    [Fact]
+    public void Long_rests_say_get_ready_ten_seconds_before_they_end()
+    {
+        WorkoutPlan plan = new(new WorkoutRoutine { StartSeconds = 0, WorkSeconds = 20, RestSeconds = 15, Rounds = 2, SkipLastRest = true });
+        // Work 0-20, rest 20-35, work 35-55
+        Assert.Contains((25.0, WorkoutCue.GetReady), plan.Cues());
+        Assert.Equal([WorkoutCue.GetReady], plan.CuesBetween(24.9, 25.1));
+        Assert.Equal([WorkoutCue.Count3], plan.CuesBetween(31.9, 32.1));
+
+        WorkoutPlan shortRest = new(new WorkoutRoutine { StartSeconds = 0, WorkSeconds = 20, RestSeconds = 14, Rounds = 2, SkipLastRest = true });
+        Assert.DoesNotContain(shortRest.Cues(), c => c.Cue == WorkoutCue.GetReady);
+    }
+
+    [Fact]
+    public void A_stage_shorter_than_the_countdown_counts_only_what_it_has()
+    {
+        WorkoutPlan plan = new(new WorkoutRoutine { StartSeconds = 3, WorkSeconds = 30, RestSeconds = 0, Rounds = 1 });
+        // The 3 s start: get ready at 0, then 2 and 1; the 3 would fall on the get ready
+        Assert.Equal([(0.0, WorkoutCue.GetReady), (1, WorkoutCue.Count2), (2, WorkoutCue.Count1), (3, WorkoutCue.Go)], plan.Cues().Take(4));
     }
 
     [Fact]
@@ -91,9 +118,10 @@ public class WorkoutTests : BunitContext
     {
         WorkoutPlan plan = new(Example());
         Assert.Equal([WorkoutCue.GetReady], plan.CuesBetween(-1, 0));
-        Assert.Empty(plan.CuesBetween(0, 14.9));
+        Assert.Empty(plan.CuesBetween(0, 9.9));
+        Assert.Equal([WorkoutCue.Count5], plan.CuesBetween(9.9, 10.1));
         Assert.Equal([WorkoutCue.Go], plan.CuesBetween(14.9, 15.1));
-        Assert.Equal([WorkoutCue.RestTime], plan.CuesBetween(15.1, 50));
+        Assert.Equal([WorkoutCue.RestTime], plan.CuesBetween(15.1, 47));
     }
 
     [Fact]

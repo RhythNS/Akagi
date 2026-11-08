@@ -19,7 +19,13 @@ public enum WorkoutCue
     Go,
     RestTime,
     AlmostThere,
-    GreatJob
+    GreatJob,
+    /// <summary>The countdown in the last five seconds of every stage: 1.mp3 to 5.mp3.</summary>
+    Count1,
+    Count2,
+    Count3,
+    Count4,
+    Count5
 }
 
 /// <summary>
@@ -132,31 +138,71 @@ public sealed class WorkoutPlan
     /// <summary>
     /// Every sound with the second it plays at: get ready as the countdown begins, go as each work begins, almost
     /// there ten seconds before a work ends (when the work is longer than that), rest time as each rest begins, great
-    /// job at the end.
+    /// job at the end. Rests of <see cref="RestGetReadyMinimum"/> seconds or more say get ready ten seconds before
+    /// they end, and every stage counts down 5, 4, 3, 2, 1 in its last five seconds (a short stage only from where it
+    /// begins, so its first sound is not drowned out).
     /// </summary>
     public IEnumerable<(double At, WorkoutCue Cue)> Cues()
     {
+        List<(double At, WorkoutCue Cue)> cues = [];
         foreach (Segment segment in Segments)
         {
             switch (segment.Kind)
             {
                 case SegmentKind.Start:
-                    yield return (segment.Start, WorkoutCue.GetReady);
+                    cues.Add((segment.Start, WorkoutCue.GetReady));
                     break;
                 case SegmentKind.Work:
-                    yield return (segment.Start, WorkoutCue.Go);
+                    cues.Add((segment.Start, WorkoutCue.Go));
                     if (segment.Duration > AlmostThereSeconds)
                     {
-                        yield return (segment.End - AlmostThereSeconds, WorkoutCue.AlmostThere);
+                        cues.Add((segment.End - AlmostThereSeconds, WorkoutCue.AlmostThere));
                     }
                     break;
                 case SegmentKind.Rest:
-                    yield return (segment.Start, WorkoutCue.RestTime);
+                    cues.Add((segment.Start, WorkoutCue.RestTime));
+                    if (segment.Duration >= RestGetReadyMinimum)
+                    {
+                        cues.Add((segment.End - RestGetReadySeconds, WorkoutCue.GetReady));
+                    }
                     break;
             }
+            for (int left = CountdownSeconds; left >= 1; left--)
+            {
+                double at = segment.End - left;
+                if (at > segment.Start)
+                {
+                    cues.Add((at, Countdown(left)));
+                }
+            }
         }
-        yield return (Total, WorkoutCue.GreatJob);
+        cues.Add((Total, WorkoutCue.GreatJob));
+        return cues.OrderBy(c => c.At);
     }
+
+    /// <summary>
+    /// The last seconds of every stage are counted down.
+    /// </summary>
+    public const int CountdownSeconds = 5;
+
+    /// <summary>
+    /// A rest says get ready this many seconds before it ends...
+    /// </summary>
+    public const double RestGetReadySeconds = 10;
+
+    /// <summary>
+    /// ...when it lasts at least this long.
+    /// </summary>
+    public const double RestGetReadyMinimum = 15;
+
+    public static WorkoutCue Countdown(int secondsLeft) => secondsLeft switch
+    {
+        1 => WorkoutCue.Count1,
+        2 => WorkoutCue.Count2,
+        3 => WorkoutCue.Count3,
+        4 => WorkoutCue.Count4,
+        _ => WorkoutCue.Count5
+    };
 
     /// <summary>
     /// The sounds due after <paramref name="from"/> up to and including <paramref name="to"/>; with a negative
