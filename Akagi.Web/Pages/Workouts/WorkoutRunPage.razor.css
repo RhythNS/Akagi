@@ -1,0 +1,102 @@
+.workout-panel {
+    --phase: var(--tblr-yellow, #f59f00);
+    border-top: 6px solid var(--phase);
+    transition: border-color 0.3s ease;
+}
+
+.workout-panel.phase-work {
+    --phase: var(--tblr-green, #2fb344);
+}
+
+.workout-panel.phase-rest {
+    --phase: var(--tblr-azure, #4299e1);
+}
+
+.workout-panel.is-paused {
+    --phase: var(--tblr-secondary, #667382);
+}
+
+.workout-phase {
+    font-size: 1.6rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--phase);
+}
+
+.workout-clock {
+    font-size: clamp(5rem, 22vw, 11rem);
+    font-weight: 700;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    margin: 0.25rem 0 1rem;
+}
+
+.is-paused .workout-clock {
+    opacity: 0.55;
+}
+
+.workout-phase-progress {
+    max-width: 28rem;
+}
+
+.workout-phase-progress .progress-bar {
+    background: var(--phase);
+    transition: width 0.2s linear;
+}
+
+.workout-timeline {
+    display: flex;
+    gap: 2px;
+    height: 14px;
+}
+
+.workout-step {
+    flex-basis: 0;
+    min-width: 3px;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--tblr-bg-surface-secondary, rgba(127, 127, 127, 0.15));
+}
+
+.workout-step.is-current {
+    outline: 2px solid var(--tblr-body-color, #fff);
+    outline-offset: 1px;
+}
+
+.workout-step-fill {
+    height: 100%;
+}
+
+/* What is still ahead shows its kind faintly */
+.workout-step.step-start {
+    background: rgba(245, 159, 0, 0.25);
+}
+
+.workout-step.step-work {
+    background: rgba(47, 179, 68, 0.25);
+}
+
+.workout-step.step-rest {
+    background: rgba(66, 153, 225, 0.25);
+}
+
+.step-start .workout-step-fill {
+    background: var(--tblr-yellow, #f59f00);
+}
+
+.step-work .workout-step-fill {
+    background: var(--tblr-green, #2fb344);
+}
+
+.step-rest .workout-step-fill {
+    background: var(--tblr-azure, #4299e1);
+}
+
+.workout-summary {
+    border-top: 6px solid var(--tblr-green, #2fb344);
+}
+
+.workout-summary[data-summary="aborted"] {
+    border-top-color: var(--tblr-secondary, #667382);
+}

@@ -1,0 +1,222 @@
+@page "/TimeTracking/Workouts"
+
+@using Akagi.Web.Icons
+@using Akagi.Web.Models
+@using Akagi.Web.Models.Workouts
+@using Akagi.Web.Services.Workouts
+
+@implements IAsyncDisposable
+@inject IWorkoutService Workouts
+@inject IJSRuntime JS
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+<PageTitle>Workouts - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Time Tracking</div>
+			<h2 class="page-title">Interval timer</h2>
+			<div class="text-secondary small mt-1">Saved workouts: a start countdown, then work and rest in turn. Finished workouts go into time tracking.</div>
+		</div>
+		<div class="col-auto ms-auto">
+			<a href="TimeTracking/Workouts/new" class="btn btn-primary d-inline-flex align-items-center gap-2" data-new>
+				<Icon IconType="@Icons.Plus" Size="16" />
+				<span>New workout</span>
+			</a>
+		</div>
+	</div>
+</div>
+
+@if (_active != null)
+{
+	<div class="alert alert-info d-flex flex-wrap align-items-center gap-2" data-active-run>
+		<div>
+			<strong>@_active.Routine.Name</strong>
+			<span>@(_active.Finished ? "is finished" + (_active.Logged ? "." : ", but not saved to time tracking yet.") : _active.Paused ? "is paused." : "is in progress.")</span>
+		</div>
+		<a class="btn btn-sm btn-primary ms-auto" href="TimeTracking/Workouts/run" data-continue>@(_active.Finished ? "Open" : "Continue")</a>
+	</div>
+}
+
+@if (_replacing is WorkoutRoutine replacing)
+{
+	<div class="alert alert-warning d-flex flex-wrap align-items-center gap-2" data-replace>
+		<span>@_active?.Routine.Name is still going. Start @replacing.Name instead? Nothing of the other one is saved.</span>
+		<button type="button" class="btn btn-sm btn-warning ms-auto" data-replace-yes @onclick="() => StartAsync(replacing, force: true)">Start @replacing.Name</button>
+		<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="() => _replacing = null">Cancel</button>
+	</div>
+}
+
+@if (_routines == null)
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+else if (_routines.Count == 0)
+{
+	<div class="card" data-empty>
+		<div class="card-body py-5 text-center">
+			<h3 class="mb-1">No workouts yet</h3>
+			<p class="text-secondary mb-3">Make one: how long to get ready, work and rest, and how many rounds.</p>
+			<a href="TimeTracking/Workouts/new" class="btn btn-primary">New workout</a>
+		</div>
+	</div>
+}
+else
+{
+	<div class="row row-cards">
+		@foreach (WorkoutRoutine routine in _routines)
+		{
+			WorkoutPlan plan = new(routine);
+			<div class="col-md-6 col-xl-4" data-routine="@routine.Id">
+				<div class="card h-100">
+					<div class="card-body">
+						<h3 class="card-title mb-1">@routine.Name</h3>
+						<div class="text-secondary mb-3" data-routine-summary>@Summary(routine)</div>
+						<div class="d-flex align-items-baseline gap-3">
+							<div><span class="h2 mb-0">@WorkoutPlan.Format(plan.Total)</span> <span class="text-secondary small">total</span></div>
+							<div class="text-secondary small">@LogLabel(routine)</div>
+						</div>
+						@if (routine.LastRunAt is DateTime last)
+						{
+							<div class="text-secondary small mt-1">Last done @last.ToLocalTime().ToString("g")</div>
+						}
+					</div>
+					<div class="card-footer d-flex align-items-center gap-2">
+						<button type="button" class="btn btn-success d-inline-flex align-items-center gap-1" data-start="@routine.Id" @onclick="() => StartAsync(routine, force: false)">
+							<Icon IconType="@Icons.PlayerPlay" Size="16" /><span>Start</span>
+						</button>
+						<a class="btn btn-ghost-secondary" href="TimeTracking/Workouts/@routine.Id/edit">Edit</a>
+						@if (_confirmDelete == routine.Id)
+						{
+							<button type="button" class="btn btn-danger ms-auto" data-delete-yes @onclick="() => DeleteAsync(routine)">Delete</button>
+							<button type="button" class="btn btn-ghost-secondary" @onclick="() => _confirmDelete = null">Keep</button>
+						}
+						else
+						{
+							<button type="button" class="btn btn-ghost-danger ms-auto" title="Delete this workout" data-delete="@routine.Id" @onclick="() => _confirmDelete = routine.Id">
+								<Icon IconType="@Icons.Trash" Size="16" />
+							</button>
+						}
+					</div>
+				</div>
+			</div>
+		}
+	</div>
+}
+
+@code {
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	/// <summary>
+	/// A workout to start right away, from "Save and start" on the editor.
+	/// </summary>
+	[SupplyParameterFromQuery(Name = "start")]
+	public string? StartId { get; set; }
+
+	private List<WorkoutRoutine>? _routines;
+	private Dictionary<string, string> _trackerNames = [];
+	private WorkoutRun? _active;
+	private WorkoutRoutine? _replacing;
+	private string? _confirmDelete;
+	private IJSObjectReference? _module;
+
+	private Task _ready = Task.CompletedTask;
+
+	protected override Task OnInitializedAsync() => _ready = LoadAsync();
+
+	private async Task LoadAsync()
+	{
+		if (CurrentUser?.Id is not string userId)
+		{
+			_routines = [];
+			return;
+		}
+		_routines = await Workouts.ListAsync(userId);
+		_trackerNames = (await Workouts.TrackersAsync(userId)).Where(d => d.Id != null).ToDictionary(d => d.Id!, d => d.Name);
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender)
+		{
+			return;
+		}
+		try
+		{
+			_module = await JS.InvokeAsync<IJSObjectReference>("import", WorkoutRunPage.ModulePath);
+			WorkoutRun? run = WorkoutRun.Deserialize(await _module.InvokeAsync<string?>("load", WorkoutRunPage.RunKey));
+			_active = run != null && (CurrentUser == null || run.UserId == CurrentUser.Id) && !(run.Finished && run.Logged) ? run : null;
+			await _ready;
+			if (StartId != null && _routines?.FirstOrDefault(r => r.Id == StartId) is WorkoutRoutine requested)
+			{
+				await StartAsync(requested, force: false);
+			}
+			StateHasChanged();
+		}
+		catch (JSDisconnectedException)
+		{
+		}
+	}
+
+	internal static string Summary(WorkoutRoutine routine)
+	{
+		string rounds = $"{routine.Rounds} × {WorkoutPlan.Format(routine.WorkSeconds)} work";
+		string rest = routine.RestSeconds > 0
+			? $", {WorkoutPlan.Format(routine.RestSeconds)} rest" + (routine.SkipLastRest && routine.Rounds > 0 ? " (none after the last)" : "")
+			: ", no rest";
+		string start = routine.StartSeconds > 0 ? $"{WorkoutPlan.Format(routine.StartSeconds)} to get ready, then " : string.Empty;
+		return start + rounds + rest;
+	}
+
+	private string LogLabel(WorkoutRoutine routine) => routine.LogTo switch
+	{
+		WorkoutLogTarget.Nowhere => "not logged",
+		WorkoutLogTarget.Tracker when routine.TrackerDefinitionId != null && _trackerNames.TryGetValue(routine.TrackerDefinitionId, out string? name) => $"logs to {name}",
+		_ => $"logs to {WorkoutLog.DefinitionName}"
+	};
+
+	private async Task StartAsync(WorkoutRoutine routine, bool force)
+	{
+		if (_module == null || CurrentUser?.Id is not string userId)
+		{
+			return;
+		}
+		if (!force && _active is { Finished: false })
+		{
+			_replacing = routine;
+			return;
+		}
+		// From a click, so the browser allows the sounds that follow
+		await _module.InvokeAsync<bool>("unlock");
+		WorkoutRun run = WorkoutRun.Start(userId, routine, Clock.GetUtcNow().UtcDateTime);
+		await _module.InvokeAsync<bool>("save", WorkoutRunPage.RunKey, run.Serialize());
+		Navigation.NavigateTo("TimeTracking/Workouts/run");
+	}
+
+	private async Task DeleteAsync(WorkoutRoutine routine)
+	{
+		if (CurrentUser?.Id is string userId && routine.Id != null)
+		{
+			await Workouts.DeleteAsync(userId, routine.Id);
+			_routines?.Remove(routine);
+		}
+		_confirmDelete = null;
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		try
+		{
+			if (_module != null)
+			{
+				await _module.DisposeAsync();
+			}
+		}
+		catch (JSDisconnectedException)
+		{
+		}
+	}
+}

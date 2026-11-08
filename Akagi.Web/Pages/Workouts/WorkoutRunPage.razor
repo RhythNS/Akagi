@@ -1,0 +1,591 @@
+@page "/TimeTracking/Workouts/run"
+
+@using Akagi.Web.Icons
+@using Akagi.Web.Models
+@using Akagi.Web.Models.TimeTrackers
+@using Akagi.Web.Models.Workouts
+@using Akagi.Web.Services.Workouts
+
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+@inject IWorkoutService Workouts
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+<PageTitle>@(_run == null ? "Workout" : $"{PhaseLabel} {WorkoutPlan.Format(_position?.SegmentRemaining ?? 0)} - {_run.Routine.Name}")</PageTitle>
+
+@if (!_loaded)
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+else if (_run == null || _plan == null || _position == null)
+{
+	<div class="card" data-no-run>
+		<div class="card-body py-5 text-center">
+			<h3 class="mb-1">No workout running</h3>
+			<p class="text-secondary mb-3">Start one from your saved workouts.</p>
+			<a class="btn btn-primary" href="TimeTracking/Workouts">Your workouts</a>
+		</div>
+	</div>
+}
+else
+{
+	<div class="page-header d-print-none mb-3">
+		<div class="row g-2 align-items-center">
+			<div class="col">
+				<div class="page-pretitle">Interval timer</div>
+				<h2 class="page-title" data-run-name>@_run.Routine.Name</h2>
+			</div>
+			<div class="col-auto">
+				<button type="button" class="btn btn-ghost-secondary" data-mute @onclick="ToggleMuteAsync" title="@(_muted ? "Sound is off" : "Sound is on")">
+					<Icon IconType="@(_muted ? Icons.VolumeOff : Icons.Volume)" Size="18" />
+					<span class="ms-1">@(_muted ? "Sound off" : "Sound on")</span>
+				</button>
+			</div>
+		</div>
+	</div>
+
+	@if (_soundBlocked && !_muted && !_run.Finished)
+	{
+		<div class="alert alert-warning d-flex align-items-center" data-sound-blocked>
+			<span>The browser holds back sound until you click on the page.</span>
+			<button type="button" class="btn btn-sm btn-warning ms-auto" @onclick="EnableSoundAsync">Turn sound on</button>
+		</div>
+	}
+
+	@if (_run.Finished)
+	{
+		<div class="card workout-summary" data-summary="@(_run.Aborted ? "aborted" : "done")">
+			<div class="card-body text-center py-5">
+				<div class="display-6 fw-bold mb-1">@(_run.Aborted ? "Workout stopped" : "Great job!")</div>
+				<div class="text-secondary mb-4">@_run.Routine.Name, started @_run.StartedAtUtc.ToLocalTime().ToString("HH:mm")</div>
+				<div class="row g-3 justify-content-center mb-4">
+					@Stat("Rounds", $"{Result.Rounds} / {Result.PlannedRounds}", "rounds")
+					@Stat("Work", WorkoutPlan.Format(Result.WorkSeconds), "work")
+					@Stat("Rest", WorkoutPlan.Format(Result.RestSeconds), "rest")
+					@Stat("Time", WorkoutPlan.Format(Result.ActiveSeconds), "time")
+				</div>
+				<div class="mb-4" data-logged>
+					@if (_run.Logged)
+					{
+						@if (_run.LoggedTo != null)
+						{
+							<span class="text-green">Saved to time tracking: </span>
+							<a href="TimeTracking/@_run.LoggedDefinitionId/detail">@_run.LoggedTo</a>
+							@if (_run.Aborted && _run.Save == AbortSave.AsCompleted)
+							{
+								<span class="text-secondary"> (as completed)</span>
+							}
+						}
+						else
+						{
+							<span class="text-secondary">Nothing was saved to time tracking.</span>
+						}
+					}
+					else
+					{
+						<span class="text-warning">Not saved to time tracking yet.</span>
+						<button type="button" class="btn btn-sm btn-outline-primary ms-2" disabled="@_busy" data-save-retry @onclick="LogAsync">Save now</button>
+						<button type="button" class="btn btn-sm btn-ghost-secondary" disabled="@_busy" @onclick="SkipLogAsync">Don't save</button>
+					}
+				</div>
+				<div class="d-flex justify-content-center gap-2">
+					<button type="button" class="btn btn-primary" data-again @onclick="AgainAsync">Run again</button>
+					<button type="button" class="btn btn-outline-secondary" data-done @onclick="DoneAsync">Back to workouts</button>
+				</div>
+			</div>
+		</div>
+	}
+	else
+	{
+		Segment segment = _position.Segment!;
+		<div class="card workout-panel phase-@PhaseClass @(_run.Paused ? "is-paused" : "")" data-phase="@PhaseClass" data-workout-running="@(!_run.Paused)">
+			<div class="card-body text-center py-4">
+				<div class="workout-phase" data-phase-label>@(_run.Paused ? "Paused" : PhaseLabel)</div>
+				<div class="workout-clock" data-clock>@WorkoutPlan.Format(_position.SegmentRemaining)</div>
+				<div class="progress progress-sm workout-phase-progress mx-auto mb-3">
+					<div class="progress-bar" style="width:@Percent(segment.Duration - _position.SegmentRemaining, segment.Duration)%"></div>
+				</div>
+				<div class="fs-3" data-round>
+					@if (segment.Kind == SegmentKind.Start)
+					{
+						<span>@_plan.Rounds @(_plan.Rounds == 1 ? "round" : "rounds") ahead</span>
+					}
+					else
+					{
+						<span>Round @segment.Round of @_plan.Rounds</span>
+					}
+				</div>
+				<div class="text-secondary mt-1" data-next>@NextLabel</div>
+			</div>
+		</div>
+
+		<div class="d-flex flex-wrap justify-content-center gap-2 my-3">
+			@if (_run.Paused)
+			{
+				<button type="button" class="btn btn-lg btn-success px-5" data-resume @onclick="ResumeAsync">
+					<Icon IconType="@Icons.PlayerPlay" Size="20" /><span class="ms-2">Resume</span>
+				</button>
+			}
+			else
+			{
+				<button type="button" class="btn btn-lg btn-warning px-5" data-pause @onclick="PauseAsync">
+					<Icon IconType="@Icons.PlayerPause" Size="20" /><span class="ms-2">Pause</span>
+				</button>
+			}
+			<button type="button" class="btn btn-lg btn-outline-danger" data-abort @onclick="AskAbortAsync">
+				<Icon IconType="@Icons.PlayerStop" Size="20" /><span class="ms-2">Abort</span>
+			</button>
+		</div>
+		<div class="text-center text-secondary small mb-3">Space pauses and resumes.</div>
+
+		@if (_askingAbort)
+		{
+			<div class="card border-danger mb-3" data-abort-options>
+				<div class="card-body">
+					<h3 class="card-title mb-2">Stop the workout?</h3>
+					<p class="text-secondary mb-3">
+						Done so far: @_position.CompletedRounds of @_plan.Rounds rounds, @WorkoutPlan.Format(_position.WorkSeconds) of work.
+						@if (_run.Routine.LogTo == WorkoutLogTarget.Nowhere)
+						{
+							<span>This workout does not log to time tracking.</span>
+						}
+					</p>
+					<div class="d-flex flex-wrap gap-2">
+						<button type="button" class="btn btn-danger" data-abort-nothing disabled="@_busy" @onclick="() => AbortAsync(AbortSave.Nothing)">Stop, save nothing</button>
+						@if (_run.Routine.LogTo != WorkoutLogTarget.Nowhere)
+						{
+							<button type="button" class="btn btn-outline-danger" data-abort-done disabled="@_busy" @onclick="() => AbortAsync(AbortSave.WhatWasDone)">Stop, save what I did</button>
+							<button type="button" class="btn btn-outline-danger" data-abort-complete disabled="@_busy" @onclick="() => AbortAsync(AbortSave.AsCompleted)">Stop, save as completed</button>
+						}
+						<button type="button" class="btn btn-ghost-secondary ms-auto" data-abort-cancel @onclick="CancelAbortAsync">Keep going</button>
+					</div>
+				</div>
+			</div>
+		}
+
+		<div class="card">
+			<div class="card-body">
+				<div class="d-flex justify-content-between small text-secondary mb-1">
+					<span data-elapsed>@WorkoutPlan.Format(_position.Elapsed) done</span>
+					<span data-remaining>@WorkoutPlan.Format(_plan.Total - _position.Elapsed) left</span>
+				</div>
+				<div class="workout-timeline" data-timeline>
+					@for (int i = 0; i < _plan.Segments.Count; i++)
+					{
+						Segment part = _plan.Segments[i];
+						double done = Math.Clamp(_position.Elapsed - part.Start, 0, part.Duration);
+						<div class="workout-step step-@part.Kind.ToString().ToLowerInvariant() @(i == _position.Index ? "is-current" : "")"
+							 style="flex-grow:@part.Duration.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+							 title="@StepTitle(part)">
+							<div class="workout-step-fill" style="width:@Percent(done, part.Duration)%"></div>
+						</div>
+					}
+				</div>
+			</div>
+		</div>
+	}
+}
+
+@if (_error != null)
+{
+	<div class="alert alert-danger mt-3" data-error>@_error</div>
+}
+
+@code {
+	public const string RunKey = "akagi.workout.run.v1";
+	public const string MutedKey = "akagi.workout.muted";
+	public const string ModulePath = "./Pages/Workouts/WorkoutRunPage.razor.js";
+
+	private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(200);
+	private static readonly TimeSpan SaveInterval = TimeSpan.FromSeconds(1);
+
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	private IJSObjectReference? _module;
+	private DotNetObjectReference<WorkoutRunPage>? _self;
+	private ITimer? _timer;
+	private WorkoutRun? _run;
+	private WorkoutPlan? _plan;
+	private WorkoutPosition? _position;
+	private bool _loaded;
+	private bool _muted;
+	private bool _soundBlocked;
+	private bool _askingAbort;
+	private bool _resumeAfterAbort;
+	private bool _busy;
+	private bool _awake;
+	private string? _error;
+	private DateTime _lastSaved;
+	private readonly SemaphoreSlim _gate = new(1, 1);
+
+	private DateTime Now => Clock.GetUtcNow().UtcDateTime;
+
+	private WorkoutResult Result => WorkoutResult.From(_run!, _plan!, _run!.Aborted && _run.Save == AbortSave.AsCompleted);
+
+	private string PhaseClass => _position?.Segment?.Kind switch
+	{
+		SegmentKind.Start => "start",
+		SegmentKind.Work => "work",
+		SegmentKind.Rest => "rest",
+		_ => "done"
+	};
+
+	private string PhaseLabel => _position?.Segment?.Kind switch
+	{
+		SegmentKind.Start => "Get ready",
+		SegmentKind.Work => "Work",
+		SegmentKind.Rest => "Rest",
+		_ => "Done"
+	};
+
+	private string NextLabel => _position?.Next switch
+	{
+		null => "Last one, then you are done",
+		Segment next when next.Kind == SegmentKind.Work => $"Next: work {next.Round} of {_plan!.Rounds}, {WorkoutPlan.Format(next.Duration)}",
+		Segment next => $"Next: rest, {WorkoutPlan.Format(next.Duration)}"
+	};
+
+	private static string StepTitle(Segment part) => part.Kind switch
+	{
+		SegmentKind.Start => $"Get ready {WorkoutPlan.Format(part.Duration)}",
+		SegmentKind.Work => $"Work {part.Round}: {WorkoutPlan.Format(part.Duration)}",
+		_ => $"Rest after {part.Round}: {WorkoutPlan.Format(part.Duration)}"
+	};
+
+	private static string Percent(double part, double whole) =>
+		(whole <= 0 ? 0 : Math.Clamp(100 * part / whole, 0, 100)).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (!firstRender)
+		{
+			return;
+		}
+		try
+		{
+			_module = await JS.InvokeAsync<IJSObjectReference>("import", ModulePath);
+			_self = DotNetObjectReference.Create(this);
+			await _module.InvokeVoidAsync("listen", _self);
+			await _module.InvokeVoidAsync("preload");
+			_muted = await _module.InvokeAsync<string?>("load", MutedKey) == "1";
+			WorkoutRun? run = WorkoutRun.Deserialize(await _module.InvokeAsync<string?>("load", RunKey));
+			if (run != null && (CurrentUser == null || run.UserId == CurrentUser.Id))
+			{
+				run.Restore(Now);
+				_run = run;
+				_plan = new WorkoutPlan(run.Routine);
+				_position = _plan.At(run.Elapsed(Now));
+				await PersistAsync();
+			}
+		}
+		catch (JSDisconnectedException)
+		{
+			return;
+		}
+		_loaded = true;
+		_timer = Clock.CreateTimer(_ => _ = InvokeAsync(TickAsync), null, TickInterval, TickInterval);
+		await TickAsync();
+	}
+
+	private async Task TickAsync()
+	{
+		if (_run == null || _plan == null || !await _gate.WaitAsync(0))
+		{
+			StateHasChanged();
+			return;
+		}
+		try
+		{
+			DateTime now = Now;
+			double elapsed = _run.Elapsed(now);
+			if (!_run.Paused && !_run.Finished)
+			{
+				List<WorkoutCue> cues = _plan.CuesBetween(_run.HeardUntil, Math.Min(elapsed, _plan.Total));
+				_run.HeardUntil = Math.Min(elapsed, _plan.Total);
+				foreach (WorkoutCue cue in cues)
+				{
+					await PlayAsync(cue);
+				}
+				if (elapsed >= _plan.Total)
+				{
+					_run.Finish(now, _plan.Total, aborted: false);
+					_run.Save = AbortSave.WhatWasDone;
+					await PersistAsync();
+					await LogCoreAsync();
+				}
+			}
+			_position = _plan.At(_run.Elapsed(now));
+			_run.LastSeenUtc = now;
+			if (now - _lastSaved >= SaveInterval)
+			{
+				await PersistAsync();
+			}
+			await KeepAwakeAsync(!_run.Paused && !_run.Finished);
+		}
+		catch (JSDisconnectedException)
+		{
+		}
+		finally
+		{
+			_gate.Release();
+		}
+		StateHasChanged();
+	}
+
+	private async Task PlayAsync(WorkoutCue cue)
+	{
+		if (_muted || _module == null)
+		{
+			return;
+		}
+		bool played = await _module.InvokeAsync<bool>("play", cue.ToString());
+		_soundBlocked = !played;
+	}
+
+	private async Task KeepAwakeAsync(bool on)
+	{
+		if (_module != null && on != _awake)
+		{
+			_awake = on;
+			await _module.InvokeVoidAsync("keepAwake", on);
+		}
+	}
+
+	private async Task PersistAsync()
+	{
+		if (_module == null || _run == null)
+		{
+			return;
+		}
+		_lastSaved = Now;
+		await _module.InvokeAsync<bool>("save", RunKey, _run.Serialize());
+	}
+
+	private async Task Change(Action<WorkoutRun, DateTime> change)
+	{
+		if (_run == null || _plan == null)
+		{
+			return;
+		}
+		await _gate.WaitAsync();
+		try
+		{
+			DateTime now = Now;
+			change(_run, now);
+			_run.LastSeenUtc = now;
+			_position = _plan.At(_run.Elapsed(now));
+			await PersistAsync();
+		}
+		finally
+		{
+			_gate.Release();
+		}
+	}
+
+	private Task PauseAsync() => Change((run, now) => run.Pause(now));
+
+	private async Task ResumeAsync()
+	{
+		await UnlockSoundAsync();
+		await Change((run, now) => run.Resume(now));
+		_askingAbort = false;
+	}
+
+	[JSInvokable]
+	public Task TogglePauseFromKeyboard() => InvokeAsync(async () =>
+	{
+		if (_run == null || _run.Finished || _askingAbort)
+		{
+			return;
+		}
+		await (_run.Paused ? ResumeAsync() : PauseAsync());
+		StateHasChanged();
+	});
+
+	private async Task AskAbortAsync()
+	{
+		_resumeAfterAbort = _run is { Paused: false };
+		await PauseAsync();
+		_askingAbort = true;
+	}
+
+	private async Task CancelAbortAsync()
+	{
+		_askingAbort = false;
+		if (_resumeAfterAbort)
+		{
+			await ResumeAsync();
+		}
+	}
+
+	private async Task AbortAsync(AbortSave save)
+	{
+		if (_run == null || _plan == null)
+		{
+			return;
+		}
+		_busy = true;
+		await Change((run, now) =>
+		{
+			run.Finish(now, run.Elapsed(now), aborted: true);
+			run.Save = save;
+			if (save == AbortSave.Nothing)
+			{
+				run.Logged = true;
+				run.LoggedTo = null;
+			}
+		});
+		_askingAbort = false;
+		if (save != AbortSave.Nothing)
+		{
+			await LogCoreAsync();
+		}
+		_busy = false;
+	}
+
+	private async Task LogAsync()
+	{
+		_busy = true;
+		await LogCoreAsync();
+		_busy = false;
+	}
+
+	/// <summary>
+	/// Writes the finished run into its tracker once; a failure leaves it for the Save now button.
+	/// </summary>
+	private async Task LogCoreAsync()
+	{
+		if (_run == null || _plan == null || _run.Logged || CurrentUser?.Id is not string userId)
+		{
+			return;
+		}
+		try
+		{
+			Definition? tracker = await Workouts.LogAsync(userId, _run.Routine, WorkoutResult.From(_run, _plan, _run.Save == AbortSave.AsCompleted));
+			_run.Logged = true;
+			_run.LoggedTo = tracker?.Name;
+			_run.LoggedDefinitionId = tracker?.Id;
+			_error = null;
+		}
+		catch (Exception)
+		{
+			_error = "The workout could not be saved to time tracking. Try again with Save now.";
+		}
+		await PersistAsync();
+		await MarkRunAsync();
+	}
+
+	private async Task MarkRunAsync()
+	{
+		if (_run?.Routine.Id is not string id || CurrentUser?.Id is not string userId)
+		{
+			return;
+		}
+		try
+		{
+			if (await Workouts.GetAsync(userId, id) is { } routine)
+			{
+				routine.LastRunAt = _run.StartedAtUtc;
+				await Workouts.SaveAsync(routine);
+			}
+		}
+		catch (Exception)
+		{
+			// Only the list order depends on it
+		}
+	}
+
+	private async Task SkipLogAsync()
+	{
+		if (_run == null)
+		{
+			return;
+		}
+		_run.Logged = true;
+		_run.LoggedTo = null;
+		_error = null;
+		await PersistAsync();
+	}
+
+	private async Task AgainAsync()
+	{
+		if (_run == null || CurrentUser?.Id is not string userId)
+		{
+			return;
+		}
+		WorkoutRoutine routine = (_run.Routine.Id is string id ? await Workouts.GetAsync(userId, id) : null) ?? _run.Routine;
+		await UnlockSoundAsync();
+		_run = WorkoutRun.Start(userId, routine, Now);
+		_plan = new WorkoutPlan(routine);
+		_position = _plan.At(0);
+		_error = null;
+		await PersistAsync();
+	}
+
+	private async Task DoneAsync()
+	{
+		if (_module != null)
+		{
+			await _module.InvokeVoidAsync("remove", RunKey);
+		}
+		Navigation.NavigateTo("TimeTracking/Workouts");
+	}
+
+	private async Task ToggleMuteAsync()
+	{
+		_muted = !_muted;
+		if (_module != null)
+		{
+			await _module.InvokeAsync<bool>("save", MutedKey, _muted ? "1" : "0");
+		}
+		if (!_muted)
+		{
+			await UnlockSoundAsync();
+		}
+	}
+
+	private Task EnableSoundAsync() => UnlockSoundAsync();
+
+	private async Task UnlockSoundAsync()
+	{
+		if (_module != null)
+		{
+			_soundBlocked = !await _module.InvokeAsync<bool>("unlock");
+		}
+	}
+
+	private static RenderFragment Stat(string title, string value, string name) => __builder =>
+	{
+		<div class="col-6 col-md-3 col-lg-2">
+			<div class="subheader">@title</div>
+			<div class="h1 mb-0" data-stat="@name">@value</div>
+		</div>
+	};
+
+	public async ValueTask DisposeAsync()
+	{
+		_timer?.Dispose();
+		try
+		{
+			if (_run != null && _module != null)
+			{
+				_run.LastSeenUtc = Now;
+				await PersistAsync();
+			}
+			if (_module != null)
+			{
+				await _module.InvokeVoidAsync("unlisten");
+				await _module.DisposeAsync();
+			}
+		}
+		catch (JSDisconnectedException)
+		{
+		}
+		catch (TaskCanceledException)
+		{
+		}
+		_self?.Dispose();
+	}
+}

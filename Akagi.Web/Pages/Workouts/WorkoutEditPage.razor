@@ -1,0 +1,353 @@
+@page "/TimeTracking/Workouts/new"
+@page "/TimeTracking/Workouts/{Id}/edit"
+
+@using Akagi.Web.Icons
+@using Akagi.Web.Models
+@using Akagi.Web.Models.TimeTrackers
+@using Akagi.Web.Models.Workouts
+@using Akagi.Web.Services.Workouts
+
+@inject IWorkoutService Workouts
+@inject NavigationManager Navigation
+
+<PageTitle>@(IsNew ? "New workout" : "Edit workout") - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Interval timer</div>
+			<h2 class="page-title">@(IsNew ? "New workout" : "Edit workout")</h2>
+		</div>
+		<div class="col-auto ms-auto">
+			<a href="TimeTracking/Workouts" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2">
+				<Icon IconType="@Icons.ArrowLeft" Size="16" />
+				<span>Back to workouts</span>
+			</a>
+		</div>
+	</div>
+</div>
+
+@if (_routine == null)
+{
+	@if (_missing)
+	{
+		<div class="card"><div class="card-body text-secondary" data-missing>This workout does not exist any more.</div></div>
+	}
+	else
+	{
+		<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+	}
+}
+else
+{
+	<div class="row row-cards">
+		<div class="col-lg-7">
+			<div class="card">
+				<div class="card-body">
+					<div class="mb-3">
+						<label class="form-label required" for="workout-name">Name</label>
+						<input id="workout-name" class="form-control @(Invalid("name"))" maxlength="100" placeholder="Tabata, Plank ladder..."
+							   value="@_routine.Name" data-field="name" @oninput="e => _routine.Name = e.Value?.ToString() ?? string.Empty" />
+						@Error("name")
+					</div>
+					<div class="row g-3 mb-3">
+						<div class="col-sm-4">
+							<label class="form-label" for="workout-start">Start time</label>
+							<input id="workout-start" class="form-control @(Invalid("start"))" inputmode="numeric" value="@_start" data-field="start"
+								   @oninput="e => _start = e.Value?.ToString() ?? string.Empty" />
+							<div class="form-hint">To get ready. 0 starts with work.</div>
+							@Error("start")
+						</div>
+						<div class="col-sm-4">
+							<label class="form-label required" for="workout-work">Work time</label>
+							<input id="workout-work" class="form-control @(Invalid("work"))" inputmode="numeric" value="@_work" data-field="work"
+								   @oninput="e => _work = e.Value?.ToString() ?? string.Empty" />
+							@Error("work")
+						</div>
+						<div class="col-sm-4">
+							<label class="form-label" for="workout-rest">Rest time</label>
+							<input id="workout-rest" class="form-control @(Invalid("rest"))" inputmode="numeric" value="@_rest" data-field="rest"
+								   @oninput="e => _rest = e.Value?.ToString() ?? string.Empty" />
+							<div class="form-hint">0 for no rests.</div>
+							@Error("rest")
+						</div>
+					</div>
+					<div class="form-hint mt-n2 mb-3">Times as seconds (90) or minutes:seconds (1:30).</div>
+					<div class="row g-3 mb-3 align-items-end">
+						<div class="col-sm-4">
+							<label class="form-label required" for="workout-rounds">Work units</label>
+							<input id="workout-rounds" type="number" min="1" max="500" class="form-control @(Invalid("rounds"))" value="@_rounds" data-field="rounds"
+								   @oninput="e => _rounds = e.Value?.ToString() ?? string.Empty" />
+							@Error("rounds")
+						</div>
+						<div class="col-sm-8">
+							<label class="form-check form-switch mb-2">
+								<input class="form-check-input" type="checkbox" checked="@_routine.SkipLastRest" data-field="skip-last-rest"
+									   @onchange="e => _routine.SkipLastRest = (bool)e.Value!" />
+								<span class="form-check-label">Skip the last rest, end right after the last work</span>
+							</label>
+						</div>
+					</div>
+					<div class="mb-3">
+						<label class="form-label" for="workout-log">Time tracking</label>
+						<select id="workout-log" class="form-select" value="@LogChoice" data-field="log" @onchange="e => SetLogChoice(e.Value?.ToString())">
+							<option value="workouts">@WorkoutLog.DefinitionName tracker@(HasWorkoutsTracker ? "" : " (created on the first save)")</option>
+							@foreach (Definition tracker in _trackers.Where(t => !string.Equals(t.Name, WorkoutLog.DefinitionName, StringComparison.OrdinalIgnoreCase)))
+							{
+								<option value="@tracker.Id">@tracker.Name</option>
+							}
+							<option value="none">Don't log</option>
+						</select>
+						@if (_routine.LogTo == WorkoutLogTarget.Tracker)
+						{
+							<div class="form-hint" data-tracker-hint>
+								Fields are filled by name: workout or name, date, start, end, rounds, planned rounds, work, rest, duration or minutes, completed.
+								Others get their usual defaults.
+							</div>
+						}
+					</div>
+					@if (_error != null)
+					{
+						<div class="alert alert-danger" data-error>@_error</div>
+					}
+					<div class="d-flex gap-2">
+						<button type="button" class="btn btn-primary" disabled="@_busy" data-save @onclick="() => SaveAsync(start: false)">Save</button>
+						<button type="button" class="btn btn-success" disabled="@_busy" data-save-start @onclick="() => SaveAsync(start: true)">Save and start</button>
+						<a href="TimeTracking/Workouts" class="btn btn-ghost-secondary">Cancel</a>
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="col-lg-5">
+			<div class="card" data-preview>
+				<div class="card-header">
+					<h3 class="card-title">How it runs</h3>
+					@if (Preview is WorkoutPlan plan)
+					{
+						<span class="ms-auto h3 mb-0" data-total>@WorkoutPlan.Format(plan.Total)</span>
+					}
+				</div>
+				@if (Preview is WorkoutPlan preview)
+				{
+					<div class="list-group list-group-flush">
+						@{ int shown = 0; }
+						@foreach (Segment segment in PreviewSegments(preview))
+						{
+							@if (shown++ == PreviewHead && preview.Segments.Count > PreviewSegments(preview).Count())
+							{
+								<div class="list-group-item text-secondary small py-2" data-preview-more>... @(preview.Segments.Count - PreviewSegments(preview).Count()) more</div>
+							}
+							<div class="list-group-item d-flex align-items-center py-2" data-preview-step="@segment.Kind">
+								<span class="badge @StepClass(segment.Kind) me-2">@StepName(segment)</span>
+								<span class="ms-auto">@WorkoutPlan.Format(segment.Duration)</span>
+							</div>
+						}
+						<div class="list-group-item d-flex py-2 text-secondary small">
+							<span>Work @WorkoutPlan.Format(preview.TotalWork), rest @WorkoutPlan.Format(preview.TotalRest)</span>
+						</div>
+					</div>
+				}
+				else
+				{
+					<div class="card-body text-secondary small">Fill in the times to see the workout.</div>
+				}
+			</div>
+		</div>
+	</div>
+}
+
+@code {
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	[Parameter]
+	public string? Id { get; set; }
+
+	private WorkoutRoutine? _routine;
+	private List<Definition> _trackers = [];
+	private string _start = string.Empty;
+	private string _work = string.Empty;
+	private string _rest = string.Empty;
+	private string _rounds = string.Empty;
+	private Dictionary<string, string> _errors = [];
+	private string? _error;
+	private bool _busy;
+	private bool _missing;
+
+	private bool IsNew => string.IsNullOrEmpty(Id);
+
+	private bool HasWorkoutsTracker => _trackers.Any(t => string.Equals(t.Name, WorkoutLog.DefinitionName, StringComparison.OrdinalIgnoreCase));
+
+	private string LogChoice => _routine?.LogTo switch
+	{
+		WorkoutLogTarget.Nowhere => "none",
+		WorkoutLogTarget.Tracker => _routine.TrackerDefinitionId ?? "workouts",
+		_ => "workouts"
+	};
+
+	protected override async Task OnInitializedAsync()
+	{
+		if (CurrentUser?.Id is not string userId)
+		{
+			_missing = true;
+			return;
+		}
+		_trackers = await Workouts.TrackersAsync(userId);
+		WorkoutRoutine? routine = IsNew ? new WorkoutRoutine { UserId = userId } : await Workouts.GetAsync(userId, Id!);
+		if (routine == null)
+		{
+			_missing = true;
+			return;
+		}
+		_routine = routine.Copy();
+		_start = WorkoutPlan.Format(routine.StartSeconds);
+		_work = WorkoutPlan.Format(routine.WorkSeconds);
+		_rest = WorkoutPlan.Format(routine.RestSeconds);
+		_rounds = routine.Rounds.ToString();
+	}
+
+	private void SetLogChoice(string? value)
+	{
+		if (_routine == null)
+		{
+			return;
+		}
+		switch (value)
+		{
+			case "none":
+				_routine.LogTo = WorkoutLogTarget.Nowhere;
+				_routine.TrackerDefinitionId = null;
+				break;
+			case "workouts" or null or "":
+				_routine.LogTo = WorkoutLogTarget.Workouts;
+				_routine.TrackerDefinitionId = null;
+				break;
+			default:
+				_routine.LogTo = WorkoutLogTarget.Tracker;
+				_routine.TrackerDefinitionId = value;
+				break;
+		}
+	}
+
+	/// <summary>
+	/// The routine with what is typed now, or null while a time does not read.
+	/// </summary>
+	private WorkoutPlan? Preview
+	{
+		get
+		{
+			if (_routine == null || WorkoutPlan.Parse(_start) is not int start || WorkoutPlan.Parse(_work) is not int work || work < 1
+				|| WorkoutPlan.Parse(_rest) is not int rest || !int.TryParse(_rounds, out int rounds) || rounds is < 1 or > 500)
+			{
+				return null;
+			}
+			WorkoutRoutine copy = _routine.Copy();
+			copy.StartSeconds = start;
+			copy.WorkSeconds = work;
+			copy.RestSeconds = rest;
+			copy.Rounds = rounds;
+			return new WorkoutPlan(copy);
+		}
+	}
+
+	/// <summary>
+	/// The first steps and the last, enough to see the pattern and how it ends.
+	/// </summary>
+	private const int PreviewHead = 8;
+
+	private static IEnumerable<Segment> PreviewSegments(WorkoutPlan plan) =>
+		plan.Segments.Count <= 12 ? plan.Segments : plan.Segments.Take(PreviewHead).Concat(plan.Segments.TakeLast(2));
+
+	private static string StepName(Segment segment) => segment.Kind switch
+	{
+		SegmentKind.Start => "Get ready",
+		SegmentKind.Work => $"Work {segment.Round}",
+		_ => "Rest"
+	};
+
+	private static string StepClass(SegmentKind kind) => kind switch
+	{
+		SegmentKind.Start => "bg-yellow-lt",
+		SegmentKind.Work => "bg-green-lt",
+		_ => "bg-azure-lt"
+	};
+
+	private string Invalid(string field) => _errors.ContainsKey(field) ? "is-invalid" : string.Empty;
+
+	private RenderFragment Error(string field) => __builder =>
+	{
+		if (_errors.TryGetValue(field, out string? message))
+		{
+			<div class="invalid-feedback d-block" data-error-for="@field">@message</div>
+		}
+	};
+
+	private bool Validate()
+	{
+		_errors = [];
+		if (_routine == null)
+		{
+			return false;
+		}
+		_routine.Name = _routine.Name.Trim();
+		if (_routine.Name.Length == 0)
+		{
+			_errors["name"] = "Give the workout a name.";
+		}
+		if (WorkoutPlan.Parse(_start) is not int start || start > 3600)
+		{
+			_errors["start"] = "Seconds or m:ss, at most 60 minutes.";
+		}
+		else
+		{
+			_routine.StartSeconds = start;
+		}
+		if (WorkoutPlan.Parse(_work) is not int work || work < 1)
+		{
+			_errors["work"] = "At least one second, as seconds or m:ss.";
+		}
+		else
+		{
+			_routine.WorkSeconds = work;
+		}
+		if (WorkoutPlan.Parse(_rest) is not int rest)
+		{
+			_errors["rest"] = "Seconds or m:ss; 0 for no rests.";
+		}
+		else
+		{
+			_routine.RestSeconds = rest;
+		}
+		if (!int.TryParse(_rounds, out int rounds) || rounds is < 1 or > 500)
+		{
+			_errors["rounds"] = "1 to 500.";
+		}
+		else
+		{
+			_routine.Rounds = rounds;
+		}
+		return _errors.Count == 0;
+	}
+
+	private async Task SaveAsync(bool start)
+	{
+		if (_routine == null || !Validate())
+		{
+			return;
+		}
+		_busy = true;
+		try
+		{
+			WorkoutRoutine saved = await Workouts.SaveAsync(_routine);
+			Navigation.NavigateTo(start ? $"TimeTracking/Workouts?start={saved.Id}" : "TimeTracking/Workouts");
+		}
+		catch (Exception)
+		{
+			_error = "The workout could not be saved. Try again in a moment.";
+		}
+		finally
+		{
+			_busy = false;
+		}
+	}
+}

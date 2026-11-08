@@ -2,6 +2,7 @@ using Akagi.Utils;
 using Akagi.Web.Services.Circuits;
 using Akagi.Web.Services.Sockets;
 using Akagi.Web.Services.Users;
+using Akagi.Web.Services.Workouts;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.Extensions.FileProviders;
 
@@ -14,6 +15,8 @@ static class DependencyInjection
         services.AddScoped<IUserService, UserService>();
         services.AddScoped<IUserState, UserState>();
         services.AddScoped<ITokenService, TokenService>();
+        services.AddSingleton<IWorkoutService, WorkoutService>();
+        services.AddSingleton(TimeProvider.System);
 
         Type[] transmissionTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<SocketTransmissionHandler>();
         Array.ForEach(transmissionTypes, transmissionType => services.AddTransient(typeof(SocketTransmissionHandler), transmissionType));

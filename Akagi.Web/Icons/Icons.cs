@@ -119,4 +119,23 @@ public static class Icons
     public static IIconType New => Plus;
     public static IIconType Delete => Trash;
     public static IIconType Dots_vertical => DotsVertical;
+
+    // Interval timer
+    public static IIconType PlayerPlay => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M7 4v16l13 -8z' />");
+
+    public static IIconType PlayerPause => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M6 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z' /><path d='M14 6a1 1 0 0 1 1 -1h2a1 1 0 0 1 1 1v12a1 1 0 0 1 -1 1h-2a1 1 0 0 1 -1 -1z' />");
+
+    public static IIconType PlayerStop => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M5 7a2 2 0 0 1 2 -2h10a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2h-10a2 2 0 0 1 -2 -2z' />");
+
+    public static IIconType Volume => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M15 8a5 5 0 0 1 0 8' /><path d='M17.7 5a9 9 0 0 1 0 14' /><path d='M6 15h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l3.5 -4.5a.8 .8 0 0 1 1.5 .5v14a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5' />");
+
+    public static IIconType VolumeOff => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M15 8a5 5 0 0 1 1.912 4.934m-1.377 2.602a5 5 0 0 1 -.535 .464' /><path d='M17.7 5a9 9 0 0 1 2.362 11.086m-1.676 2.299a9 9 0 0 1 -.686 .615' /><path d='M9.069 5.054l.431 -.554a.8 .8 0 0 1 1.5 .5v2m0 4v8a.8 .8 0 0 1 -1.5 .5l-3.5 -4.5h-2a1 1 0 0 1 -1 -1v-4a1 1 0 0 1 1 -1h2l1.294 -1.664' /><path d='M3 3l18 18' />");
+
+    public static IIconType Barbell => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M2 12h1' /><path d='M6 8h-2a1 1 0 0 0 -1 1v6a1 1 0 0 0 1 1h2' /><path d='M6 7v10a1 1 0 0 0 1 1h1a1 1 0 0 0 1 -1v-10a1 1 0 0 0 -1 -1h-1a1 1 0 0 0 -1 1z' /><path d='M9 12h6' /><path d='M15 7v10a1 1 0 0 0 1 1h1a1 1 0 0 0 1 -1v-10a1 1 0 0 0 -1 -1h-1a1 1 0 0 0 -1 1z' /><path d='M18 8h2a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-2' /><path d='M22 12h-1' />");
 }
