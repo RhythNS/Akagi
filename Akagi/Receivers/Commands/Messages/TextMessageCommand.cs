@@ -22,6 +22,11 @@ internal class TextMessageCommand : MessageCommand
     public override Task<Command[]> Execute(Context context)
     {
         string text = Arguments[0].Value;
+        if (From == Message.Type.Character)
+        {
+            // A reply that copied the "[Sun 14:43]" stamps from the history would be stamped again next time
+            text = MessageStamps.StripLeading(text);
+        }
         _message = new TextMessage
         {
             Text = text,

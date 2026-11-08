@@ -138,22 +138,33 @@ internal abstract class CharacterBehavior : Savable
         {
             Command[] finalCommands = [];
             string fullText = string.Empty;
+            // A copied "[Sun 14:43]" at the start is held back and dropped instead of shown
+            LeadingStampFilter stamps = new();
 
             await foreach (LLMStreamEvent streamEvent in llm.GetNextStepsStreamAsync(systemProcessor, Context))
             {
                 switch (streamEvent)
                 {
                     case TextDeltaEvent textDelta:
-                        await stream.WriteChunkAsync(textDelta.Text);
+                        string shown = stamps.Push(textDelta.Text);
+                        if (shown.Length > 0)
+                        {
+                            await stream.WriteChunkAsync(shown);
+                        }
                         break;
 
                     case StreamCompleteEvent complete:
                         finalCommands = complete.FinalCommands;
-                        fullText = complete.CompleteText;
+                        fullText = MessageStamps.StripLeading(complete.CompleteText);
                         break;
                 }
             }
 
+            string rest = stamps.Flush();
+            if (rest.Length > 0)
+            {
+                await stream.WriteChunkAsync(rest);
+            }
             await stream.CompleteAsync(fullText);
 
             if (finalCommands.Length == 0)
