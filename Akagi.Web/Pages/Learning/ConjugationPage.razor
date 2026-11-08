@@ -1,0 +1,624 @@
+@page "/Learn/Conjugation"
+
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Bridge.Japanese
+@using Akagi.Web.Pages.Learning.Conjugations
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+@using System.Diagnostics
+
+@implements IAsyncDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject IJSRuntime JS
+
+<PageTitle>Conjugation practice - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="page-pretitle">Learn</div>
+	<h2 class="page-title">Conjugation practice</h2>
+	<div class="text-secondary small mt-1">
+		Type the form in kana, romaji or kanji and press Enter. Every answer is kept, so forms, rules and verbs that keep going wrong
+		come back more often and show up under Progress.
+	</div>
+</div>
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert" data-error>@_error</div>
+}
+
+@if (_drill != null)
+{
+	<div class="row row-cards" @ref="_root">
+		<div class="col-lg-7">
+			<div class="card conj-card @(_settings.ShowFurigana ? "furigana-on" : "")">
+				@if (_drill.Focus is DrillFocus focus)
+				{
+					<div class="card-header py-2">
+						<span class="text-secondary small me-2">Drilling</span>
+						<span class="badge bg-azure-lt" data-focus>@focus.Label</span>
+						<button type="button" class="btn btn-sm btn-ghost-secondary ms-auto py-0" data-focus-clear @onclick="() => SetFocusAsync(null)">Back to all</button>
+					</div>
+				}
+				@if (_dictionaryLoading)
+				{
+					<div class="alert alert-info m-3 mb-0 small" data-dictionary-loading>
+						The bot is still reading the dictionary, so only verbs you already practised or heard in calls are here.
+						<button type="button" class="btn btn-sm btn-link p-0 align-baseline" @onclick="LoadAsync">Load again</button>
+					</div>
+				}
+				@if (_question is DrillQuestion question)
+				{
+					<div class="conj-question text-center" lang="ja" data-question="@question.Key">
+						@if (question.Reverse)
+						{
+							@Word(question.Answer.Main.Written, question.Answer.Main.Reading)
+						}
+						else
+						{
+							@Word(question.Verb.Written, question.Verb.Reading)
+						}
+					</div>
+					<div class="card-body text-center pt-3">
+						<div class="h3 mb-2" data-prompt>
+							@if (question.Reverse)
+							{
+								<span>Dictionary Form</span>
+								<span class="text-secondary small d-block">of the @Conjugator.FormName(question.Form)</span>
+							}
+							else
+							{
+								<span>@Conjugator.FormName(question.Form)</span>
+							}
+						</div>
+						<div class="conj-input mx-auto">
+							<div class="input-group">
+								<input @ref="_input" type="text" class="form-control form-control-lg text-center @InputClass" lang="ja" autocomplete="off"
+									   autocapitalize="off" spellcheck="false" readonly="@(_result != null)" value="@_answer" data-answer
+									   @oninput="e => _answer = e.Value?.ToString() ?? string.Empty" aria-label="Your answer" />
+								<button type="button" class="btn btn-primary" data-check @onclick="() => SubmitAsync(_answer)">
+									@(_result == null ? "Check" : "Next")
+								</button>
+							</div>
+							@if (_result == null && Preview is string preview)
+							{
+								<div class="text-secondary small mt-1" lang="ja" data-preview>@preview</div>
+							}
+						</div>
+						@if (!_settings.HideType)
+						{
+							<div class="mt-3 fs-3" data-type>@Conjugator.TypeLabel(question.Verb.Class)</div>
+						}
+						@if (_settings.ShowEnglish && question.Verb.Meaning.Length > 0)
+						{
+							<div class="text-secondary mt-1" data-english>@question.Verb.Meaning</div>
+						}
+						@if (question.Verb.LearnerUses + question.Verb.PartnerUses > 0)
+						{
+							<div class="text-secondary small mt-1">
+								From your calls: you said it @Times(question.Verb.LearnerUses), your partners @Times(question.Verb.PartnerUses).
+							</div>
+						}
+
+						@if (_result is AnswerResult result)
+						{
+							<div class="conj-feedback mt-3 @(result.Correct ? "text-green" : "text-red")" lang="ja" data-result="@(result.Correct ? "right" : "wrong")">
+								@if (result.Correct)
+								{
+									<div class="fw-bold">Right!</div>
+								}
+								else
+								{
+									<div><span class="text-secondary">You wrote</span> <s>@(result.Answer.Length == 0 ? "nothing" : result.Answer)</s></div>
+								}
+								<div class="fs-2 text-body mt-1" data-solution>
+									@if (question.Reverse)
+									{
+										@Word(question.Verb.Written, question.Verb.Reading)
+									}
+									else
+									{
+										@for (int i = 0; i < question.Answer.Answers.Count; i++)
+										{
+											Spelling spelling = question.Answer.Answers[i];
+											@if (i > 0)
+											{
+												<span class="text-secondary fs-4"> or </span>
+											}
+											@Word(spelling.Written, spelling.Reading)
+										}
+									}
+								</div>
+								<div class="text-secondary small mt-1">
+									@Conjugator.FormName(question.Form): @question.Rule.Label
+									@if (_drill.Item(question.Key) is ConjugationItemView item && item.Attempts > 1)
+									{
+										<span> · @item.Correct of @item.Attempts right so far</span>
+									}
+								</div>
+								<div class="text-secondary small mt-2">Press Enter for the next one.</div>
+							</div>
+						}
+
+						<div class="fs-2 mt-3" data-score>
+							<span class="text-green">@_right</span>/<span class="text-red">@_wrong</span>/<span>@Percent(_right, _right + _wrong)</span>
+						</div>
+						@if (_drill.NothingInTrouble)
+						{
+							<div class="text-secondary small" data-nothing-in-trouble>Nothing is in trouble right now, so everything is asked.</div>
+						}
+						@if (_saveFailed)
+						{
+							<div class="text-warning small" data-save-failed>The last answer could not be saved; it still counts on this page.</div>
+						}
+					</div>
+				}
+				else
+				{
+					<div class="card-body py-5 text-center text-secondary" data-nothing>
+						Nothing to ask with these settings. Turn on at least one form and one verb type, or pick another set of verbs.
+					</div>
+				}
+			</div>
+		</div>
+
+		<div class="col-lg-5">
+			<div class="card" data-settings>
+				<div class="card-header">
+					<h3 class="card-title">Settings</h3>
+					<span class="ms-auto text-secondary small" data-question-count>@_drill.QuestionCount.ToString("N0") questions</span>
+				</div>
+				<div class="card-body">
+					<div class="conj-group-title">Forms</div>
+					<div class="conj-switches mb-2">
+						@foreach (ConjugationForm form in Conjugator.DisplayOrder)
+						{
+							<label class="form-check form-switch mb-1" title="書く → @Conjugator.FormExample(form)">
+								<input class="form-check-input" type="checkbox" checked="@_settings.Forms.Contains(form)" data-form="@form"
+									   @onchange="e => ToggleFormAsync(form, (bool)e.Value!)" />
+								<span class="form-check-label">@Conjugator.FormName(form)</span>
+							</label>
+						}
+					</div>
+					<div class="mb-3 small">
+						<button type="button" class="btn btn-sm btn-ghost-secondary py-0 px-1" @onclick="() => SetFormsAsync(Conjugator.DisplayOrder)">All</button>
+						<button type="button" class="btn btn-sm btn-ghost-secondary py-0 px-1" @onclick="() => SetFormsAsync(ConjugationSettingsView.DefaultForms)">Basics</button>
+						<button type="button" class="btn btn-sm btn-ghost-secondary py-0 px-1" @onclick="() => SetFormsAsync([])">None</button>
+					</div>
+
+					<div class="conj-group-title">Verbs</div>
+					<div class="conj-switches mb-2">
+						@(Switch("Godan (う)", _settings.Godan, v => _settings.Godan = v, "godan"))
+						@(Switch("Ichidan (る)", _settings.Ichidan, v => _settings.Ichidan = v, "ichidan"))
+						@(Switch("Irregular", _settings.Irregular, v => _settings.Irregular = v, "irregular"))
+					</div>
+					<div class="row g-2 mb-3">
+						<div class="col-6">
+							<select class="form-select form-select-sm" data-pool value="@_settings.Pool" @onchange="e => ChangeAsync(() => _settings.Pool = Enum.Parse<ConjugationPool>(e.Value!.ToString()!))">
+								<option value="@ConjugationPool.Common">Common verbs</option>
+								<option value="@ConjugationPool.Calls">Verbs from my calls</option>
+								<option value="@ConjugationPool.Both">Both</option>
+							</select>
+						</div>
+						<div class="col-6">
+							<select class="form-select form-select-sm" data-limit disabled="@(_settings.Pool == ConjugationPool.Calls)" value="@_settings.CommonLimit"
+									@onchange="e => ChangeAsync(() => _settings.CommonLimit = int.Parse(e.Value!.ToString()!))">
+								@foreach (int limit in Limits)
+								{
+									<option value="@limit">@LimitLabel(limit) (@CommonCount(limit) verbs)</option>
+								}
+							</select>
+						</div>
+						<div class="col-12 text-secondary small" data-verb-count>@_drill.Verbs().Count().ToString("N0") verbs to draw from</div>
+					</div>
+
+					<div class="conj-group-title">Questions</div>
+					<select class="form-select form-select-sm mb-2" data-mode value="@_settings.Mode" @onchange="e => ChangeAsync(() => _settings.Mode = Enum.Parse<ConjugationMode>(e.Value!.ToString()!))">
+						<option value="@ConjugationMode.Mixed">Mixed: everything, trouble comes back more</option>
+						<option value="@ConjugationMode.Focus">Focus on trouble, some new ones</option>
+						<option value="@ConjugationMode.TroubleOnly">Only what is in trouble</option>
+					</select>
+					<div class="conj-switches mb-3">
+						@(Switch("Reverse (Q⇄A)", _settings.Reverse, v => _settings.Reverse = v, "reverse"))
+						@(Switch("Randomize direction", _settings.Randomize, v => _settings.Randomize = v, "randomize"))
+					</div>
+
+					<div class="conj-group-title">Display</div>
+					<div class="conj-switches">
+						@(Switch("Show Kanji", _settings.ShowKanji, v => _settings.ShowKanji = v, "kanji", newQuestion: false))
+						@(Switch("Show Furigana (Shift)", _settings.ShowFurigana, v => _settings.ShowFurigana = v, "furigana", newQuestion: false))
+						@(Switch("Hide Type", _settings.HideType, v => _settings.HideType = v, "hide-type", newQuestion: false))
+						@(Switch("Show English", _settings.ShowEnglish, v => _settings.ShowEnglish = v, "english", newQuestion: false))
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<div class="col-12">
+			<ConjugationProgressCard Drill="_drill" Days="_days" Mistakes="_mistakes" Version="_version"
+									 OnDrill="SetFocusAsync" OnReset="ResetAsync" ShowKanji="_settings.ShowKanji" />
+		</div>
+	</div>
+}
+else if (_offline)
+{
+	<div class="card border-danger">
+		<div class="card-body py-5 text-center">
+			<h3 class="h4 mb-1">Socket Service Offline</h3>
+			<p class="text-secondary mb-3">Unable to reach the Akagi backend. Your practice progress is stored there.</p>
+			<button type="button" class="btn btn-primary" @onclick="LoadAsync">Retry Connection</button>
+		</div>
+	</div>
+}
+else
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+
+@code {
+	private sealed record AnswerResult(string Answer, bool Correct);
+
+	internal static readonly int[] Limits = [2_500, 5_000, 10_000, 12_000];
+
+	private ConjugationDrill? _drill;
+	private ConjugationSettingsView _settings = new();
+	private List<ConjugationDayView> _days = [];
+	private List<ConjugationAttemptView> _mistakes = [];
+	private DrillQuestion? _question;
+	private AnswerResult? _result;
+	private string _answer = string.Empty;
+	private int _right;
+	private int _wrong;
+	private int _version;
+	private bool _offline;
+	private bool _dictionaryLoading;
+	private bool _saveFailed;
+	private string? _error;
+	private readonly Stopwatch _clock = new();
+	private Dictionary<int, int> _commonCounts = [];
+
+	private ElementReference _root;
+	private ElementReference _input;
+	private IJSObjectReference? _module;
+	private DotNetObjectReference<ConjugationPage>? _self;
+	private bool _attached;
+	private bool _focusPending;
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override Task OnInitializedAsync() => LoadAsync();
+
+	private async Task LoadAsync()
+	{
+		_offline = false;
+		int offset = (int)TimeZoneInfo.Local.GetUtcOffset(DateTime.UtcNow).TotalMinutes;
+		ConjugationResponseTransmission? response = await SendAsync(new ConjugationRequestTransmission { Action = ConjugationAction.Load, UtcOffsetMinutes = offset });
+		if (response == null || response.Error != null)
+		{
+			_offline = response == null;
+			return;
+		}
+		_settings = response.Settings;
+		_days = [.. response.Days];
+		_mistakes = [.. response.Mistakes];
+		_dictionaryLoading = response.DictionaryLoading;
+		_drill = new ConjugationDrill(response.Verbs, response.Items, _settings.Copy());
+		_commonCounts = Limits.ToDictionary(l => l, l => response.Verbs.Count(v => v.Rank <= l));
+		_version++;
+		NextQuestion();
+	}
+
+	private void NextQuestion()
+	{
+		_question = _drill?.Next();
+		_result = null;
+		_answer = string.Empty;
+		_clock.Restart();
+		_focusPending = true;
+	}
+
+	private string? Preview
+	{
+		get
+		{
+			if (_answer.Length == 0 || !_answer.Any(c => c is >= 'a' and <= 'z' or >= 'A' and <= 'Z'))
+			{
+				return null;
+			}
+			return Kana.Normalize(_answer);
+		}
+	}
+
+	private string InputClass => _result == null ? string.Empty : _result.Correct ? "is-valid" : "is-invalid";
+
+	[JSInvokable]
+	public Task SubmitFromKeyboard(string value) => InvokeAsync(async () =>
+	{
+		await SubmitAsync(value);
+		StateHasChanged();
+	});
+
+	private async Task SubmitAsync(string value)
+	{
+		if (_drill == null || _question is not DrillQuestion question)
+		{
+			return;
+		}
+		if (_result != null)
+		{
+			NextQuestion();
+			return;
+		}
+		string answer = value.Trim();
+		int millis = (int)_clock.ElapsedMilliseconds;
+		bool correct = ConjugationDrill.Check(question, answer);
+		_answer = answer;
+		_result = new AnswerResult(answer, correct);
+		_drill.Record(question, answer, correct);
+		if (correct)
+		{
+			_right++;
+		}
+		else
+		{
+			_wrong++;
+			_mistakes.Insert(0, new ConjugationAttemptView
+			{
+				Verb = question.Verb.Id, Written = question.Verb.Written, Reading = question.Verb.Reading, Class = question.Verb.Class,
+				Form = question.Form, Reverse = question.Reverse, Answer = answer, Correct = false, At = DateTime.UtcNow, Millis = millis
+			});
+		}
+		CountToday(correct);
+		_version++;
+		_focusPending = true;
+
+		ConjugationResponseTransmission? response = await SendAsync(new ConjugationRequestTransmission
+		{
+			Action = ConjugationAction.Record,
+			Verb = question.Verb.Id,
+			Written = question.Verb.Written,
+			Reading = question.Verb.Reading,
+			Class = question.Verb.Class,
+			Form = question.Form,
+			Reverse = question.Reverse,
+			Answer = answer,
+			Correct = correct,
+			Millis = millis
+		}, quiet: true);
+		_saveFailed = response?.Item == null;
+		if (response?.Item is ConjugationItemView stored)
+		{
+			_drill.Stored(stored);
+			_version++;
+		}
+		if (correct && _result != null && _question == question)
+		{
+			// A right answer moves on by itself after a moment; Enter moves on sooner
+			_ = AdvanceAfterAsync(question);
+		}
+	}
+
+	private async Task AdvanceAfterAsync(DrillQuestion question)
+	{
+		await Task.Delay(900);
+		await InvokeAsync(() =>
+		{
+			if (_question == question && _result is { Correct: true })
+			{
+				NextQuestion();
+				StateHasChanged();
+			}
+		});
+	}
+
+	private void CountToday(bool correct)
+	{
+		DateTime today = DateTime.Now.Date;
+		ConjugationDayView? day = _days.FirstOrDefault(d => d.Date.Date == today);
+		if (day == null)
+		{
+			day = new ConjugationDayView { Date = today };
+			_days.Add(day);
+		}
+		day.Attempts++;
+		if (correct)
+		{
+			day.Correct++;
+		}
+	}
+
+	private Task ToggleFormAsync(ConjugationForm form, bool on) => ChangeAsync(() =>
+		_settings.Forms = on ? [.. _settings.Forms.Append(form).Distinct()] : [.. _settings.Forms.Where(f => f != form)]);
+
+	private Task SetFormsAsync(IEnumerable<ConjugationForm> forms)
+	{
+		ConjugationForm[] chosen = [.. forms];
+		return ChangeAsync(() => _settings.Forms = chosen);
+	}
+
+	/// <summary>
+	/// Changes a setting, saves it and, when it changes what can be asked, asks something new.
+	/// </summary>
+	private async Task ChangeAsync(Action change, bool newQuestion = true)
+	{
+		change();
+		if (_drill == null)
+		{
+			return;
+		}
+		_drill.Apply(_settings.Copy());
+		if (newQuestion)
+		{
+			NextQuestion();
+		}
+		_version++;
+		ConjugationResponseTransmission? response = await SendAsync(new ConjugationRequestTransmission { Action = ConjugationAction.SaveSettings, Settings = _settings }, quiet: true);
+		_saveFailed = response == null || response.Error != null;
+	}
+
+	private async Task SetFocusAsync(DrillFocus? focus)
+	{
+		if (_drill == null)
+		{
+			return;
+		}
+		_drill.SetFocus(focus);
+		NextQuestion();
+		await Task.CompletedTask;
+	}
+
+	private async Task ResetAsync()
+	{
+		ConjugationResponseTransmission? response = await SendAsync(new ConjugationRequestTransmission { Action = ConjugationAction.Reset });
+		if (response is { Error: null } && _drill != null)
+		{
+			_drill.Forget();
+			_days.Clear();
+			_mistakes.Clear();
+			_right = 0;
+			_wrong = 0;
+			_version++;
+			NextQuestion();
+		}
+	}
+
+	private int CommonCount(int limit) => _commonCounts.GetValueOrDefault(limit);
+
+	internal static string LimitLabel(int limit) => limit switch
+	{
+		>= 12_000 => "All common words",
+		_ => $"Top {limit / 1000.0:0.#}k words"
+	};
+
+	private static string Times(int count) => count == 1 ? "once" : $"{count} times";
+
+	internal static string Percent(int part, int whole) => whole == 0 ? "100%" : $"{Math.Round(100.0 * part / whole)}%";
+
+	private RenderFragment Switch(string label, bool value, Action<bool> set, string name, bool newQuestion = true) => __builder =>
+	{
+		<label class="form-check form-switch mb-1">
+			<input class="form-check-input" type="checkbox" checked="@value" data-setting="@name"
+				   @onchange="e => ChangeAsync(() => set((bool)e.Value!), newQuestion)" />
+			<span class="form-check-label">@label</span>
+		</label>
+	};
+
+	/// <summary>
+	/// A word with kanji (and furigana when shown) or in kana, as the display settings say.
+	/// </summary>
+	private RenderFragment Word(string written, string reading) => __builder =>
+	{
+		if (!_settings.ShowKanji || written == reading)
+		{
+			<span>@reading</span>
+			return;
+		}
+		foreach (FuriganaPart part in Kana.Furigana(written, reading))
+		{
+			if (part.Ruby == null)
+			{
+				<span>@part.Text</span>
+			}
+			else
+			{
+				<ruby>@part.Text<rt>@part.Ruby</rt></ruby>
+			}
+		}
+	};
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (_drill == null)
+		{
+			return;
+		}
+		try
+		{
+			_module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Learning/ConjugationPage.razor.js");
+			if (!_attached)
+			{
+				_self ??= DotNetObjectReference.Create(this);
+				await _module.InvokeVoidAsync("attach", _root, _self);
+				_attached = true;
+			}
+			if (_focusPending)
+			{
+				_focusPending = false;
+				await _module.InvokeVoidAsync("focus", _input);
+			}
+		}
+		catch (JSDisconnectedException)
+		{
+		}
+		catch (InvalidOperationException)
+		{
+			// Prerendering has no JavaScript yet
+		}
+	}
+
+	/// <summary>
+	/// Failures end up in <see cref="_error"/> unless <paramref name="quiet"/>; null means there is no response.
+	/// </summary>
+	private async Task<ConjugationResponseTransmission?> SendAsync(ConjugationRequestTransmission transmission, bool quiet = false)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			return null;
+		}
+		try
+		{
+			ConjugationResponseTransmission response = await new ConjugationRequest(transmission).Get(client, ConjugationRequest.Timeout);
+			if (!quiet || response.Error != null)
+			{
+				_error = response.Error;
+			}
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			if (!quiet)
+			{
+				_error = "That took too long. Try again in a moment.";
+			}
+			return null;
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_drill == null && _offline && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+		try
+		{
+			if (_module != null)
+			{
+				if (_attached)
+				{
+					await _module.InvokeVoidAsync("detach", _root);
+				}
+				await _module.DisposeAsync();
+			}
+		}
+		catch (JSDisconnectedException)
+		{
+		}
+		_self?.Dispose();
+	}
+}

@@ -1,0 +1,45 @@
+.conj-days {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: 80px;
+}
+
+.conj-day {
+    flex: 1 1 0;
+    height: 100%;
+    display: flex;
+    align-items: flex-end;
+    background: var(--tblr-bg-surface-secondary, rgba(127, 127, 127, 0.08));
+    border-radius: 2px;
+}
+
+.conj-day-bar {
+    width: 100%;
+    background: var(--tblr-green, #2fb344);
+    border-radius: 2px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.conj-day-wrong {
+    width: 100%;
+    background: var(--tblr-red, #d63939);
+}
+
+.conj-key {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 2px;
+    vertical-align: middle;
+}
+
+.conj-key-right {
+    background: var(--tblr-green, #2fb344);
+}
+
+.conj-key-wrong {
+    background: var(--tblr-red, #d63939);
+}

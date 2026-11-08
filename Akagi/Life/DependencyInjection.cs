@@ -4,6 +4,7 @@ using Akagi.Characters.Routines;
 using Akagi.Characters.Upgrades;
 using Akagi.Life.Japanese;
 using Akagi.Life.Japanese.Calls;
+using Akagi.Life.Japanese.Conjugations;
 using Akagi.Life.Japanese.Mining;
 using Akagi.Life.Japanese.Vocabulary;
 using Akagi.Utils;
@@ -26,6 +27,10 @@ static class DependencyInjection
         services.AddSingleton<IPersonProfileDatabase, PersonProfileDatabase>();
         services.AddSingleton<ICallMemory, CallMemory>();
         services.AddSingleton<IMinedSentenceDatabase, MinedSentenceDatabase>();
+        services.AddSingleton<IVerbCatalog, VerbCatalog>();
+        services.AddSingleton<IConjugationItemDatabase, ConjugationItemDatabase>();
+        services.AddSingleton<IConjugationAttemptDatabase, ConjugationAttemptDatabase>();
+        services.AddSingleton<IConjugationPreferencesDatabase, ConjugationPreferencesDatabase>();
         services.AddSingleton<IStudyAdvisor, StudyAdvisor>();
         services.AddSingleton<IWordDictionary, JmdictWordDictionary>();
         services.AddSingleton<IVocabularyIndex, VocabularyIndex>();

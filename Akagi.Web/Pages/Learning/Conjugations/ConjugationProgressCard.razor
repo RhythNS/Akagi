@@ -1,0 +1,369 @@
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Japanese
+
+<div class="card" data-progress>
+	<div class="card-header">
+		<ul class="nav nav-tabs card-header-tabs">
+			@foreach ((ProgressTab tab, string label) in Tabs)
+			{
+				<li class="nav-item">
+					<a href="javascript:void(0)" class="nav-link @(_tab == tab ? "active" : "")" data-tab="@tab" @onclick="() => _tab = tab">
+						@label
+						@if (tab == ProgressTab.Rules && TroubleCount(_rules) > 0)
+						{
+							<span class="badge bg-red-lt ms-1">@TroubleCount(_rules)</span>
+						}
+						@if (tab == ProgressTab.Verbs && TroubleCount(_verbs) > 0)
+						{
+							<span class="badge bg-red-lt ms-1">@TroubleCount(_verbs)</span>
+						}
+					</a>
+				</li>
+			}
+		</ul>
+	</div>
+
+	@if (Drill.Items.Count == 0 && _tab != ProgressTab.Mistakes)
+	{
+		<div class="card-body text-secondary" data-progress-empty>
+			Nothing practised yet. Every answer is kept here: which forms, rules and verbs are fine and which ones you have trouble with.
+		</div>
+	}
+	else
+	{
+		@switch (_tab)
+		{
+			case ProgressTab.Overview:
+				<div class="card-body" data-overview>
+					<div class="row g-3 mb-3">
+						@Tile("Answers", Drill.Items.Sum(i => i.Attempts).ToString("N0"), $"{ConjugationPage.Percent(Drill.Items.Sum(i => i.Correct), Drill.Items.Sum(i => i.Attempts))} right overall", "answers")
+						@Tile("Today", (Today?.Attempts ?? 0).ToString("N0"), Today == null ? "nothing yet" : $"{ConjugationPage.Percent(Today.Correct, Today.Attempts)} right", "today")
+						@Tile("Fine", Count(ConjugationStatus.Fine).ToString("N0"), "questions you get right", "fine", "text-green")
+						@Tile("Learning", Count(ConjugationStatus.Learning).ToString("N0"), "questions still settling", "learning")
+						@Tile("Trouble", Count(ConjugationStatus.Trouble).ToString("N0"), "questions that go wrong", "trouble", "text-red")
+						@Tile("Days", Days.Count.ToString(), "practised in the last 30", "days")
+					</div>
+
+					<div class="row g-4">
+						<div class="col-md-6">
+							<h4 class="mb-2">Rules you have trouble with</h4>
+							@if (!_rules.Any(r => r.Status == ConjugationStatus.Trouble))
+							{
+								<div class="text-secondary small" data-no-trouble-rules>None right now.</div>
+							}
+							@foreach (GroupProgress rule in _rules.Where(r => r.Status == ConjugationStatus.Trouble).OrderBy(r => r.RecentRate).Take(6))
+							{
+								<div class="d-flex align-items-center mb-2" data-trouble-rule="@rule.Key">
+									<div class="flex-fill">
+										<div>@rule.Label <span class="text-secondary" lang="ja">· @rule.Detail</span></div>
+										<div class="text-secondary small" lang="ja">@string.Join(", ", rule.Troubled.Take(4).Select(Name))</div>
+									</div>
+									<span class="text-red small me-2">@Percentage(rule.RecentRate)</span>
+									<button type="button" class="btn btn-sm btn-outline-primary py-0" @onclick="() => DrillAsync(DrillFocusKind.Rule, rule)">Drill</button>
+								</div>
+							}
+						</div>
+						<div class="col-md-6">
+							<h4 class="mb-2">Verbs you have trouble with</h4>
+							@if (!_verbs.Any(v => v.Status == ConjugationStatus.Trouble))
+							{
+								<div class="text-secondary small" data-no-trouble-verbs>None right now.</div>
+							}
+							@foreach (GroupProgress verb in _verbs.Where(v => v.Status == ConjugationStatus.Trouble).OrderBy(v => v.RecentRate).Take(6))
+							{
+								<div class="d-flex align-items-center mb-2" data-trouble-verb="@verb.Key">
+									<div class="flex-fill">
+										<div lang="ja">@VerbName(verb)</div>
+										<div class="text-secondary small">@string.Join(", ", verb.Troubled.Select(i => Conjugator.FormName(i.Form)).Distinct().Take(4))</div>
+									</div>
+									<span class="text-red small me-2">@Percentage(verb.RecentRate)</span>
+									<button type="button" class="btn btn-sm btn-outline-primary py-0" @onclick="() => DrillAsync(DrillFocusKind.Verb, verb)">Drill</button>
+								</div>
+							}
+						</div>
+					</div>
+
+					<h4 class="mt-4 mb-2">Last 30 days</h4>
+					<div class="conj-days" data-days>
+						@foreach (DateTime day in Enumerable.Range(0, 30).Select(i => DateTime.Now.Date.AddDays(i - 29)))
+						{
+							ConjugationDayView? entry = Days.FirstOrDefault(d => d.Date.Date == day);
+							int attempts = entry?.Attempts ?? 0;
+							double height = attempts == 0 ? 0 : Math.Max(6, 100.0 * attempts / MaxDay);
+							<div class="conj-day" title="@day.ToString("ddd d MMM"): @attempts answers@(entry == null ? "" : $", {ConjugationPage.Percent(entry.Correct, entry.Attempts)} right")">
+								<div class="conj-day-bar" style="height:@(height.ToString(System.Globalization.CultureInfo.InvariantCulture))%">
+									@if (entry != null && entry.Attempts > 0)
+									{
+										<div class="conj-day-wrong" style="height:@((100.0 * (entry.Attempts - entry.Correct) / entry.Attempts).ToString(System.Globalization.CultureInfo.InvariantCulture))%"></div>
+									}
+								</div>
+							</div>
+						}
+					</div>
+					<div class="d-flex justify-content-between text-secondary small mt-1">
+						<span>@DateTime.Now.Date.AddDays(-29).ToString("d MMM")</span>
+						<span><span class="conj-key conj-key-right"></span> right <span class="conj-key conj-key-wrong ms-2"></span> wrong</span>
+						<span>today</span>
+					</div>
+				</div>
+				break;
+
+			case ProgressTab.Forms:
+				<div class="table-responsive">
+					<table class="table table-sm table-vcenter card-table mb-0" data-forms>
+						<thead><tr><th>Form</th><th>Status</th><th>Lately</th><th>Overall</th><th>Questions</th><th class="w-1"></th></tr></thead>
+						<tbody>
+							@foreach (GroupProgress form in _forms)
+							{
+								<tr data-form-row="@form.Key">
+									<td>@form.Label <span class="text-secondary small" lang="ja">@Conjugator.FormExample(form.Form!.Value)</span></td>
+									<td>@StatusBadge(form.Status)</td>
+									<td style="min-width:8rem">@RateBar(form.RecentRate)</td>
+									<td class="text-secondary">@form.Correct / @form.Attempts</td>
+									<td class="text-secondary">@form.Items.Count@(form.Troubled.Any() ? $", {form.Troubled.Count()} in trouble" : "")</td>
+									<td><button type="button" class="btn btn-sm btn-ghost-primary py-0" @onclick="() => DrillAsync(DrillFocusKind.Form, form)">Drill</button></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				break;
+
+			case ProgressTab.Rules:
+				@Filter()
+				<div class="table-responsive">
+					<table class="table table-sm table-vcenter card-table mb-0" data-rules>
+						<thead><tr><th>Rule</th><th>Status</th><th>Lately</th><th>Overall</th><th>Verbs in trouble</th><th class="w-1"></th></tr></thead>
+						<tbody>
+							@foreach (GroupProgress rule in Filtered(_rules))
+							{
+								<tr data-rule-row="@rule.Key">
+									<td>@rule.Label <span class="text-secondary" lang="ja">· @rule.Detail</span></td>
+									<td>@StatusBadge(rule.Status)</td>
+									<td style="min-width:8rem">@RateBar(rule.RecentRate)</td>
+									<td class="text-secondary">@rule.Correct / @rule.Attempts</td>
+									<td class="small" lang="ja">@string.Join(", ", rule.Troubled.Take(5).Select(Name))</td>
+									<td><button type="button" class="btn btn-sm btn-ghost-primary py-0" @onclick="() => DrillAsync(DrillFocusKind.Rule, rule)">Drill</button></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				break;
+
+			case ProgressTab.Verbs:
+				@Filter()
+				<div class="table-responsive">
+					<table class="table table-sm table-vcenter card-table mb-0" data-verbs>
+						<thead><tr><th>Verb</th><th>Status</th><th>Lately</th><th>Overall</th><th>Forms in trouble</th><th>Last wrong answers</th><th class="w-1"></th></tr></thead>
+						<tbody>
+							@foreach (GroupProgress verb in Filtered(_verbs))
+							{
+								<tr data-verb-row="@verb.Key">
+									<td lang="ja">@VerbName(verb) <div class="text-secondary small">@Conjugator.TypeLabel(verb.Verb!.Class)</div></td>
+									<td>@StatusBadge(verb.Status)</td>
+									<td style="min-width:8rem">@RateBar(verb.RecentRate)</td>
+									<td class="text-secondary">@verb.Correct / @verb.Attempts</td>
+									<td class="small">@string.Join(", ", verb.Troubled.Select(i => Conjugator.FormName(i.Form) + (i.Reverse ? " (reverse)" : "")).Distinct())</td>
+									<td class="small" lang="ja">@string.Join(", ", verb.Items.Where(i => i.LastWrong != null).OrderByDescending(i => i.LastWrong).SelectMany(i => i.WrongAnswers.Reverse()).Take(3))</td>
+									<td><button type="button" class="btn btn-sm btn-ghost-primary py-0" @onclick="() => DrillAsync(DrillFocusKind.Verb, verb)">Drill</button></td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				break;
+
+			case ProgressTab.Mistakes:
+				@if (Mistakes.Count == 0)
+				{
+					<div class="card-body text-secondary">No mistakes yet.</div>
+				}
+				else
+				{
+					<div class="table-responsive">
+						<table class="table table-sm table-vcenter card-table mb-0" data-mistakes>
+							<thead><tr><th>Asked</th><th>You wrote</th><th>Right</th><th>When</th></tr></thead>
+							<tbody>
+								@foreach (ConjugationAttemptView mistake in Mistakes.Take(50))
+								{
+									Verb verb = new(mistake.Written, mistake.Reading, mistake.Class);
+									Conjugation? right = Conjugator.Conjugate(verb, mistake.Form);
+									<tr>
+										<td>
+											<span lang="ja">@(mistake.Reverse ? right?.Main.Written ?? mistake.Written : mistake.Written)</span>
+											<span class="text-secondary small"> → @(mistake.Reverse ? "dictionary form" : Conjugator.FormName(mistake.Form))</span>
+										</td>
+										<td lang="ja"><s class="text-red">@(mistake.Answer.Length == 0 ? "(blank)" : mistake.Answer)</s></td>
+										<td lang="ja" class="text-green">@(mistake.Reverse ? $"{mistake.Written} ({mistake.Reading})" : right == null ? "" : $"{right.Main.Written} ({right.Main.Reading})")</td>
+										<td class="text-secondary small text-nowrap">@mistake.At.ToLocalTime().ToString("g")</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				}
+				break;
+		}
+	}
+
+	<div class="card-footer d-flex align-items-center small">
+		<span class="text-secondary">
+			Fine: the latest answers are almost all right. Trouble: the latest answer was wrong, or under three in four were right.
+		</span>
+		@if (_confirmReset)
+		{
+			<button type="button" class="btn btn-sm btn-danger ms-auto py-0" data-reset-yes @onclick="ResetAsync">Forget all progress</button>
+			<button type="button" class="btn btn-sm btn-outline-secondary ms-1 py-0" @onclick="() => _confirmReset = false">Keep</button>
+		}
+		else
+		{
+			<button type="button" class="btn btn-sm btn-ghost-danger ms-auto py-0" data-reset @onclick="() => _confirmReset = true">Reset progress</button>
+		}
+	</div>
+</div>
+
+@code {
+	public enum ProgressTab
+	{
+		Overview,
+		Forms,
+		Rules,
+		Verbs,
+		Mistakes
+	}
+
+	private static readonly (ProgressTab, string)[] Tabs =
+		[(ProgressTab.Overview, "Overview"), (ProgressTab.Forms, "Forms"), (ProgressTab.Rules, "Rules"), (ProgressTab.Verbs, "Verbs"), (ProgressTab.Mistakes, "Mistakes")];
+
+	[Parameter, EditorRequired]
+	public ConjugationDrill Drill { get; set; } = null!;
+
+	[Parameter]
+	public List<ConjugationDayView> Days { get; set; } = [];
+
+	[Parameter]
+	public List<ConjugationAttemptView> Mistakes { get; set; } = [];
+
+	/// <summary>
+	/// Changes whenever an answer or setting changed, so the groups are read again.
+	/// </summary>
+	[Parameter]
+	public int Version { get; set; }
+
+	[Parameter]
+	public bool ShowKanji { get; set; } = true;
+
+	[Parameter]
+	public EventCallback<DrillFocus?> OnDrill { get; set; }
+
+	[Parameter]
+	public EventCallback OnReset { get; set; }
+
+	private ProgressTab _tab;
+	private ConjugationStatus? _filter;
+	private bool _confirmReset;
+	private int _readVersion = -1;
+	private List<GroupProgress> _forms = [];
+	private List<GroupProgress> _rules = [];
+	private List<GroupProgress> _verbs = [];
+
+	protected override void OnParametersSet()
+	{
+		if (_readVersion == Version)
+		{
+			return;
+		}
+		_readVersion = Version;
+		_forms = Drill.Forms();
+		_rules = Drill.Rules();
+		_verbs = Drill.VerbGroups();
+	}
+
+	private ConjugationDayView? Today => Days.FirstOrDefault(d => d.Date.Date == DateTime.Now.Date);
+
+	private int MaxDay => Math.Max(1, Days.Count == 0 ? 1 : Days.Max(d => d.Attempts));
+
+	private int Count(ConjugationStatus status) => Drill.Items.Count(i => ConjugationProgress.Status(i.Recent) == status);
+
+	private static int TroubleCount(List<GroupProgress> groups) => groups.Count(g => g.Status == ConjugationStatus.Trouble);
+
+	private IEnumerable<GroupProgress> Filtered(List<GroupProgress> groups) =>
+		(_filter is ConjugationStatus status ? groups.Where(g => g.Status == status) : groups)
+			.OrderBy(g => g.Status switch { ConjugationStatus.Trouble => 0, ConjugationStatus.Learning => 1, ConjugationStatus.New => 2, _ => 3 })
+			.ThenBy(g => g.RecentRate);
+
+	private string Name(ConjugationItemView item) => ShowKanji ? item.Written : item.Reading;
+
+	private string VerbName(GroupProgress verb) =>
+		ShowKanji && verb.Verb!.Written != verb.Verb.Reading ? $"{verb.Verb.Written} ({verb.Verb.Reading})" : verb.Verb!.Reading;
+
+	private static string Percentage(double rate) => $"{Math.Round(rate * 100)}%";
+
+	private Task DrillAsync(DrillFocusKind kind, GroupProgress group)
+	{
+		string label = kind switch
+		{
+			DrillFocusKind.Rule => $"{group.Label} · {group.Detail}",
+			DrillFocusKind.Verb => VerbName(group),
+			_ => group.Label
+		};
+		return OnDrill.InvokeAsync(new DrillFocus(kind, group.Key, label));
+	}
+
+	private async Task ResetAsync()
+	{
+		_confirmReset = false;
+		await OnReset.InvokeAsync();
+	}
+
+	private RenderFragment Filter() => __builder =>
+	{
+		<div class="card-body py-2 border-bottom">
+			<div class="btn-group btn-group-sm" role="group" data-filter>
+				@foreach ((ConjugationStatus? status, string label) in new (ConjugationStatus?, string)[]
+					{ (null, "All"), (ConjugationStatus.Trouble, "Trouble"), (ConjugationStatus.Learning, "Learning"), (ConjugationStatus.Fine, "Fine") })
+				{
+					<button type="button" class="btn @(_filter == status ? "btn-primary" : "btn-outline-secondary")" data-filter-option="@label"
+							@onclick="() => _filter = status">@label</button>
+				}
+			</div>
+		</div>
+	};
+
+	private static RenderFragment StatusBadge(ConjugationStatus status) => __builder =>
+	{
+		(string css, string label) = status switch
+		{
+			ConjugationStatus.Trouble => ("bg-red-lt", "trouble"),
+			ConjugationStatus.Fine => ("bg-green-lt", "fine"),
+			ConjugationStatus.Learning => ("bg-yellow-lt", "learning"),
+			_ => ("bg-secondary-lt", "new")
+		};
+		<span class="badge @css" data-status="@label">@label</span>
+	};
+
+	private static RenderFragment RateBar(double rate) => __builder =>
+	{
+		string css = rate >= 0.85 ? "bg-green" : rate >= 0.75 ? "bg-yellow" : "bg-red";
+		<div class="d-flex align-items-center">
+			<div class="progress progress-sm flex-fill me-2">
+				<div class="progress-bar @css" style="width:@((rate * 100).ToString("0", System.Globalization.CultureInfo.InvariantCulture))%"></div>
+			</div>
+			<span class="small text-secondary">@Percentage(rate)</span>
+		</div>
+	};
+
+	private static RenderFragment Tile(string title, string value, string note, string name, string css = "") => __builder =>
+	{
+		<div class="col-6 col-md-4 col-xl-2">
+			<div class="card card-sm h-100" data-tile="@name">
+				<div class="card-body">
+					<div class="subheader">@title</div>
+					<div class="h2 mb-0 @css">@value</div>
+					<div class="text-secondary small">@note</div>
+				</div>
+			</div>
+		</div>
+	};
+}
