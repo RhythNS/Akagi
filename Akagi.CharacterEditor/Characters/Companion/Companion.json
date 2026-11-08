@@ -8,33 +8,7 @@
         "Y": 20
       },
       "Properties": {
-        "Dirty": true,
         "Name": "Companion",
-        "Conversations": {
-          "List": [],
-          "Dirty": false,
-          "Current": null,
-          "ActiveSession": null
-        },
-        "SharedMemory": {
-          "Goals": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "ShortTerm": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "LongTerm": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "Conversations": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "Dirty": false
-        },
         "AllowAutomaticProcessing": true,
         "UserVisibility": 0,
         "ErrorBehavior": 1,
@@ -53,7 +27,6 @@
         "Y": 0
       },
       "Properties": {
-        "Dirty": true,
         "Name": "Placeholder",
         "Username": "",
         "LastUsedCommunicator": "",
@@ -128,8 +101,7 @@
       },
       "Properties": {
         "Name": "Akagi speaks",
-        "Description": "Akagi answers; the others advise.",
-        "Dirty": true
+        "Description": "Akagi answers; the others advise."
       },
       "ArraySizes": {}
     }

@@ -402,6 +402,10 @@ public class MainWindowViewModel : INotifyPropertyChanged
                 if (property.GetCustomAttribute<Akagi.Bridge.Attributes.NodeReferenceAttribute>() != null)
                     continue;
 
+                // Runtime state (Dirty, conversations, memory, bookkeeping) is not configuration and is never loaded
+                if (!GraphNodeUtils.IsEditorVisible(property))
+                    continue;
+
                 if (!property.CanRead || !property.CanWrite)
                     continue;
 

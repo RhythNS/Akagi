@@ -44,7 +44,7 @@ modules with the `Consult` tool:
 | File | Module | Tools |
 | --- | --- | --- |
 | `Sensei.json` | Japanese communication coach (around N2) | RecordJapaneseIssue, RecordCorrectUsage, RecordJapaneseStrength, AnalyzeJapanese, JapaneseDiagnosisReport, RecentCallAnalyses, CheckReading, LookupWord, FindExampleSentences |
-| `Hana.json` | Sleep, health and energy | SyncHealth, HealthStatus, LogSleep, LogSteps, RecordMood |
+| `Hana.json` | Sleep, health and energy | SyncHealth, HealthStatus, WorkoutHistory, LogSleep, LogSteps, RecordMood |
 | `Kai.json` | Focus and time tracking | StartWork, StopWork, TakeBreak, WorkStatus, TimeTrackerOverview |
 
 What makes Akagi feel present:

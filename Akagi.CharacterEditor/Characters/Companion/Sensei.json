@@ -24,8 +24,7 @@
         "Creator": "Akagi",
         "CharacterVersion": "1",
         "ImageId": "",
-        "RawCardBase64": "",
-        "Dirty": true
+        "RawCardBase64": ""
       },
       "ArraySizes": {}
     },
@@ -36,32 +35,6 @@
         "Y": -60
       },
       "Properties": {
-        "Dirty": true,
-        "Conversations": {
-          "List": [],
-          "Dirty": false,
-          "Current": null,
-          "ActiveSession": null
-        },
-        "Memory": {
-          "Goals": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "ShortTerm": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "LongTerm": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "Conversations": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "Dirty": false
-        },
         "AllowAutomaticProcessing": true,
         "AllowVoice": false,
         "VoiceId": "",
@@ -83,7 +56,6 @@
         "Y": -680
       },
       "Properties": {
-        "Dirty": true,
         "Name": "Placeholder",
         "Username": "",
         "LastUsedCommunicator": "",
@@ -102,8 +74,7 @@
       },
       "Properties": {
         "Name": "Sensei Puppeteer",
-        "MaxSteps": 5,
-        "Dirty": true
+        "MaxSteps": 5
       },
       "ArraySizes": {}
     },
@@ -131,9 +102,7 @@
           "CheckReading",
           "LookupWord",
           "FindExampleSentences"
-        ],
-        "Commands": [],
-        "Dirty": true
+        ]
       },
       "ArraySizes": {}
     },
@@ -146,8 +115,7 @@
       "Properties": {
         "MaxMessages": 40,
         "Name": "Recent messages",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -164,8 +132,7 @@
         "Position": 1,
         "MessageType": 4,
         "Name": "Life context",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -184,8 +151,7 @@
         "Position": 1,
         "MessageType": 4,
         "Name": "Japanese diagnosis",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -197,8 +163,7 @@
       },
       "Properties": {
         "Name": "Sensei Pipeline",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {
         "Definitions": 3

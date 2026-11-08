@@ -74,7 +74,9 @@ internal class HealthStatusCommand : LifeCommand
 {
     public override string Name => "HealthStatus";
 
-    public override string Description => "Look up the user's recent sleep, steps and resting heart rate.";
+    public override string Description =>
+        "Look up what is already known about the user's health: recent sleep, steps, resting heart rate and the last 7 days " +
+        "of workouts (watch sessions with heart rate and zones, and interval timer workouts).";
 
     public override Argument[] GetDefaultArguments() => [];
 
@@ -82,6 +84,7 @@ internal class HealthStatusCommand : LifeCommand
     {
         LifeProfile profile = await LoadProfile(context);
         HealthSummary summary = HealthSummary.Create(profile, DateTime.UtcNow);
-        return Reply(context, summary.HasData ? summary.Describe() : "No health data recorded yet.");
+        string health = summary.HasData ? summary.Describe(withExercise: false) : "No sleep, step or heart rate data recorded yet.";
+        return Reply(context, health + Environment.NewLine + await ActivityLookup.DescribeAsync(context, profile));
     }
 }

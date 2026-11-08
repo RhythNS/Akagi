@@ -116,6 +116,98 @@ internal static class GoogleHealthMapper
     public static int ApplyRestingHeartRate(LifeProfile profile, string json) => ApplyRestingHeartRate(profile, [json]);
 
     /// <summary>
+    /// Pages of GET users/me/dataTypes/exercise/dataPoints for the local days <paramref name="first"/> to
+    /// <paramref name="last"/>. Those days get exactly the sessions returned, so one deleted in the app goes away too.
+    /// Returns the number of sessions.
+    /// </summary>
+    public static int ApplyExercise(LifeProfile profile, IEnumerable<string> pages, DateTime first, DateTime last)
+    {
+        List<(string Date, HealthExercise Exercise)> sessions = [];
+        foreach (string page in pages)
+        {
+            using JsonDocument document = JsonDocument.Parse(page);
+            foreach (JsonElement point in DataPoints(document.RootElement))
+            {
+                if (point.TryGetProperty("exercise", out JsonElement exercise) && ReadExercise(profile, point, exercise) is { } session)
+                {
+                    sessions.Add(session);
+                }
+            }
+        }
+
+        string from = first.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        string to = last.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        foreach (HealthDay day in profile.HealthDays.Where(d => string.CompareOrdinal(d.Date, from) >= 0 && string.CompareOrdinal(d.Date, to) <= 0 && d.Exercises.Count > 0))
+        {
+            day.Exercises.Clear();
+            Touch(day);
+        }
+        foreach ((string date, HealthExercise exercise) in sessions)
+        {
+            HealthDay day = profile.GetOrAddHealthDay(date);
+            day.Exercises.RemoveAll(e => e.Id.Length > 0 && e.Id == exercise.Id);
+            day.Exercises.Add(exercise);
+            day.Exercises.Sort((a, b) => a.StartUtc.CompareTo(b.StartUtc));
+            Touch(day);
+        }
+        return sessions.Count;
+    }
+
+    public static int ApplyExercise(LifeProfile profile, string json, DateTime first, DateTime last) => ApplyExercise(profile, [json], first, last);
+
+    private static (string Date, HealthExercise Exercise)? ReadExercise(LifeProfile profile, JsonElement point, JsonElement exercise)
+    {
+        if (!exercise.TryGetProperty("interval", out JsonElement interval) || Utc(interval, "startTime") is not DateTime start)
+        {
+            return null;
+        }
+        DateTime end = Utc(interval, "endTime") ?? start;
+        string date = CivilDate(interval, "civilStartTime") ?? OffsetDate(start, interval, "startUtcOffset") ?? profile.LocalDate(start);
+
+        JsonElement metrics = exercise.TryGetProperty("metricsSummary", out JsonElement m) ? m : default;
+        JsonElement zones = metrics.ValueKind == JsonValueKind.Object && metrics.TryGetProperty("heartRateZoneDurations", out JsonElement z) ? z : default;
+        int? Metric(string name) => metrics.ValueKind == JsonValueKind.Object ? Int(metrics, name) : null;
+        int? Zone(string name) => zones.ValueKind == JsonValueKind.Object && zones.TryGetProperty(name, out JsonElement value) ? Seconds(value) : null;
+
+        string recording = point.TryGetProperty("dataSource", out JsonElement source) && source.TryGetProperty("recordingMethod", out JsonElement method)
+            ? method.GetString() ?? string.Empty
+            : string.Empty;
+        double? millimeters = metrics.ValueKind == JsonValueKind.Object && metrics.TryGetProperty("distanceMillimeters", out JsonElement distance)
+            && distance.ValueKind == JsonValueKind.Number ? distance.GetDouble() : null;
+
+        return (date, new HealthExercise
+        {
+            Id = point.TryGetProperty("name", out JsonElement name) ? name.GetString() ?? string.Empty : string.Empty,
+            Type = exercise.TryGetProperty("exerciseType", out JsonElement type) ? type.GetString() ?? string.Empty : string.Empty,
+            Name = exercise.TryGetProperty("displayName", out JsonElement display) ? display.GetString() ?? string.Empty : string.Empty,
+            StartUtc = start,
+            EndUtc = end,
+            ActiveSeconds = exercise.TryGetProperty("activeDuration", out JsonElement active) && Seconds(active) is int seconds
+                ? seconds
+                : (int)Math.Round((end - start).TotalSeconds),
+            Calories = Metric("caloriesKcal"),
+            Steps = Metric("steps"),
+            DistanceMeters = millimeters is double mm ? Math.Round(mm / 1000.0, 1) : null,
+            AverageHeartRate = Metric("averageHeartRateBeatsPerMinute"),
+            ActiveZoneMinutes = Metric("activeZoneMinutes"),
+            LightSeconds = Zone("lightTime"),
+            ModerateSeconds = Zone("moderateTime"),
+            VigorousSeconds = Zone("vigorousTime"),
+            PeakSeconds = Zone("peakTime"),
+            AutoDetected = recording == "PASSIVELY_MEASURED"
+        });
+    }
+
+    /// <summary>
+    /// A Duration such as "1820s" or "1820.5s".
+    /// </summary>
+    private static int? Seconds(JsonElement value) =>
+        value.ValueKind == JsonValueKind.String && value.GetString() is { Length: > 1 } text && text.EndsWith('s')
+        && double.TryParse(text[..^1], NumberStyles.Float, CultureInfo.InvariantCulture, out double seconds)
+            ? (int)Math.Round(seconds)
+            : null;
+
+    /// <summary>
     /// The nextPageToken of a list or reconcile response; null on the last page.
     /// </summary>
     public static string? NextPageToken(string json)

@@ -29,6 +29,27 @@ public class CompanionGraphTests
     }
 
     [Fact]
+    public void CompanionGraphs_CarryNoRuntimeState()
+    {
+        foreach (string file in Directory.GetFiles(CompanionDirectory(), "*.json"))
+        {
+            GraphData graph = GraphData.Load(file);
+            foreach (NodeData node in graph.Nodes)
+            {
+                Type? type = GraphNodeUtils.ResolveType(node.TypeName);
+                if (type == null)
+                {
+                    continue;
+                }
+                string[] state = [.. GraphNodeUtils.GetValueProperties(type)
+                    .Where(p => !GraphNodeUtils.IsEditorVisible(p) && node.Properties.ContainsKey(p.Name))
+                    .Select(p => p.Name)];
+                Assert.True(state.Length == 0, $"{Path.GetFileName(file)}: {type.Name} stores {string.Join(", ", state)}");
+            }
+        }
+    }
+
+    [Fact]
     public async Task CompanionGraphs_AreValidWithoutWarnings()
     {
         GraphValidator validator = new();

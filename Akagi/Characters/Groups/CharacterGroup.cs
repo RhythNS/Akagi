@@ -67,11 +67,14 @@ internal class CharacterGroup : Savable
         get => _strategyId;
         set => SetProperty(ref _strategyId, value);
     }
+    // What the group lived through, not configuration: a graph never sets it, so updates keep the history
+    [NodeIgnore]
     public ConversationContainer Conversations
     {
         get => _conversations;
         set => SetProperty(ref _conversations, value);
     }
+    [NodeIgnore]
     public Memory SharedMemory
     {
         get => _sharedMemory;

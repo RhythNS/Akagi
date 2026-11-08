@@ -199,6 +199,12 @@ internal static class GraphNodeUtils
             {
                 continue;
             }
+            // Runtime state (conversations, memory, bookkeeping) that a graph file carries, from an editor that saved
+            // every property, must not overwrite what an updated character already has
+            if (!IsEditorVisible(property))
+            {
+                continue;
+            }
 
             try
             {

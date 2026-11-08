@@ -438,6 +438,10 @@ public class GoogleHealthSyncTests
             {
                 return path.Contains("pageToken=") ? """{"dataPoints":[]}""" : SleepFirstPage;
             }
+            if (path.Contains("exercise"))
+            {
+                return WorkoutHistoryTests.ExerciseJson;
+            }
             return GoogleHealthMapperTests.HeartJson;
         }
 
@@ -474,13 +478,16 @@ public class GoogleHealthSyncTests
 
         GoogleHealthSyncResult? result = await fixture.Sync.SyncUserAsync(fixture.UserId);
 
-        Assert.Equal(new GoogleHealthSyncResult(2, 2, 1), result);
-        Assert.Equal(3, fixture.Client.Calls.Count);
+        Assert.Equal(new GoogleHealthSyncResult(2, 2, 1, "", 2), result);
+        Assert.Equal(4, fixture.Client.Calls.Count);
         string sleepCall = Uri.UnescapeDataString(fixture.Client.Calls[0]);
         Assert.StartsWith("GET users/me/dataTypes/sleep/dataPoints:reconcile?filter=sleep.interval.civil_end_time >= \"", sleepCall);
         Assert.Contains("&pageSize=25", sleepCall);
         Assert.Equal("POST users/me/dataTypes/steps/dataPoints:dailyRollUp", fixture.Client.Calls[1]);
-        Assert.StartsWith("GET users/me/dataTypes/daily-resting-heart-rate/dataPoints?filter=daily_resting_heart_rate.date >= \"", Uri.UnescapeDataString(fixture.Client.Calls[2]));
+        string exerciseCall = Uri.UnescapeDataString(fixture.Client.Calls[2]);
+        Assert.StartsWith("GET users/me/dataTypes/exercise/dataPoints?filter=exercise.interval.civil_start_time >= \"", exerciseCall);
+        Assert.Contains("&pageSize=25", exerciseCall);
+        Assert.StartsWith("GET users/me/dataTypes/daily-resting-heart-rate/dataPoints?filter=daily_resting_heart_rate.date >= \"", Uri.UnescapeDataString(fixture.Client.Calls[3]));
         Assert.Equal(392, fixture.Profiles.Items.Single().HealthDays.Single(d => d.Date == "2026-10-27").SleepMinutes);
         GoogleHealthAccount account = fixture.Accounts.Items.Single();
         Assert.Equal("refreshed", account.AccessToken);
@@ -509,9 +516,9 @@ public class GoogleHealthSyncTests
 
         GoogleHealthSyncResult? result = await fixture.Sync.SyncUserAsync(fixture.UserId);
 
-        Assert.Equal(new GoogleHealthSyncResult(2, 0, 0, "steps, resting heart rate"), result);
+        Assert.Equal(new GoogleHealthSyncResult(2, 0, 0, "steps, exercise, resting heart rate"), result);
         Assert.Single(fixture.Client.Calls);
-        Assert.Contains("Not shared with Akagi: steps, resting heart rate", result!.ToString());
+        Assert.Contains("Not shared with Akagi: steps, exercise, resting heart rate", result!.ToString());
     }
 
     [Fact]

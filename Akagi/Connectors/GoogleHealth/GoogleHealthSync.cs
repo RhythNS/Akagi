@@ -11,11 +11,12 @@ namespace Akagi.Connectors.GoogleHealth;
 /// <summary>
 /// What a sync imported. <paramref name="NotShared"/> lists data the user did not grant access to, e.g. "sleep".
 /// </summary>
-internal record GoogleHealthSyncResult(int SleepDays, int StepDays, int HeartRateDays, string NotShared = "")
+internal record GoogleHealthSyncResult(int SleepDays, int StepDays, int HeartRateDays, string NotShared = "", int ExerciseSessions = 0)
 {
     public override string ToString()
     {
-        string text = $"Synced sleep for {SleepDays} day(s), steps for {StepDays} day(s) and resting heart rate for {HeartRateDays} day(s) from Google Health.";
+        string text = $"Synced sleep for {SleepDays} day(s), steps for {StepDays} day(s), resting heart rate for {HeartRateDays} day(s) " +
+                      $"and {ExerciseSessions} exercise session(s) from Google Health.";
         return NotShared.Length == 0 ? text : $"{text} Not shared with Akagi: {NotShared} (run /health link again to allow it).";
     }
 }
@@ -23,7 +24,7 @@ internal record GoogleHealthSyncResult(int SleepDays, int StepDays, int HeartRat
 internal interface IGoogleHealthSync
 {
     /// <summary>
-    /// Pulls the last days of sleep, steps and resting heart rate into the user's life profile and saves both
+    /// Pulls the last days of sleep, steps, resting heart rate and exercise sessions into the user's life profile and saves both
     /// the profile and the account. Returns null when the user has not linked Google Health.
     /// </summary>
     public Task<GoogleHealthSyncResult?> SyncUserAsync(string userId, CancellationToken cancellationToken = default);
@@ -73,6 +74,7 @@ internal class GoogleHealthSync : IGoogleHealthSync
             int sleepDays = 0;
             int stepDays = 0;
             int heartDays = 0;
+            int exerciseSessions = 0;
 
             if (await TryFetch(account, GoogleHealthOptions.SleepScope, "sleep", notShared, async () =>
                 await GetPagesAsync(account, "users/me/dataTypes/sleep/dataPoints:reconcile",
@@ -88,6 +90,14 @@ internal class GoogleHealthSync : IGoogleHealthSync
                 stepDays = GoogleHealthMapper.ApplySteps(profile, steps[0]);
             }
 
+            DateTime exerciseFirst = localToday.AddDays(-Math.Max(0, _options.CurrentValue.ExerciseDaysToSync - 1));
+            if (await TryFetch(account, GoogleHealthOptions.ActivityScope, "exercise", notShared, async () =>
+                await GetPagesAsync(account, "users/me/dataTypes/exercise/dataPoints",
+                    CivilFilter("exercise.interval.civil_start_time", exerciseFirst, localToday), 25, persist, cancellationToken)) is { } exercise)
+            {
+                exerciseSessions = GoogleHealthMapper.ApplyExercise(profile, exercise, exerciseFirst, localToday);
+            }
+
             if (await TryFetch(account, GoogleHealthOptions.MetricsScope, "resting heart rate", notShared, async () =>
                 await GetPagesAsync(account, "users/me/dataTypes/daily-resting-heart-rate/dataPoints",
                     CivilFilter("daily_resting_heart_rate.date", first, localToday), 0, persist, cancellationToken)) is { } heart)
@@ -99,7 +109,7 @@ internal class GoogleHealthSync : IGoogleHealthSync
             account.LastSyncUtc = DateTime.UtcNow;
             account.LastError = string.Empty;
             await _accounts.SaveDocumentAsync(account);
-            return new GoogleHealthSyncResult(sleepDays, stepDays, heartDays, string.Join(", ", notShared));
+            return new GoogleHealthSyncResult(sleepDays, stepDays, heartDays, string.Join(", ", notShared), exerciseSessions);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

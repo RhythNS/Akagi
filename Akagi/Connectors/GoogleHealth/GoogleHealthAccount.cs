@@ -33,6 +33,10 @@ internal class GoogleHealthOptions
     /// </summary>
     public int MorningSyncIntervalMinutes { get; set; } = 20;
     public int DaysToSync { get; set; } = 3;
+    /// <summary>
+    /// Exercise sessions are few and come on one page, so they are fetched further back: a weekly report sees them all.
+    /// </summary>
+    public int ExerciseDaysToSync { get; set; } = 14;
 }
 
 /// <summary>

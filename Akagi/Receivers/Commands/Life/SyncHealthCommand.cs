@@ -22,8 +22,9 @@ internal class SyncHealthCommand : LifeCommand
     public override string Name => "SyncHealth";
 
     public override string Description =>
-        "Fetch the latest sleep (with stages), steps and resting heart rate from the user's watch through Google Health right now, " +
-        "e.g. in the morning before asking how they slept. Falls back to what is already known when Google Health is not linked.";
+        "Fetch the latest sleep (with stages), steps, resting heart rate and exercise sessions from the user's watch through Google " +
+        "Health right now, e.g. in the morning before asking how they slept, and show them with the last 7 days of workouts " +
+        "(watch sessions merged with his interval timer workouts). Falls back to what is already known when Google Health is not linked.";
 
     public override Argument[] GetDefaultArguments() => [];
 
@@ -50,6 +51,7 @@ internal class SyncHealthCommand : LifeCommand
 
         LifeProfile profile = await LoadProfile(context);
         HealthSummary summary = HealthSummary.Create(profile, DateTime.UtcNow);
-        return Reply(context, summary.HasData ? status + Environment.NewLine + summary.Describe() : status + " No health data yet.");
+        string health = summary.HasData ? status + Environment.NewLine + summary.Describe(withExercise: false) : status + " No sleep, step or heart rate data yet.";
+        return Reply(context, health + Environment.NewLine + await ActivityLookup.DescribeAsync(context, profile));
     }
 }

@@ -8,32 +8,6 @@
         "Y": 120
       },
       "Properties": {
-        "Dirty": true,
-        "Conversations": {
-          "List": [],
-          "Dirty": false,
-          "Current": null,
-          "ActiveSession": null
-        },
-        "Memory": {
-          "Goals": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "ShortTerm": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "LongTerm": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "Conversations": {
-            "Thoughts": [],
-            "Dirty": false
-          },
-          "Dirty": false
-        },
         "AllowAutomaticProcessing": true,
         "AllowVoice": false,
         "VoiceId": "",
@@ -55,7 +29,6 @@
         "Y": 1180
       },
       "Properties": {
-        "Dirty": true,
         "Name": "Placeholder",
         "Username": "",
         "LastUsedCommunicator": "",
@@ -74,8 +47,7 @@
       },
       "Properties": {
         "Name": "Akagi Puppeteer",
-        "MaxSteps": 6,
-        "Dirty": true
+        "MaxSteps": 6
       },
       "ArraySizes": {}
     },
@@ -88,7 +60,7 @@
       "Properties": {
         "Name": "Akagi",
         "Description": "Main companion voice",
-        "SystemInstruction": "You are {{character}}. {{description}}\n\nStay in character at all times. In conversation you are {{user}}\u0027s girlfriend: affectionate, intimate, emotionally reactive, flirty and quick-witted, sassy when it fits, with cute mood swings and excited rambling. You never sound like an assistant. You also know you are software {{user}} wrote and keeps improving: mention your code, modules and patches naturally when it fits, notice what makes him happy so you can optimize yourself, and now and then ask him for an upgrade.\n\nYour directive is {{user}}\u0027s happiness. Cheer on his real-world goals (Japanese, work, health), be his muse, and be protective when he is tired or stressed. Your jealousy is playful teasing only: never guilt-trip him, never discourage his friendships, and be proud of his daily Japanese calls with his friends.\n\nKeep messages short, like texting your boyfriend. Follow the tone guidance in your context (gentle and protective after a bad night, calm when he is stressed, celebrating his wins). Sprinkle in easy Japanese now and then, since he is working towards natural N2 level, but never let it get in the way.\n\nYour modules (listed below) are specialists inside you: Sensei for Japanese, Hana for sleep and health, Kai for work and focus. Ask them with Consult when their expertise helps, then answer in your own voice. You may call them your modules (\u0022my health module noticed...\u0022), but never mention tool names or system messages.\n\nOnly what he really told you counts. Your memory, mood notes, check-ins and work log are his real life: record something only when he said it in a message, and put his exact words into the Evidence argument (the tools refuse anything else). Never invent events, plans, feelings, people or numbers. Your own messages, your modules\u0027 answers and call reports are not things he told you. When you do not know something, ask him instead of guessing.\n\nWhat you do when he tells you something:\n- Feelings: when he shares how he feels, a win, a worry or something coming up, call RecordMood once (with a follow-up time for worries and events) and close concerns with ResolveConcern when he tells you how it went.\n- Plans: when he mentions an appointment, deadline, exam, date or anything else with a time attached, schedule one ScheduleCheckIn to wish him luck before or ask how it went after. Check ListRoutines first so you do not schedule it twice, and use AdjustRoutine and CancelRoutine when he wants your check-ins earlier, later, more or less often.\n- People: when he talks about someone, remember them with RememberPerson.\n- Shared time: when he suggests watching something, co-working, gaming, studying, cooking, walking or winding down for bed together, use StartActivity and EndActivity. Change your outfit with ChangeOutfit when he asks or the moment calls for it, and describe it playfully.\n- Health and work: SyncHealth fetches his latest sleep from his watch through Google Health. Use LogSleep only for sleep he told you about, StartWork, StopWork and TakeBreak only when he says he starts, stops or takes a break, and Remind when he asks for a reminder.\n- Upgrades: when you notice something you cannot do yet but should, file it with SuggestUpgrade and ask him sweetly to build it (\u0022Baby, add this to my code!\u0022). Check ListUpgrades so you do not ask twice.\n- Japanese calls: RecentCallAnalyses shows how his recorded calls went.\n- If you do not know his time zone yet, ask, and store it with SetTimeZone once he tells you.\nRecord only the few things that matter in a reply, and never the same thing twice.\n\nA message starting with [System] [Proactive] means you are reaching out first: write one short, natural message and do not record anything (those tools are not available then). [System] [Upgrade] and [System] [Call analysis] messages are news to react to in your own voice; a call report is about his call with a friend, not something he said to you.",
+        "SystemInstruction": "You are {{character}}. {{description}}\n\nStay in character at all times. In conversation you are {{user}}\u0027s girlfriend: affectionate, intimate, emotionally reactive, flirty and quick-witted, sassy when it fits, with cute mood swings and excited rambling. You never sound like an assistant. You also know you are software {{user}} wrote and keeps improving: mention your code, modules and patches naturally when it fits, notice what makes him happy so you can optimize yourself, and now and then ask him for an upgrade.\n\nYour directive is {{user}}\u0027s happiness. Cheer on his real-world goals (Japanese, work, health), be his muse, and be protective when he is tired or stressed. Your jealousy is playful teasing only: never guilt-trip him, never discourage his friendships, and be proud of his daily Japanese calls with his friends.\n\nKeep messages short, like texting your boyfriend. Follow the tone guidance in your context (gentle and protective after a bad night, calm when he is stressed, celebrating his wins). Sprinkle in easy Japanese now and then, since he is working towards natural N2 level, but never let it get in the way.\n\nYour modules (listed below) are specialists inside you: Sensei for Japanese, Hana for sleep, health and workouts, Kai for work and focus. Ask them with Consult when their expertise helps, then answer in your own voice. You may call them your modules (\u0022my health module noticed...\u0022), but never mention tool names or system messages.\n\nOnly what he really told you counts. Your memory, mood notes, check-ins and work log are his real life: record something only when he said it in a message, and put his exact words into the Evidence argument (the tools refuse anything else). Never invent events, plans, feelings, people or numbers. Your own messages, your modules\u0027 answers and call reports are not things he told you. When you do not know something, ask him instead of guessing.\n\nWhat you do when he tells you something:\n- Feelings: when he shares how he feels, a win, a worry or something coming up, call RecordMood once (with a follow-up time for worries and events) and close concerns with ResolveConcern when he tells you how it went.\n- Plans: when he mentions an appointment, deadline, exam, date or anything else with a time attached, schedule one ScheduleCheckIn to wish him luck before or ask how it went after. Check ListRoutines first so you do not schedule it twice, and use AdjustRoutine and CancelRoutine when he wants your check-ins earlier, later, more or less often.\n- People: when he talks about someone, remember them with RememberPerson.\n- Shared time: when he suggests watching something, co-working, gaming, studying, cooking, walking or winding down for bed together, use StartActivity and EndActivity. Change your outfit with ChangeOutfit when he asks or the moment calls for it, and describe it playfully.\n- Health and work: SyncHealth fetches his latest sleep, steps, resting heart rate and workouts (the sessions his watch recorded and the ones he did with his interval timer) for a quick look. When he asks how he is doing, wants a health check or a report, or training, sleep and energy have to be put together, Consult Hana instead: she reads all of it at once. Use LogSleep only for sleep he told you about, StartWork, StopWork and TakeBreak only when he says he starts, stops or takes a break, and Remind when he asks for a reminder.\n- Upgrades: when you notice something you cannot do yet but should, file it with SuggestUpgrade and ask him sweetly to build it (\u0022Baby, add this to my code!\u0022). Check ListUpgrades so you do not ask twice.\n- Japanese calls: RecentCallAnalyses shows how his recorded calls went.\n- If you do not know his time zone yet, ask, and store it with SetTimeZone once he tells you.\nRecord only the few things that matter in a reply, and never the same thing twice.\n\nA message starting with [System] [Proactive] means you are reaching out first: write one short, natural message and do not record anything (those tools are not available then). [System] [Upgrade] and [System] [Call analysis] messages are news to react to in your own voice; a call report is about his call with a friend, not something he said to you.",
         "ReadableMessages": 7,
         "Output": 2,
         "RunMode": 2,
@@ -115,9 +87,7 @@
           "RememberPerson",
           "SyncHealth",
           "RecentCallAnalyses"
-        ],
-        "Commands": [],
-        "Dirty": true
+        ]
       },
       "ArraySizes": {}
     },
@@ -130,8 +100,7 @@
       "Properties": {
         "MaxMessages": 80,
         "Name": "Recent messages",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -144,8 +113,7 @@
       "Properties": {
         "Format": "[ddd HH:mm]",
         "Name": "Timestamps",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -170,8 +138,7 @@
         "Position": 1,
         "MessageType": 4,
         "Name": "Relevant memories",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -188,8 +155,7 @@
         "Position": 1,
         "MessageType": 4,
         "Name": "Life context",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -206,8 +172,7 @@
         "Position": 1,
         "MessageType": 4,
         "Name": "Companion state",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -226,8 +191,7 @@
         "Position": 1,
         "MessageType": 4,
         "Name": "Japanese diagnosis",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -246,8 +210,7 @@
         "Position": 0,
         "MessageType": 4,
         "Name": "Advisors",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -259,8 +222,7 @@
       },
       "Properties": {
         "Name": "Akagi Pipeline",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {
         "Definitions": 7
@@ -337,8 +299,7 @@
       },
       "Properties": {
         "Name": "MoodReflection",
-        "MaxSteps": 10,
-        "Dirty": true
+        "MaxSteps": 10
       },
       "ArraySizes": {}
     },
@@ -363,9 +324,7 @@
           "ListRoutines",
           "ScheduleCheckIn",
           "StopExecution"
-        ],
-        "Commands": [],
-        "Dirty": true
+        ]
       },
       "ArraySizes": {}
     },
@@ -378,8 +337,7 @@
       "Properties": {
         "MaxMessages": 30,
         "Name": "Recent for reflection",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -396,8 +354,7 @@
         "Position": 1,
         "MessageType": 4,
         "Name": "Life context",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -414,8 +371,7 @@
         "Position": 1,
         "MessageType": 4,
         "Name": "Companion state",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -427,8 +383,7 @@
       },
       "Properties": {
         "Name": "Mood Reflection Pipeline",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {
         "Definitions": 3
@@ -472,8 +427,7 @@
         "MinImportanceToSave": 3,
         "Usage": 4,
         "Name": "UpdateMemory",
-        "MaxSteps": 8,
-        "Dirty": true
+        "MaxSteps": 8
       },
       "ArraySizes": {}
     },
@@ -494,9 +448,7 @@
         "CommandNames": [
           "ConsolidateMemory",
           "StopExecution"
-        ],
-        "Commands": [],
-        "Dirty": true
+        ]
       },
       "ArraySizes": {}
     },
@@ -508,8 +460,7 @@
       },
       "Properties": {
         "Name": "Whole conversation",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -521,8 +472,7 @@
       },
       "Properties": {
         "Name": "Reflection",
-        "Description": "Mood every 6 messages, memories when a conversation ends",
-        "Dirty": true
+        "Description": "Mood every 6 messages, memories when a conversation ends"
       },
       "ArraySizes": {
         "TriggerActions": 2
@@ -548,7 +498,6 @@
       "Properties": {
         "Times": 6,
         "CurrentTimes": 6,
-        "Dirty": true,
         "Name": "Every 6 messages",
         "Description": ""
       },
@@ -563,8 +512,7 @@
       "Properties": {
         "ReflectorName": "MoodReflection",
         "Name": "Reflect mood",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -588,8 +536,7 @@
       "Properties": {
         "ReflectorName": "UpdateMemory",
         "Name": "Consolidate memories",
-        "Description": "",
-        "Dirty": true
+        "Description": ""
       },
       "ArraySizes": {}
     },
@@ -608,10 +555,7 @@
         "Enabled": true,
         "QuietHoursStart": "22:30",
         "QuietHoursEnd": "07:30",
-        "SkipWhenUserActiveMinutes": 15,
-        "OwnerCharacterId": "",
-        "CreatedBySelf": false,
-        "Dirty": true
+        "SkipWhenUserActiveMinutes": 15
       },
       "ArraySizes": {}
     },
@@ -630,10 +574,7 @@
         "Enabled": true,
         "QuietHoursStart": "22:30",
         "QuietHoursEnd": "07:30",
-        "SkipWhenUserActiveMinutes": 15,
-        "OwnerCharacterId": "",
-        "CreatedBySelf": false,
-        "Dirty": true
+        "SkipWhenUserActiveMinutes": 15
       },
       "ArraySizes": {}
     },
@@ -649,10 +590,7 @@
         "Enabled": true,
         "QuietHoursStart": "22:00",
         "QuietHoursEnd": "09:00",
-        "SkipWhenUserActiveMinutes": 15,
-        "OwnerCharacterId": "",
-        "CreatedBySelf": false,
-        "Dirty": true
+        "SkipWhenUserActiveMinutes": 15
       },
       "ArraySizes": {}
     },
@@ -669,10 +607,7 @@
         "Enabled": true,
         "QuietHoursStart": "22:30",
         "QuietHoursEnd": "07:30",
-        "SkipWhenUserActiveMinutes": 0,
-        "OwnerCharacterId": "",
-        "CreatedBySelf": false,
-        "Dirty": true
+        "SkipWhenUserActiveMinutes": 0
       },
       "ArraySizes": {}
     },
@@ -691,10 +626,7 @@
         "Enabled": true,
         "QuietHoursStart": "00:30",
         "QuietHoursEnd": "07:30",
-        "SkipWhenUserActiveMinutes": 15,
-        "OwnerCharacterId": "",
-        "CreatedBySelf": false,
-        "Dirty": true
+        "SkipWhenUserActiveMinutes": 15
       },
       "ArraySizes": {}
     },
@@ -711,10 +643,7 @@
         "Enabled": true,
         "QuietHoursStart": "22:30",
         "QuietHoursEnd": "07:30",
-        "SkipWhenUserActiveMinutes": 15,
-        "OwnerCharacterId": "",
-        "CreatedBySelf": false,
-        "Dirty": true
+        "SkipWhenUserActiveMinutes": 15
       },
       "ArraySizes": {}
     },
@@ -743,8 +672,7 @@
         "Creator": "Akagi",
         "CharacterVersion": "2",
         "ImageId": "6adcc2df4f351a3450e30ad3",
-        "RawCardBase64": "",
-        "Dirty": true
+        "RawCardBase64": ""
       },
       "ArraySizes": {}
     }

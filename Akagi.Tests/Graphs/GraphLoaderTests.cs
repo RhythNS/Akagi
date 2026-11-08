@@ -1,6 +1,8 @@
 using Akagi.Characters;
+using Akagi.Characters.Conversations;
 using Akagi.Characters.Groups;
 using Akagi.Characters.Groups.Strategies;
+using Akagi.Characters.Memories;
 using Akagi.Characters.TriggerPoints;
 using Akagi.Characters.TriggerPoints.Actions;
 using Akagi.Data;
@@ -106,6 +108,49 @@ public class GraphLoaderTests
         Assert.Equal(characterId, character.Id);
         Assert.Equal("Akagi Renamed", character.Name);
         Assert.Single(database.All<Character>());
+    }
+
+    [Fact]
+    public async Task Update_KeepsConversationsAndMemory_EvenWhenTheFileCarriesEmptyOnes()
+    {
+        InMemoryDatabaseFactory database = new();
+        GraphData graph = CharacterGraph("Akagi", "graph-1");
+        GraphLoader loader = new(database);
+        loader.LoadGraph(graph);
+        await loader.Create(UserId, "akagi");
+
+        Character lived = Assert.Single(database.All<Character>());
+        lived.Conversations.GetCurrentConversation().AddMessage(new TextMessage { CharacterId = null, From = Message.Type.User, Text = "Hey", Time = DateTime.UtcNow });
+        lived.Memory.LongTerm.AddThought(new SingleFactThought { Fact = "Likes jump rope" });
+        await database.TrySave(lived);
+
+        // What an editor that saved every property wrote: empty state next to the real settings
+        graph.Nodes[1] = Node<Character>(new
+        {
+            Dirty = true,
+            Name = "Akagi Renamed",
+            Conversations = new { List = Array.Empty<object>(), Dirty = false, Current = (object?)null, ActiveSession = (object?)null },
+            Memory = new { Goals = new { Thoughts = Array.Empty<object>() }, ShortTerm = new { Thoughts = Array.Empty<object>() }, LongTerm = new { Thoughts = Array.Empty<object>() }, Conversations = new { Thoughts = Array.Empty<object>() } }
+        });
+        GraphLoader updater = new(database);
+        updater.LoadGraph(graph);
+        Character character = Assert.Single((await updater.Update(UserId, "akagi")).OfType<Character>());
+
+        Assert.Equal("Akagi Renamed", character.Name);
+        Assert.Equal("Hey", Assert.IsType<TextMessage>(Assert.Single(Assert.Single(character.Conversations.List).Messages)).Text);
+        Assert.Equal("Likes jump rope", Assert.Single(character.Memory.LongTerm.Thoughts).Fact);
+    }
+
+    [Fact]
+    public void Runtime_state_is_never_a_graph_setting()
+    {
+        string[] state = [.. GraphNodeUtils.GetValueProperties(typeof(Character)).Concat(GraphNodeUtils.GetValueProperties(typeof(CharacterGroup)))
+            .Where(p => !GraphNodeUtils.IsEditorVisible(p)).Select(p => p.DeclaringType!.Name + "." + p.Name).Distinct()];
+
+        Assert.Contains("Character.Conversations", state);
+        Assert.Contains("Character.Memory", state);
+        Assert.Contains("CharacterGroup.Conversations", state);
+        Assert.Contains("CharacterGroup.SharedMemory", state);
     }
 
     [Fact]

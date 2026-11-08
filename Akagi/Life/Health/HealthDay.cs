@@ -20,8 +20,39 @@ internal class HealthDay
     public int? NapMinutes { get; set; }
     public int? Steps { get; set; }
     public int? RestingHeartRate { get; set; }
+    /// <summary>Workouts the watch recorded that started on this day, started by hand or detected.</summary>
+    public List<HealthExercise> Exercises { get; set; } = [];
     public string Source { get; set; } = string.Empty;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// One exercise session from the watch (Google Health "exercise"), with what it measured during it.
+/// </summary>
+internal class HealthExercise
+{
+    /// <summary>The data point's name in Google Health, so a later sync replaces instead of duplicating it.</summary>
+    public string Id { get; set; } = string.Empty;
+    /// <summary>Google's type, e.g. JUMPING_ROPE or WALKING.</summary>
+    public string Type { get; set; } = string.Empty;
+    /// <summary>What the watch calls it, e.g. "Skipping rope".</summary>
+    public string Name { get; set; } = string.Empty;
+    public DateTime StartUtc { get; set; }
+    public DateTime EndUtc { get; set; }
+    /// <summary>Time moving, without pauses.</summary>
+    public int ActiveSeconds { get; set; }
+    public int? Calories { get; set; }
+    public int? Steps { get; set; }
+    public double? DistanceMeters { get; set; }
+    public int? AverageHeartRate { get; set; }
+    public int? ActiveZoneMinutes { get; set; }
+    /// <summary>Time in each heart rate zone.</summary>
+    public int? LightSeconds { get; set; }
+    public int? ModerateSeconds { get; set; }
+    public int? VigorousSeconds { get; set; }
+    public int? PeakSeconds { get; set; }
+    /// <summary>Recognised by the watch on its own instead of started by him.</summary>
+    public bool AutoDetected { get; set; }
 }
 
 internal class HealthSummary
@@ -38,8 +69,12 @@ internal class HealthSummary
     public int? StepsYesterday { get; init; }
     public double? AverageSteps { get; init; }
     public int? RestingHeartRate { get; init; }
+    /// <summary>The watch's exercise sessions of the last 7 days, oldest first.</summary>
+    public IReadOnlyList<HealthExercise> RecentExercises { get; init; } = [];
+    public DateTime? LatestExerciseLocalStart { get; init; }
+    public DateTime LocalToday { get; init; }
 
-    public bool HasData => LastSleep != null || StepsToday.HasValue || StepsYesterday.HasValue;
+    public bool HasData => LastSleep != null || StepsToday.HasValue || StepsYesterday.HasValue || RecentExercises.Count > 0;
 
     public bool SleptShortLastNight => LastSleepIsLastNight && LastSleep?.SleepMinutes is < ShortSleepMinutes;
 
@@ -53,6 +88,8 @@ internal class HealthSummary
         List<HealthDay> week = [.. profile.HealthDays.Where(d => string.CompareOrdinal(d.Date, weekStart) >= 0 && string.CompareOrdinal(d.Date, today) <= 0)];
         List<HealthDay> sleepDays = [.. week.Where(d => d.SleepMinutes.HasValue)];
         List<HealthDay> stepDays = [.. week.Where(d => d.Steps.HasValue && d.Date != today)];
+
+        List<HealthExercise> exercises = [.. week.SelectMany(d => d.Exercises).OrderBy(e => e.StartUtc)];
 
         HealthDay? lastSleep = profile.HealthDays
             .Where(d => d.SleepMinutes.HasValue && string.CompareOrdinal(d.Date, today) <= 0)
@@ -68,11 +105,15 @@ internal class HealthSummary
             StepsToday = profile.HealthDays.FirstOrDefault(d => d.Date == today)?.Steps,
             StepsYesterday = profile.HealthDays.FirstOrDefault(d => d.Date == yesterday)?.Steps,
             AverageSteps = stepDays.Count > 0 ? stepDays.Average(d => d.Steps!.Value) : null,
-            RestingHeartRate = week.Where(d => d.RestingHeartRate.HasValue).MaxBy(d => d.Date)?.RestingHeartRate
+            RestingHeartRate = week.Where(d => d.RestingHeartRate.HasValue).MaxBy(d => d.Date)?.RestingHeartRate,
+            RecentExercises = exercises,
+            LatestExerciseLocalStart = exercises.Count > 0 ? profile.ToLocal(exercises[^1].StartUtc) : null,
+            LocalToday = localNow.Date
         };
     }
 
-    public string Describe()
+    /// <param name="withExercise">False when the full <see cref="ActivityReport"/> follows anyway.</param>
+    public string Describe(bool withExercise = true)
     {
         List<string> parts = [];
         if (LastSleep?.SleepMinutes is int minutes)
@@ -116,7 +157,41 @@ internal class HealthSummary
         {
             parts.Add($"Resting heart rate: {RestingHeartRate} bpm");
         }
+        string exercise = withExercise ? DescribeExercise() : string.Empty;
+        if (exercise.Length > 0)
+        {
+            parts.Add(exercise);
+        }
         return string.Join(Environment.NewLine, parts);
+    }
+
+    /// <summary>
+    /// The watch's workouts of the week in one line, e.g. "Workouts on the watch (7 days): 3, 1h46m active, 114 Active
+    /// Zone Minutes; latest today 16:35 Skipping rope, 30m20s, avg heart rate 152 bpm". Interval timer workouts are
+    /// not in the profile; ActivityReport puts both together.
+    /// </summary>
+    internal string DescribeExercise()
+    {
+        if (RecentExercises.Count == 0 || LatestExerciseLocalStart is not DateTime start)
+        {
+            return string.Empty;
+        }
+        int active = RecentExercises.Sum(e => e.ActiveSeconds);
+        int zoneMinutes = RecentExercises.Sum(e => e.ActiveZoneMinutes ?? 0);
+        HealthExercise latest = RecentExercises[^1];
+        int daysAgo = (LocalToday - start.Date).Days;
+        string when = daysAgo switch { 0 => "today", 1 => "yesterday", _ => $"{daysAgo} days ago" };
+        string text = $"Workouts on the watch (7 days): {RecentExercises.Count}, {ActivityReport.Duration(active)} active";
+        if (zoneMinutes > 0)
+        {
+            text += $", {zoneMinutes} Active Zone Minutes";
+        }
+        text += $"; latest {when} {start:HH:mm} {(latest.Name.Length > 0 ? latest.Name : latest.Type)}, {ActivityReport.Duration(latest.ActiveSeconds)}";
+        if (latest.AverageHeartRate is int heartRate)
+        {
+            text += $", avg heart rate {heartRate} bpm";
+        }
+        return text;
     }
 
     /// <summary>

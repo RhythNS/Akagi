@@ -47,11 +47,14 @@ internal class Character : Savable
         }
     }
 
+    // What the character lived through, not configuration: a graph never sets it, so updates keep the history
+    [NodeIgnore]
     public ConversationContainer Conversations
     {
         get => _conversations;
         set => SetProperty(ref _conversations, value);
     }
+    [NodeIgnore]
     public Memory Memory
     {
         get => _memory;
