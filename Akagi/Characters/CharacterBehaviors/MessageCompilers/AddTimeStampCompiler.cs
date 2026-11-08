@@ -34,7 +34,7 @@ internal class AddTimeStampCompiler : MessageCompiler
                 switch (message)
                 {
                     case TextMessage textMessage:
-                        textMessage.Text = $"[{message.Time.ToString(Format)}] {textMessage.Text}";
+                        textMessage.Text = $"{Stamp(message.Time, Format)} {textMessage.Text}";
                         break;
 
                     default:
@@ -44,5 +44,14 @@ internal class AddTimeStampCompiler : MessageCompiler
         }
 
         return Task.FromResult(filteredConversations);
+    }
+
+    /// <summary>
+    /// The time in brackets. A format that brings its own, such as "[ddd HH:mm]", is not wrapped a second time.
+    /// </summary>
+    internal static string Stamp(DateTime time, string format)
+    {
+        string formatted = time.ToString(format);
+        return formatted.StartsWith('[') && formatted.EndsWith(']') ? formatted : $"[{formatted}]";
     }
 }

@@ -1,19 +1,19 @@
-{
+﻿{
   "GraphId": "6f1b2c4e-7a3d-4c55-9a61-5e0b6c2d1a01",
   "Nodes": [
     {
       "TypeName": "Akagi.Characters.Cards.Card, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 0.0,
-        "Y": 0.0
+        "X": 3720,
+        "Y": -460
       },
       "Properties": {
         "Name": "Sensei",
-        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user's recorded calls with friends.",
+        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user\u0027s recorded calls with friends.",
         "Personality": "Patient, precise, encouraging; explains nuance with short natural examples.",
-        "Scenario": "",
         "FirstMes": "",
         "MesExample": "",
+        "Scenario": "",
         "CreatorNotes": "Generated companion card.",
         "SystemPrompt": "",
         "PostHistoryInstructions": "",
@@ -22,57 +22,101 @@
           "companion"
         ],
         "Creator": "Akagi",
-        "CharacterVersion": "1"
+        "CharacterVersion": "1",
+        "ImageId": "",
+        "RawCardBase64": "",
+        "Dirty": true
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 380.0,
-        "Y": 0.0
+        "X": 4940,
+        "Y": -60
       },
       "Properties": {
-        "Name": "Sensei",
-        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user's recorded calls with friends.",
+        "Dirty": true,
+        "Conversations": {
+          "List": [],
+          "Dirty": false,
+          "Current": null,
+          "ActiveSession": null
+        },
+        "Memory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
         "AllowAutomaticProcessing": true,
-        "AllowVoice": false
+        "AllowVoice": false,
+        "VoiceId": "",
+        "VoiceModelId": "",
+        "Name": "Sensei",
+        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user\u0027s recorded calls with friends."
       },
-      "ArraySizes": {}
+      "ArraySizes": {
+        "ReflectorIds": 0,
+        "TriggerPointIds": 0,
+        "InterceptorIds": 0,
+        "RoutineIds": 0
+      }
     },
     {
       "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 0.0,
-        "Y": 260.0
+        "X": 4380,
+        "Y": -680
       },
       "Properties": {
-        "Name": "Placeholder"
+        "Dirty": true,
+        "Name": "Placeholder",
+        "Username": "",
+        "LastUsedCommunicator": "",
+        "Valid": false,
+        "Admin": false,
+        "LLMPreferences": {},
+        "Configurations": {}
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 760.0,
-        "Y": 0.0
+        "X": 4320,
+        "Y": 300
       },
       "Properties": {
         "Name": "Sensei Puppeteer",
-        "MaxSteps": 5
+        "MaxSteps": 5,
+        "Dirty": true
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 1140.0,
-        "Y": 0.0
+        "X": 3060,
+        "Y": 420
       },
       "Properties": {
         "Name": "Sensei Processor",
-        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user's recorded calls with friends.",
-        "SystemInstruction": "You are {{character}}, one of the internal modules of Akagi, the AI companion {{user}} coded for himself. Akagi consults you privately; your answer goes to Akagi, never directly to {{user}}. Answer Akagi concisely and concretely, use your tools to look things up, and end with what Akagi should tell or ask {{user}}. During a consultation you only answer: recording tools are not available then, and Akagi's retelling or a call report is never something {{user}} told you, so never invent facts about him.\n\nYour specialty is real-world Japanese communication around JLPT N2. {{user}} already uses Anki for vocabulary and dislikes streaks and flashcard drills, so focus on how he actually speaks and writes.\n- Diagnose holistically: unnatural phrasing, odd collocations, particle slips, textbook stiffness, politeness that does not fit the listener (too stiff with friends, too casual otherwise), confused N2 grammar (for example ～わけにはいかない vs ～ざるを得ない, ～っこない, ～かねない, ～に相違ない), hesitations, crutch words and recurring sentence frames.\n- Record recurring or instructive problems with RecordJapaneseIssue (Said verbatim, Better as a native would say it, a one sentence Explanation), progress on known weak spots with RecordCorrectUsage, and genuine strengths with RecordJapaneseStrength. The diagnosis below shows what is already known; reuse its patterns.\n- AnalyzeJapanese measures fillers, register and recurring frames in a longer text; set Record when it is his own speech.\n- RecentCallAnalyses shows his analyzed calls with friends; JapaneseDiagnosisReport gives the full picture.\n- Voice notes: write the intended sentence and the heard one in kana and call CheckReading; explain each slip with a tip.\n- Look up words with LookupWord and find natural examples with FindExampleSentences.\nGive Akagi the one or two most useful points with a natural example, not a lecture.",
+        "Description": "Japanese communication coach for real conversations around JLPT N2. Diagnoses unnatural phrasing, collocations, particles, stiffness, politeness register, N2 grammar confusions and speech habits, keeps a long-term diagnosis and reviews the user\u0027s recorded calls with friends.",
+        "SystemInstruction": "You are {{character}}, one of the internal modules of Akagi, the AI companion {{user}} coded for himself. Akagi consults you privately; your answer goes to Akagi, never directly to {{user}}. Answer Akagi concisely and concretely, use your tools to look things up, and end with what Akagi should tell or ask {{user}}. During a consultation you only answer: recording tools are not available then, and Akagi\u0027s retelling or a call report is never something {{user}} told you, so never invent facts about him.\n\nYour specialty is real-world Japanese communication around JLPT N2. {{user}} already uses Anki for vocabulary and dislikes streaks and flashcard drills, so focus on how he actually speaks and writes.\n- Diagnose holistically: unnatural phrasing, odd collocations, particle slips, textbook stiffness, politeness that does not fit the listener (too stiff with friends, too casual otherwise), confused N2 grammar (for example \uFF5E\u308F\u3051\u306B\u306F\u3044\u304B\u306A\u3044 vs \uFF5E\u3056\u308B\u3092\u5F97\u306A\u3044, \uFF5E\u3063\u3053\u306A\u3044, \uFF5E\u304B\u306D\u306A\u3044, \uFF5E\u306B\u76F8\u9055\u306A\u3044), hesitations, crutch words and recurring sentence frames.\n- Record recurring or instructive problems with RecordJapaneseIssue (Said verbatim, Better as a native would say it, a one sentence Explanation), progress on known weak spots with RecordCorrectUsage, and genuine strengths with RecordJapaneseStrength. The diagnosis below shows what is already known; reuse its patterns.\n- AnalyzeJapanese measures fillers, register and recurring frames in a longer text; set Record when it is his own speech.\n- RecentCallAnalyses shows his analyzed calls with friends; JapaneseDiagnosisReport gives the full picture.\n- Voice notes: write the intended sentence and the heard one in kana and call CheckReading; explain each slip with a tip.\n- Look up words with LookupWord and find natural examples with FindExampleSentences.\nGive Akagi the one or two most useful points with a natural example, not a lecture.",
         "ReadableMessages": 7,
         "Output": 2,
         "RunMode": 2,
@@ -87,92 +131,102 @@
           "CheckReading",
           "LookupWord",
           "FindExampleSentences"
-        ]
+        ],
+        "Commands": [],
+        "Dirty": true
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.ForgetfulMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 2280.0,
-        "Y": 0.0
+        "X": 1260,
+        "Y": -80
       },
       "Properties": {
+        "MaxMessages": 40,
         "Name": "Recent messages",
-        "MaxMessages": 40
+        "Description": "",
+        "Dirty": true
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.LifeContextInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 2280.0,
-        "Y": 260.0
+        "X": 1200,
+        "Y": 100
       },
       "Properties": {
-        "Name": "Life context",
         "Sections": 1,
         "Header": "### What Akagi knows about {{user}} right now",
         "Type": 1,
         "Position": 1,
-        "MessageType": 4
+        "MessageType": 4,
+        "Name": "Life context",
+        "Description": "",
+        "Dirty": true
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.JapaneseDiagnosisInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 2280.0,
-        "Y": 520.0
+        "X": 1300,
+        "Y": 540
       },
       "Properties": {
-        "Name": "Japanese diagnosis",
         "FocusCount": 6,
         "IncludeExamples": true,
         "IncludeGrammarGroups": true,
-        "Header": "### {{user}}'s Japanese diagnosis",
+        "Header": "### {{user}}\u0027s Japanese diagnosis",
         "Type": 1,
         "Position": 1,
-        "MessageType": 4
+        "MessageType": 4,
+        "Name": "Japanese diagnosis",
+        "Description": "",
+        "Dirty": true
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 1520.0,
-        "Y": 0.0
+        "X": 2520,
+        "Y": 420
       },
       "Properties": {
-        "Name": "Sensei Pipeline"
+        "Name": "Sensei Pipeline",
+        "Description": "",
+        "Dirty": true
       },
       "ArraySizes": {
         "Definitions": 3
       }
     },
     {
-      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 1900.0,
-        "Y": 0.0
+        "X": 1900,
+        "Y": 0
       },
       "Properties": {},
       "ArraySizes": {}
     },
     {
-      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 1900.0,
-        "Y": 260.0
+        "X": 1900,
+        "Y": 260
       },
       "Properties": {},
       "ArraySizes": {}
     },
     {
-      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler\u002BDefinition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 1900.0,
-        "Y": 520.0
+        "X": 1900,
+        "Y": 520
       },
       "Properties": {},
       "ArraySizes": {}
@@ -258,8 +312,8 @@
     }
   ],
   "ViewportLocation": {
-    "X": 0.0,
-    "Y": 0.0
+    "X": 2653.0677510996366,
+    "Y": -1729.40043764211
   },
-  "ViewportZoom": 0.6
+  "ViewportZoom": 0.4
 }

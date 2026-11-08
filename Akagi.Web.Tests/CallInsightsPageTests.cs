@@ -136,9 +136,10 @@ public class CallInsightsPageTests : BunitContext
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-struggle-toggle]")));
         Assert.Empty(cut.FindAll("[data-occurrence]"));
 
-        cut.Find("[data-struggle-toggle='i1']").Click();
+        // Found and clicked in one go: the page may still be rendering what it loaded in the background
+        cut.InvokeAsync(() => cut.Find("[data-struggle-toggle='i1']").Click()).Wait();
 
-        Assert.Equal(["f2", "f1"], cut.FindAll("[data-occurrence]").Select(e => e.GetAttribute("data-occurrence")));
+        cut.WaitForAssertion(() => Assert.Equal(["f2", "f1"], cut.FindAll("[data-occurrence]").Select(e => e.GetAttribute("data-occurrence"))));
         Assert.Equal(["b", "a"], cut.FindAll("[data-occurrence-call]").Select(e => e.GetAttribute("data-occurrence-call")));
         string newest = cut.Find("[data-occurrence='f2']").TextContent;
         Assert.Contains("楽しかった", newest);

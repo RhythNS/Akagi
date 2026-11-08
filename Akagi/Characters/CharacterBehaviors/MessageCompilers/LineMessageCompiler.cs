@@ -38,6 +38,9 @@ internal class LineMessageCompiler : MessageCompiler
             }
             definition.MessageCompiler = await messageCompilerDatabase.GetDocumentByIdAsync(definition.MessageCompilerId)
                 ?? throw new InvalidOperationException($"MessageCompiler with ID {definition.MessageCompilerId} not found.");
+            // Each step reads the processor's message types too. Left uninitialized they read none, so a
+            // ForgetfulMessageCompiler step dropped every message and the model saw only the injected notes.
+            await definition.MessageCompiler.Init(readableMessages, messageCompilerDatabase);
         }
     }
 

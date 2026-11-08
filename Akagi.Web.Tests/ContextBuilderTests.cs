@@ -399,8 +399,9 @@ public class ContextBuilderTests : BunitContext
         string file = (string)module.VerifyInvoke("download").Arguments[1]!;
         Assert.Contains("> [01:35] Me: うん、楽しかったです   <- here", file);
 
-        await cut.Find("[data-item='issue:i1'] [data-item-pick]").ChangeAsync(new ChangeEventArgs { Value = false });
-        Assert.Contains("(2 of 4)", cut.Find("[data-block-pick]").TextContent);
+        // Found and changed in one go: the page may render again in between (it saves the picks in the background)
+        await cut.InvokeAsync(() => cut.Find("[data-item='issue:i1'] [data-item-pick]").Change(new ChangeEventArgs { Value = false }));
+        cut.WaitForAssertion(() => Assert.Contains("(2 of 4)", cut.Find("[data-block-pick]").TextContent));
         // The examples of a dropped mistake cannot be picked on their own
         Assert.True(cut.Find("[data-item='f:f1'] [data-item-pick]").HasAttribute("disabled"));
         await cut.Find("[data-context-download]").ClickAsync(new MouseEventArgs());

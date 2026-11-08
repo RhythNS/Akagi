@@ -1,87 +1,135 @@
-{
+﻿{
   "GraphId": "6f1b2c4e-7a3d-4c55-9a61-5e0b6c2d1a10",
   "Nodes": [
     {
       "TypeName": "Akagi.Characters.Groups.CharacterGroup, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 760.0,
-        "Y": 0.0
+        "X": 1100,
+        "Y": 20
       },
       "Properties": {
+        "Dirty": true,
         "Name": "Companion",
+        "Conversations": {
+          "List": [],
+          "Dirty": false,
+          "Current": null,
+          "ActiveSession": null
+        },
+        "SharedMemory": {
+          "Goals": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "ShortTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "LongTerm": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Conversations": {
+            "Thoughts": [],
+            "Dirty": false
+          },
+          "Dirty": false
+        },
         "AllowAutomaticProcessing": true,
         "UserVisibility": 0,
         "ErrorBehavior": 1,
         "ErrorMessage": "Akagi got tangled up for a moment ({{error}}). Try again?"
       },
       "ArraySizes": {
-        "MemberCharacterIds": 4
+        "MemberCharacterIds": 4,
+        "InterceptorIds": 0,
+        "ReflectorIds": 0
       }
     },
     {
       "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 0.0,
-        "Y": 0.0
+        "X": 0,
+        "Y": 0
       },
       "Properties": {
-        "Name": "Placeholder"
+        "Dirty": true,
+        "Name": "Placeholder",
+        "Username": "",
+        "LastUsedCommunicator": "",
+        "Valid": false,
+        "Admin": false,
+        "LLMPreferences": {},
+        "Configurations": {}
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 0.0,
-        "Y": 260.0
+        "X": -80,
+        "Y": 240
       },
       "Properties": {
-        "GraphPath": "Akagi.json"
+        "GraphPath": "Akagi.json",
+        "GraphId": "",
+        "ExportNode": "",
+        "Overrides": []
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 0.0,
-        "Y": 520.0
+        "X": 0,
+        "Y": 520
       },
       "Properties": {
-        "GraphPath": "Sensei.json"
+        "GraphPath": "Sensei.json",
+        "GraphId": "",
+        "ExportNode": "",
+        "Overrides": []
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 0.0,
-        "Y": 780.0
+        "X": 0,
+        "Y": 780
       },
       "Properties": {
-        "GraphPath": "Hana.json"
+        "GraphPath": "Hana.json",
+        "GraphId": "",
+        "ExportNode": "",
+        "Overrides": []
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 0.0,
-        "Y": 1040.0
+        "X": 0,
+        "Y": 1040
       },
       "Properties": {
-        "GraphPath": "Kai.json"
+        "GraphPath": "Kai.json",
+        "GraphId": "",
+        "ExportNode": "",
+        "Overrides": []
       },
       "ArraySizes": {}
     },
     {
       "TypeName": "Akagi.Characters.Groups.Strategies.PersonaStrategy, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
       "Location": {
-        "X": 380.0,
-        "Y": 0.0
+        "X": 460,
+        "Y": 300
       },
       "Properties": {
         "Name": "Akagi speaks",
-        "Description": "Akagi answers; the others advise."
+        "Description": "Akagi answers; the others advise.",
+        "Dirty": true
       },
       "ArraySizes": {}
     }
@@ -138,8 +186,8 @@
     }
   ],
   "ViewportLocation": {
-    "X": 0.0,
-    "Y": 0.0
+    "X": -385.01407917979833,
+    "Y": -406.67727541652846
   },
-  "ViewportZoom": 0.6
+  "ViewportZoom": 0.6000000000000001
 }

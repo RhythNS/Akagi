@@ -40,6 +40,9 @@ var fileSystemBasePath = builder.AddParameter("FileSystemBasePath", false);
 
 var serilogConfig = builder.AddParameter("SerilogConfig", """{"Serilog":{"Using":["Serilog.Sinks.Console"],"MinimumLevel":{"Default":"Information","Override":{"Microsoft":"Warning","System":"Warning"}},"WriteTo":[{"Name":"Console"}],"Enrich":["FromLogContext","WithMachineName","WithThreadId"]}}""", false);
 
+var googleClientId = builder.AddParameter("GoogleClientId", true);
+var googleClientSecret = builder.AddParameter("GoogleClientSecret", true);
+
 var akagi = builder.AddProject<Akagi>("Akagi")
                    .WithReference(akagiDb, "MongoDB")
                    .WaitFor(akagiDb)
@@ -58,6 +61,8 @@ var akagi = builder.AddProject<Akagi>("Akagi")
                    .WithEnvironment("Socket__Ip", socketServerIp)
                    .WithEnvironment("Socket__Port", socketServerPort)
                    .WithEnvironment("FileSystem__BasePath", fileSystemBasePath)
+                   .WithEnvironment("GoogleHealth__ClientId", googleClientId)
+                   .WithEnvironment("GoogleHealth__ClientSecret", googleClientSecret)
                    .WithEnvironment("Serilog__Using__0", "Serilog.Sinks.Console")
                    .WithEnvironment("Serilog__MinimumLevel__Default", "Information")
                    .WithEnvironment("Serilog__MinimumLevel__Override__Microsoft", "Warning")
@@ -77,9 +82,6 @@ var analysisSql = builder.AddMySql("AnalysisSQL", mySqlPassword)
                          .WithPhpMyAdmin()
                          .WithLifetime(ContainerLifetime.Persistent);
 var akagiWebSqlDb = analysisSql.AddDatabase("AkagiWebSQLDB");
-
-var googleClientId = builder.AddParameter("GoogleClientId", true);
-var googleClientSecret = builder.AddParameter("GoogleClientSecret", true);
 
 if (webEnabled)
 {

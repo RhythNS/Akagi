@@ -149,6 +149,12 @@ public class LiveCompanionTests
             Assert.Contains(current.Messages, m => m.Text == "Hi Akagi, how was your day?");
             Assert.Contains(current.Messages, m => m.Text == ScriptedLLM.Reply);
 
+            // Akagi's model is given the user's words as a user message, not only the stored history
+            (string _, global::Akagi.Characters.Conversations.Message[] seen) = ScriptedLLM.Seen.Last(s => s.Processor == "Akagi");
+            global::Akagi.Characters.Conversations.TextMessage asked = Assert.IsType<global::Akagi.Characters.Conversations.TextMessage>(
+                seen.Last(m => m.From == global::Akagi.Characters.Conversations.Message.Type.User));
+            Assert.EndsWith("Hi Akagi, how was your day?", asked.Text);
+
             // A member's picture can be set from the group chat
             client.Send(new SendFileMessageRequestTransmission
             {
@@ -472,14 +478,29 @@ public class LiveCompanionTests
         {
         }
 
-        public Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context) =>
-            Task.FromResult(Steps(systemProcessor, context));
+        public async Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context)
+        {
+            await RecordAsync(systemProcessor, context);
+            return Steps(systemProcessor, context);
+        }
 
         public async IAsyncEnumerable<LLMStreamEvent> GetNextStepsStreamAsync(SystemProcessor systemProcessor, Context context,
             [EnumeratorCancellation] CancellationToken cancellationToken = default)
         {
             await Task.Yield();
+            await RecordAsync(systemProcessor, context);
             yield return new StreamCompleteEvent(Steps(systemProcessor, context), Reply);
+        }
+
+        /// <summary>
+        /// What each processor's model was given, built the way OpenRouterClient builds it: compiled, then the group view.
+        /// </summary>
+        public static readonly ConcurrentQueue<(string Processor, global::Akagi.Characters.Conversations.Message[] Messages)> Seen = new();
+
+        private static async Task RecordAsync(SystemProcessor systemProcessor, Context context)
+        {
+            global::Akagi.Characters.Conversations.Message[] compiled = await systemProcessor.MessageCompiler.CompileAsync(context);
+            Seen.Enqueue((systemProcessor.Name, GroupView.For(compiled, context)));
         }
 
         private static T Call<T>(T command, SystemProcessor systemProcessor, Context context, params (string Name, string Value)[] values) where T : Command

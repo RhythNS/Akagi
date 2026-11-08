@@ -291,7 +291,6 @@
 		overflow-y: auto;
 		padding: 1rem 1.25rem;
 		background: var(--tblr-body-bg);
-		scroll-behavior: smooth;
 	}
 
 	.chat-thread {
@@ -588,6 +587,8 @@
 			try
 			{
 				_jsModule = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Chat/ChatCharacterChatPage.razor.js");
+				// Follows the newest message from here on, also when the thread grows after a render
+				await _jsModule.InvokeVoidAsync("followBottom", _scrollEl);
 				_pendingScroll = true;
 				_forceScroll = true;
 				_recentCommands = [.. await _jsModule.InvokeAsync<string[]>("loadRecentCommands")];
