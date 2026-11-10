@@ -405,6 +405,32 @@ public class CallJobTests
         Assert.Equal(file.StartsWith("2026", StringComparison.Ordinal), recordedAt.HasValue);
     }
 
+    [Theory]
+    [InlineData("/home/akagi/build/calls/{0}/call.mp3")]
+    [InlineData(@"X:\old\calls\{0}\call.mp3")]
+    public void FindSource_FindsTheRecordingAfterTheStorageFolderMoved(string storedPath)
+    {
+        string storage = Path.Combine(Path.GetTempPath(), "akagi-calls-" + Guid.NewGuid().ToString("N"));
+        string id = ObjectId.GenerateNewId().ToString();
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(storage, id));
+            string moved = Path.Combine(storage, id, "call.mp3");
+            File.WriteAllBytes(moved, [1]);
+            CallJob job = new() { Id = id, SourcePath = string.Format(storedPath, id) };
+
+            Assert.Equal(moved, CallJobs.FindSource(job, storage));
+            Assert.True(CallJobs.HasRecording(job, storage));
+            Assert.Null(CallJobs.FindSource(job, Path.Combine(storage, "elsewhere")));
+            job.IsTranscript = true;
+            Assert.False(CallJobs.HasRecording(job, storage));
+        }
+        finally
+        {
+            Directory.Delete(storage, true);
+        }
+    }
+
     [Fact]
     public void Parse_ReadsSpeakerLabel()
     {

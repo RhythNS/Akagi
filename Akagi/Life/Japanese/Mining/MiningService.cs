@@ -100,7 +100,7 @@ internal class MiningService
             Text = sentence,
             Target = target.Trim(),
             AddedAt = DateTime.UtcNow,
-            State = HasAudio(job) ? MinedClipState.Queued : MinedClipState.NoAudio
+            State = CallJobs.HasRecording(job, _storageDirectory) ? MinedClipState.Queued : MinedClipState.NoAudio
         };
         await _mined.SaveDocumentAsync(mined);
         if (mined.State == MinedClipState.Queued)
@@ -209,7 +209,7 @@ internal class MiningService
         {
             string? audio = null;
             string? problem = null;
-            if (!HasAudio(job))
+            if (job.IsTranscript || CallJobs.FindSource(job, _storageDirectory) is not string source)
             {
                 problem = "This call has no recording, so only the subtitles are included.";
             }
@@ -222,7 +222,7 @@ internal class MiningService
                 audio = name + ".mp3";
                 try
                 {
-                    await _clipper.ExtractAsync(job.SourcePath, job.LearnerChannel, voices, Path.Combine(work, audio), cancellationToken);
+                    await _clipper.ExtractAsync(source, job.LearnerChannel, voices, Path.Combine(work, audio), cancellationToken);
                 }
                 catch (InvalidOperationException ex)
                 {
@@ -315,7 +315,7 @@ internal class MiningService
                 return;
             }
             CallJob? job = (await _jobs.GetForUser(sentence.UserId)).FirstOrDefault(j => j.Id == sentence.CallId);
-            if (job == null || !HasAudio(job))
+            if (job == null || job.IsTranscript || CallJobs.FindSource(job, _storageDirectory) is not string source)
             {
                 sentence.State = MinedClipState.NoAudio;
                 await _mined.SaveDocumentAsync(sentence);
@@ -341,7 +341,7 @@ internal class MiningService
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(output)!);
-                await _clipper.ClipAsync(job.SourcePath, start, end, job.LearnerChannel, voices, output, CancellationToken.None);
+                await _clipper.ClipAsync(source, start, end, job.LearnerChannel, voices, output, CancellationToken.None);
             }
             catch (Exception ex) when (ex is InvalidOperationException or IOException or UnauthorizedAccessException)
             {
@@ -421,8 +421,6 @@ internal class MiningService
         double? next = job.Segments.Where(s => s.Start > segment.Start).Select(s => (double?)s.Start).Min();
         return Math.Min(next ?? segment.Start + 6, segment.Start + 6);
     }
-
-    private static bool HasAudio(CallJob job) => !job.IsTranscript && !string.IsNullOrEmpty(job.SourcePath) && File.Exists(job.SourcePath);
 
     private static string CallName(CallJob job) =>
         !string.IsNullOrWhiteSpace(job.Partner) ? $"Call with {job.Partner}"

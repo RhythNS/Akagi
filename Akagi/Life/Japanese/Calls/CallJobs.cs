@@ -184,6 +184,35 @@ internal static partial class CallJobs
     }
 
     /// <summary>
+    /// Where the call's uploaded file is now. The stored path is absolute, so after the storage folder moved (e.g. to
+    /// another server) the file is looked for in the call's own folder under the storage directory. Null when it is gone.
+    /// </summary>
+    public static string? FindSource(CallJob job, string storageDirectory)
+    {
+        if (string.IsNullOrEmpty(job.SourcePath))
+        {
+            return null;
+        }
+        if (File.Exists(job.SourcePath))
+        {
+            return job.SourcePath;
+        }
+        if (string.IsNullOrWhiteSpace(storageDirectory) || string.IsNullOrEmpty(job.Id))
+        {
+            return null;
+        }
+        // Both separators, since the path may have been stored on another system
+        string fileName = job.SourcePath[(job.SourcePath.LastIndexOfAny(['/', '\\']) + 1)..];
+        string moved = Path.Combine(storageDirectory, job.Id, fileName);
+        return File.Exists(moved) ? moved : null;
+    }
+
+    /// <summary>
+    /// Whether the call has a recording on disk to cut audio from; a transcript upload has none.
+    /// </summary>
+    public static bool HasRecording(CallJob job, string storageDirectory) => !job.IsTranscript && FindSource(job, storageDirectory) != null;
+
+    /// <summary>
     /// The tutor analyzes and the companion delivers, found by name among the user's characters.
     /// Falls back to the given character, e.g. the one the user is talking to.
     /// </summary>

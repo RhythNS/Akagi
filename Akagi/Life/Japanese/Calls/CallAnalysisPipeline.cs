@@ -51,6 +51,11 @@ internal class CallAnalysisPipeline
 
     public string WorkDirectory(CallJob job) => Path.Combine(_options.StorageDirectory, job.Id ?? "unsaved", "parts");
 
+    /// <summary>
+    /// The uploaded file, also after the storage folder moved; the stored path when it is gone, so the error names it.
+    /// </summary>
+    private string Source(CallJob job) => CallJobs.FindSource(job, _options.StorageDirectory) ?? job.SourcePath;
+
     public async Task RunAsync(CallJob job, CancellationToken cancellationToken)
     {
         _logger.LogInformation("Call {JobId}: working on {Title} ({Status}, attempt {Attempt} of {MaxAttempts})",
@@ -100,7 +105,7 @@ internal class CallAnalysisPipeline
         job.Status = CallJobStatus.Transcribing;
         if (job.IsTranscript)
         {
-            string content = await File.ReadAllTextAsync(job.SourcePath, cancellationToken);
+            string content = await File.ReadAllTextAsync(Source(job), cancellationToken);
             job.Segments = TranscriptParser.Parse(content, job.SourcePath);
         }
         else
@@ -111,7 +116,7 @@ internal class CallAnalysisPipeline
             }
 
             // Before anything is labeled with it: a date from the name or the user wins, the recording's own comes next
-            if (job.RecordedAt == null && await _splitter.ReadRecordingDateAsync(job.SourcePath, cancellationToken) is DateTime recorded)
+            if (job.RecordedAt == null && await _splitter.ReadRecordingDateAsync(Source(job), cancellationToken) is DateTime recorded)
             {
                 job.RecordedAt = recorded;
                 _logger.LogInformation("Call {JobId}: recorded on {Date:yyyy-MM-dd} according to the file", job.Id, recorded);
@@ -147,7 +152,8 @@ internal class CallAnalysisPipeline
 
     private async Task TranscribeMixedAsync(CallJob job, CancellationToken cancellationToken)
     {
-        IReadOnlyList<AudioPart> parts = await _splitter.SplitAsync(job.SourcePath, PartLength, job.LearnerChannel, WorkDirectory(job), cancellationToken);
+        string source = Source(job);
+        IReadOnlyList<AudioPart> parts = await _splitter.SplitAsync(source, PartLength, job.LearnerChannel, WorkDirectory(job), cancellationToken);
         for (int i = job.TranscribedParts; i < parts.Count; i++)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -169,9 +175,10 @@ internal class CallAnalysisPipeline
         }
         LearnerChannel partnerChannel = job.LearnerChannel == LearnerChannel.Left ? LearnerChannel.Right : LearnerChannel.Left;
         string work = WorkDirectory(job);
-        IReadOnlyList<AudioPart> learnerParts = await _splitter.SplitAsync(job.SourcePath, PartLength, job.LearnerChannel, Path.Combine(work, "learner"), cancellationToken);
-        IReadOnlyList<AudioPart> partnerParts = await _splitter.SplitAsync(job.SourcePath, PartLength, partnerChannel, Path.Combine(work, "partner"), cancellationToken);
-        IReadOnlyList<AudioPart> mixParts = await _splitter.SplitBalancedAsync(job.SourcePath, PartLength, Path.Combine(work, "mix"), cancellationToken);
+        string source = Source(job);
+        IReadOnlyList<AudioPart> learnerParts = await _splitter.SplitAsync(source, PartLength, job.LearnerChannel, Path.Combine(work, "learner"), cancellationToken);
+        IReadOnlyList<AudioPart> partnerParts = await _splitter.SplitAsync(source, PartLength, partnerChannel, Path.Combine(work, "partner"), cancellationToken);
+        IReadOnlyList<AudioPart> mixParts = await _splitter.SplitBalancedAsync(source, PartLength, Path.Combine(work, "mix"), cancellationToken);
 
         int count = Math.Min(learnerParts.Count, Math.Min(partnerParts.Count, mixParts.Count));
         _logger.LogInformation("Call {JobId}: split into {Parts} parts of {Minutes} minutes, three passes each; {Done} already transcribed",

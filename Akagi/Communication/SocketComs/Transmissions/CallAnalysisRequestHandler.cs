@@ -77,7 +77,7 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
                     }
                     JapaneseDiagnosis? diagnosis = await _diagnoses.GetForUser(userId);
                     await PrepareAsync(jobs, diagnosis);
-                    response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs);
+                    response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs, _storageDirectory);
                     break;
                 }
 
@@ -237,7 +237,7 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
         await _jobs.SaveDocumentAsync(job);
         _logger.LogInformation("Call {JobId}: finding {FindingId} marked {Feedback}", job.Id, finding.Id, finding.Feedback);
 
-        response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs);
+        response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs, _storageDirectory);
         return null;
     }
 
@@ -314,7 +314,7 @@ internal class CallAnalysisRequestHandler : SocketTransmissionHandler
             await _jobs.SaveDocumentAsync(job);
             _logger.LogInformation("Call {JobId}: date set to {Date:yyyy-MM-dd}", job.Id, date);
         }
-        response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs);
+        response.Detail = CallAnalysisViews.Detail(job, diagnosis, jobs, _storageDirectory);
         response.Calls = [.. CallAnalysisViews.Newest(jobs).Select(CallAnalysisViews.Summary)];
         return null;
     }

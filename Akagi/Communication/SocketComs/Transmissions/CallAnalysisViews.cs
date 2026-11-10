@@ -45,7 +45,7 @@ internal static partial class CallAnalysisViews
         Cost = job.Costs.Count > 0 ? CallCosts.Total(job) : null
     };
 
-    public static CallAnalysisDetail Detail(CallJob job, JapaneseDiagnosis? diagnosis, IReadOnlyCollection<CallJob> allJobs)
+    public static CallAnalysisDetail Detail(CallJob job, JapaneseDiagnosis? diagnosis, IReadOnlyCollection<CallJob> allJobs, string storageDirectory)
     {
         CallAnalysisDetail detail = new()
         {
@@ -111,7 +111,7 @@ internal static partial class CallAnalysisViews
                 detail.Metrics = Metrics(job, allJobs);
             }
         }
-        detail.HasAudio = !job.IsTranscript && !string.IsNullOrEmpty(job.SourcePath) && File.Exists(job.SourcePath);
+        detail.HasAudio = CallJobs.HasRecording(job, storageDirectory);
         return detail;
     }
 
