@@ -26,15 +26,14 @@ internal class HealthCommand : TextCommand
         }
 
         IGoogleHealthAccountDatabase accounts = context.DatabaseFactory.GetDatabase<IGoogleHealthAccountDatabase>();
-        GoogleHealthAccount account = await accounts.GetOrCreate(context.User.Id!);
+        IGoogleHealthLinking linking = services.GetRequiredService<IGoogleHealthLinking>();
         string verb = args.Length > 0 ? args[0].ToLowerInvariant() : "status";
         string message;
 
         switch (verb)
         {
             case "link":
-                string url = client.StartAuthorization(account);
-                await accounts.SaveDocumentAsync(account);
+                string url = await linking.StartAsync(context.User.Id!);
                 message = "Your Google account needs a Google Health profile first: sign in once in the Google Health app " +
                           $"(moving your Fitbit account over if asked).{Environment.NewLine}" +
                           "Then open this link, allow access, copy the address your browser ends up on (even if the page shows something else) " +
@@ -49,15 +48,7 @@ internal class HealthCommand : TextCommand
                 }
                 try
                 {
-                    await client.CompleteAuthorizationAsync(account, string.Join(string.Empty, args.Skip(1)), CancellationToken.None);
-                    await accounts.SaveDocumentAsync(account);
-                    if (account.LastError == GoogleHealthClient.NotLinkedMessage)
-                    {
-                        message = $"Google access granted, but no data yet. {GoogleHealthClient.NotLinkedMessage}";
-                        break;
-                    }
-                    GoogleHealthSyncResult? result = await services.GetRequiredService<IGoogleHealthSync>().SyncUserAsync(context.User.Id!);
-                    message = $"Google Health linked. {result}";
+                    message = await linking.CompleteAsync(context.User.Id!, string.Join(string.Empty, args.Skip(1)));
                 }
                 catch (Exception ex) when (ex is GoogleHealthAuthException or HttpRequestException)
                 {
@@ -84,6 +75,7 @@ internal class HealthCommand : TextCommand
                 break;
 
             case "unlink":
+                GoogleHealthAccount account = await accounts.GetOrCreate(context.User.Id!);
                 await client.RevokeAsync(account, CancellationToken.None);
                 account.AccessToken = string.Empty;
                 account.RefreshToken = string.Empty;
@@ -94,7 +86,8 @@ internal class HealthCommand : TextCommand
                 break;
 
             default:
-                message = Status(account);
+                GoogleHealthAccount current = await accounts.GetOrCreate(context.User.Id!);
+                message = Status(current, linking.ExpiresAtUtc(current));
                 break;
         }
 
@@ -102,7 +95,7 @@ internal class HealthCommand : TextCommand
         return CommandResult.Ok;
     }
 
-    internal static string Status(GoogleHealthAccount account)
+    internal static string Status(GoogleHealthAccount account, DateTime? expiresAtUtc = null)
     {
         if (!account.IsConnected)
         {
@@ -112,6 +105,9 @@ internal class HealthCommand : TextCommand
             ? account.LastSyncUtc.Value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC"
             : "never";
         string error = string.IsNullOrEmpty(account.LastError) ? string.Empty : $" Last error: {account.LastError}";
-        return $"Google Health linked since {account.ConnectedAt?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}, last sync {lastSync}.{error}";
+        string renew = expiresAtUtc.HasValue
+            ? $" Google drops the link around {expiresAtUtc.Value.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)} UTC; renew before then with /health link or from the website's home page."
+            : string.Empty;
+        return $"Google Health linked since {account.ConnectedAt?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}, last sync {lastSync}.{error}{renew}";
     }
 }

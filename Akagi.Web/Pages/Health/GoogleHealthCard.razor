@@ -1,0 +1,256 @@
+@using Akagi.Bridge.Chat.Models
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Icons
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject NavigationManager NavigationManager
+
+@if (_status != null)
+{
+	GoogleHealthState state = GoogleHealthView.State(_status, DateTime.UtcNow);
+	<div class="card card-sm mb-4 @CardClass(state)" data-health-state="@state">
+		<div class="card-body">
+			<div class="row align-items-center g-3">
+				<div class="col-auto">
+					<span class="avatar @AvatarClass(state)">
+						<Icon IconType="@Icons.Heart" Size="20" />
+					</span>
+				</div>
+				<div class="col min-w-0">
+					<div class="fw-medium" data-health-headline>@Headline(state)</div>
+					<div class="text-secondary small" data-health-detail>@Detail(state)</div>
+				</div>
+				@if (state != GoogleHealthState.NotConfigured)
+				{
+					<div class="col-12 col-md-auto d-flex flex-wrap gap-2">
+						@if (_status.Linked)
+						{
+							<button type="button" class="btn btn-sm btn-ghost-secondary d-inline-flex align-items-center gap-1" disabled="@_busy" @onclick="SyncAsync" data-health-sync>
+								<Icon IconType="@Icons.Refresh" Size="16" />
+								<span>Sync now</span>
+							</button>
+						}
+						@if (_authorizationUrl == null)
+						{
+							<button type="button" class="btn btn-sm @(state == GoogleHealthState.Ok ? "btn-outline-primary" : "btn-primary")" disabled="@_busy" @onclick="StartAsync" data-health-renew>
+								@(state == GoogleHealthState.NotLinked ? "Link Google Health" : "Renew link")
+							</button>
+						}
+					</div>
+				}
+			</div>
+
+			@if (_authorizationUrl != null)
+			{
+				<div class="border-top mt-3 pt-3" data-health-steps>
+					<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+						<span class="small">1.</span>
+						<a href="@_authorizationUrl" target="_blank" rel="noopener" class="btn btn-sm btn-primary" data-health-consent>Open Google</a>
+						<span class="small text-secondary">and allow access.</span>
+					</div>
+					@if (_returnsHere)
+					{
+						<div class="small text-secondary">2. Google brings you back to this site and the link is renewed there.</div>
+					}
+					else
+					{
+						<div class="small mb-2">2. Copy the address your browser ends up on (it may show Google's homepage) and paste it here:</div>
+						<div class="input-group input-group-sm">
+							<input type="text" class="form-control" placeholder="https://www.google.com/?state=...&code=..."
+								   value="@_code" @oninput="OnCodeInput" @onkeydown="OnCodeKeyDown" disabled="@_busy" data-health-code />
+							<button type="button" class="btn btn-primary" disabled="@(_busy || string.IsNullOrWhiteSpace(_code))" @onclick="CompleteAsync" data-health-finish>Finish</button>
+						</div>
+					}
+					<button type="button" class="btn btn-sm btn-link px-0 mt-1" disabled="@_busy" @onclick="Cancel">Cancel</button>
+				</div>
+			}
+
+			@if (_busy)
+			{
+				<div class="small text-secondary mt-2">Talking to Google...</div>
+			}
+			@if (_message != null)
+			{
+				<div class="alert alert-success mt-3 mb-0 small" role="status" data-health-message>@_message</div>
+			}
+			@if (_error != null)
+			{
+				<div class="alert alert-danger mt-3 mb-0 small" role="alert" data-health-error>@_error</div>
+			}
+		</div>
+	</div>
+}
+
+@code {
+	private GoogleHealthStatus? _status;
+	private string? _authorizationUrl;
+	private bool _returnsHere;
+	private string? _code;
+	private bool _busy;
+	private string? _message;
+	private string? _error;
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override async Task OnInitializedAsync()
+	{
+		await SendAsync(new GoogleHealthRequestTransmission { Action = GoogleHealthAction.Status });
+		// A failed first look stays quiet: the dashboard should not shout about a backend that is still starting
+		_error = null;
+	}
+
+	private async Task StartAsync()
+	{
+		_message = null;
+		GoogleHealthResponseTransmission? response = await SendAsync(new GoogleHealthRequestTransmission { Action = GoogleHealthAction.Start });
+		if (response?.AuthorizationUrl is { Length: > 0 } url)
+		{
+			_authorizationUrl = url;
+			_returnsHere = GoogleHealthView.ReturnsHere(url, NavigationManager.BaseUri);
+			_code = null;
+		}
+	}
+
+	private async Task CompleteAsync()
+	{
+		if (string.IsNullOrWhiteSpace(_code) || _busy)
+		{
+			return;
+		}
+		_message = null;
+		GoogleHealthResponseTransmission? response = await SendAsync(new GoogleHealthRequestTransmission { Action = GoogleHealthAction.Complete, Code = _code.Trim() });
+		if (response != null && response.Error == null)
+		{
+			_message = response.Message;
+			_authorizationUrl = null;
+			_code = null;
+		}
+	}
+
+	private async Task SyncAsync()
+	{
+		_message = null;
+		GoogleHealthResponseTransmission? response = await SendAsync(new GoogleHealthRequestTransmission { Action = GoogleHealthAction.Sync });
+		if (response != null && response.Error == null)
+		{
+			_message = response.Message;
+		}
+	}
+
+	private async Task OnCodeInput(ChangeEventArgs args)
+	{
+		_code = args.Value?.ToString();
+		// A pasted address is whole; sending it right away saves a click
+		if (GoogleHealthView.LooksComplete(_code))
+		{
+			await CompleteAsync();
+		}
+	}
+
+	private Task OnCodeKeyDown(KeyboardEventArgs args) => args.Key == "Enter" ? CompleteAsync() : Task.CompletedTask;
+
+	private void Cancel()
+	{
+		_authorizationUrl = null;
+		_code = null;
+		_error = null;
+	}
+
+	/// <summary>
+	/// Failures end up in <see cref="_error"/>; null means there is no response to work with.
+	/// </summary>
+	private async Task<GoogleHealthResponseTransmission?> SendAsync(GoogleHealthRequestTransmission transmission)
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			_error = "The connection to the backend is gone. Try again in a moment.";
+			return null;
+		}
+
+		_busy = true;
+		_error = null;
+		StateHasChanged();
+		try
+		{
+			GoogleHealthResponseTransmission response = await new GoogleHealthRequest(transmission).Get(client, GoogleHealthRequest.Timeout);
+			_status = response.Status;
+			_error = response.Error;
+			return response;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Try again in a moment.";
+			return null;
+		}
+		finally
+		{
+			_busy = false;
+		}
+	}
+
+	private string Headline(GoogleHealthState state) => state switch
+	{
+		GoogleHealthState.NotConfigured => "Google Health is not configured on the server",
+		GoogleHealthState.NotLinked => "Google Health is not linked",
+		GoogleHealthState.Expired => "Google Health link expired",
+		GoogleHealthState.Soon => $"Google Health link runs out in {GoogleHealthView.Remaining(_status!.ExpiresAtUtc!.Value - DateTime.UtcNow)}",
+		_ => "Google Health linked"
+	};
+
+	private string Detail(GoogleHealthState state)
+	{
+		GoogleHealthStatus status = _status!;
+		string lastSync = status.LastSyncUtc.HasValue ? $"Last sync {GoogleHealthView.When(status.LastSyncUtc.Value)}." : "Not synced yet.";
+		return state switch
+		{
+			GoogleHealthState.NotConfigured => "Set GoogleHealth:ClientId and GoogleHealth:ClientSecret to sync sleep, steps and heart rate.",
+			GoogleHealthState.NotLinked => "Link it so sleep, steps and resting heart rate sync automatically.",
+			GoogleHealthState.Expired => "Renew it to keep sleep, steps and heart rate syncing. " + lastSync,
+			_ when status.ExpiresAtUtc is { } expires =>
+				$"Renew by {GoogleHealthView.When(expires)} ({GoogleHealthView.Remaining(expires - DateTime.UtcNow)} left). {lastSync}"
+				+ (string.IsNullOrEmpty(status.LastError) ? string.Empty : $" Last error: {status.LastError}"),
+			_ => lastSync + (string.IsNullOrEmpty(status.LastError) ? string.Empty : $" Last error: {status.LastError}")
+		};
+	}
+
+	private static string CardClass(GoogleHealthState state) => state switch
+	{
+		GoogleHealthState.Expired => "border-danger",
+		GoogleHealthState.Soon => "border-warning",
+		_ => string.Empty
+	};
+
+	private static string AvatarClass(GoogleHealthState state) => state switch
+	{
+		GoogleHealthState.Ok => "bg-success-lt text-success",
+		GoogleHealthState.Soon => "bg-warning-lt text-warning",
+		GoogleHealthState.Expired or GoogleHealthState.NotLinked => "bg-danger-lt text-danger",
+		_ => "bg-secondary-lt text-secondary"
+	};
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_status == null && SocketClientContainer.IsConnected)
+			{
+				await SendAsync(new GoogleHealthRequestTransmission { Action = GoogleHealthAction.Status });
+				_error = null;
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+	}
+}

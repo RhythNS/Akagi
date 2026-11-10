@@ -1,0 +1,72 @@
+@page "/Health/Callback"
+
+@using Akagi.Bridge.Chat.Transmissions.Requests
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Services.Sockets
+@using Akagi.Web.Services.Sockets.Requests
+
+@inject ISocketClientContainer SocketClientContainer
+@inject NavigationManager NavigationManager
+
+<PageTitle>Google Health - Akagi</PageTitle>
+
+@* Google sends the browser here after consent when GoogleHealth:RedirectUri points at this page *@
+<div class="card mx-auto" style="max-width: 36rem;">
+	<div class="card-body">
+		<h2 class="card-title">Google Health</h2>
+		@if (_error != null)
+		{
+			<div class="alert alert-danger" role="alert" data-health-error>@_error</div>
+		}
+		else if (_message != null)
+		{
+			<div class="alert alert-success" role="status" data-health-message>@_message</div>
+		}
+		else
+		{
+			<div class="text-secondary">Finishing the link...</div>
+		}
+		<a href="/" class="btn btn-primary">Back to the dashboard</a>
+	</div>
+</div>
+
+@code {
+	private string? _message;
+	private string? _error;
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		// Only once and only in the live circuit: the page is prerendered too, and Google's code works a single time
+		if (!firstRender)
+		{
+			return;
+		}
+		await FinishAsync();
+		StateHasChanged();
+	}
+
+	private async Task FinishAsync()
+	{
+		SocketClient? client = await SocketClientContainer.EnsureConnectedAsync();
+		if (client is null || !SocketClientContainer.IsConnected)
+		{
+			_error = "The connection to the backend is gone. Reload this page in a moment.";
+			return;
+		}
+
+		try
+		{
+			GoogleHealthResponseTransmission response = await new GoogleHealthRequest(new GoogleHealthRequestTransmission
+			{
+				Action = GoogleHealthAction.Complete,
+				Code = NavigationManager.Uri
+			}).Get(client, GoogleHealthRequest.Timeout);
+			_error = response.Error;
+			_message = response.Message;
+		}
+		catch (TimeoutException)
+		{
+			_error = "That took too long. Check the dashboard to see whether the link went through.";
+		}
+	}
+}

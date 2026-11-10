@@ -22,6 +22,7 @@ static class DependencyInjection
         services.AddHttpClient<IGoogleHealthClient, GoogleHealthClient>();
         services.AddSingleton<IGoogleHealthAccountDatabase, GoogleHealthAccountDatabase>();
         services.AddTransient<IGoogleHealthSync, GoogleHealthSync>();
+        services.AddTransient<IGoogleHealthLinking, GoogleHealthLinking>();
         services.AddHostedService<GoogleHealthSyncService>();
     }
 }

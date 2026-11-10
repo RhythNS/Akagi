@@ -242,7 +242,7 @@ internal class GoogleHealthClient : IGoogleHealthClient
             // The refresh token is gone for good (revoked, or seven days old for a client in testing); link again
             account.AccessToken = string.Empty;
             account.RefreshToken = string.Empty;
-            account.LastError = "The Google Health link expired. Link again with /health link.";
+            account.LastError = "The Google Health link expired. Renew it on the website's home page or with /health link.";
             await persist(account);
             throw;
         }

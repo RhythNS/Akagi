@@ -37,6 +37,11 @@ internal class GoogleHealthOptions
     /// Exercise sessions are few and come on one page, so they are fetched further back: a weekly report sees them all.
     /// </summary>
     public int ExerciseDaysToSync { get; set; } = 14;
+    /// <summary>
+    /// How long a link lasts before the user has to link again: seven days while the OAuth client is in "Testing".
+    /// Set it to 0 once the client is published, so no renewal is asked for.
+    /// </summary>
+    public int LinkLifetimeDays { get; set; } = 7;
 }
 
 /// <summary>
