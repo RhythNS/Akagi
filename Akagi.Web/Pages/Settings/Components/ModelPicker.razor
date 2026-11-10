@@ -26,26 +26,26 @@
 			}
 			@for (int i = 0; i < _matches.Count; i++)
 			{
-				LLMModel model = _matches[i];
+				LLMModel option = _matches[i];
 				int index = i;
 				<button type="button"
 						role="option"
 						aria-selected="@(index == _active ? "true" : "false")"
 						class="dropdown-item d-flex justify-content-between align-items-start gap-3 @(index == _active ? "active" : "")"
-						@onmousedown="() => PickAsync(model)"
+						@onmousedown="() => PickAsync(option)"
 						@onmousedown:preventDefault
 						@onmouseover="() => _active = index">
 					<span class="text-truncate">
-						<span class="d-block fw-medium text-truncate">@model.Name</span>
-						<span class="d-block small opacity-75 text-truncate">@model.Id</span>
+						<span class="d-block fw-medium text-truncate">@option.Name</span>
+						<span class="d-block small opacity-75 text-truncate">@option.Id</span>
 					</span>
 					<span class="flex-shrink-0 text-end small">
-						@if (NeedsTools && !model.SupportsTools)
+						@if (NeedsTools && !option.SupportsTools)
 						{
 							<span class="badge bg-warning-lt d-block mb-1">no tools</span>
 						}
-						<span class="d-block opacity-75">@ModelSearch.FormatPrice(model)</span>
-						<span class="d-block opacity-75">@ModelSearch.FormatContext(model.ContextLength)</span>
+						<span class="d-block opacity-75">@ModelSearch.FormatPrice(option)</span>
+						<span class="d-block opacity-75">@ModelSearch.FormatContext(option.ContextLength)</span>
 					</span>
 				</button>
 			}

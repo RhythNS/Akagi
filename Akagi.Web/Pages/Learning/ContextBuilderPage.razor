@@ -289,12 +289,12 @@
 						else
 						{
 							<div class="d-flex flex-wrap align-items-center gap-1">
-								@foreach (ContextSection section in ContextSections.For(block.Kind))
+								@foreach (ContextSection part in ContextSections.For(block.Kind))
 								{
-									bool on = block.Has(section.Key);
+									bool on = block.Has(part.Key);
 									<button type="button" class="btn btn-sm py-0 px-2 @(on ? "btn-primary" : "btn-outline-secondary")" aria-pressed="@(on ? "true" : "false")"
-											data-section="@section.Key" @onclick="() => ToggleSectionAsync(block, section.Key)">
-										@section.Label
+											data-section="@part.Key" @onclick="() => ToggleSectionAsync(block, part.Key)">
+										@part.Label
 									</button>
 								}
 							</div>
