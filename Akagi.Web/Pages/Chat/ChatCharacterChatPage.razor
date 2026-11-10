@@ -129,7 +129,7 @@
 
 					@foreach (Message baseMessage in conv.Messages)
 					{
-						if (baseMessage is not TextMessage textMessage)
+						if (baseMessage is not TextMessage textMessage || !textMessage.IsShownInChat)
 						{
 							continue;
 						}
@@ -146,9 +146,9 @@
 						lastDate = currentDate;
 
 						bool fromUser = textMessage.From == Message.Type.User;
-						bool isSystem = textMessage.From == Message.Type.System;
+						bool isNotice = textMessage.From == Message.Type.Notice;
 						bool isStreaming = IsMessageStreaming(textMessage);
-						string senderName = fromUser ? "You" : (isSystem ? "System" : DisplayName);
+						string senderName = fromUser ? "You" : (isNotice ? "System" : DisplayName);
 
 						<div class="message-row @(fromUser ? "from-user" : "from-character")">
 							@if (!fromUser)
@@ -1137,7 +1137,7 @@
 
 			foreach (Message msg in conv.Messages)
 			{
-				if (msg is TextMessage textMsg)
+				if (msg is TextMessage { IsShownInChat: true } textMsg)
 				{
 					string sender = textMsg.From == Message.Type.User ? "You" : DisplayName;
 					sb.AppendLine($"**{sender}** ({textMsg.Time.ToLocalTime():t}):");

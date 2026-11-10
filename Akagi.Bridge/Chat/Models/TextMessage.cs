@@ -9,7 +9,14 @@ public class TextMessage
     {
         User = 1,
         Character = 2,
-        System = 4
+        /// <summary>
+        /// An instruction for the character (routines, consultations, call reports); the user does not see it.
+        /// </summary>
+        System = 4,
+        /// <summary>
+        /// The bot telling the user something directly, such as a command reply or an error. Never stored in a conversation.
+        /// </summary>
+        Notice = 8
     }
 
     [Key(0)]

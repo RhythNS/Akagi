@@ -128,7 +128,7 @@ internal class SocketService : Communicator, IStreamingCommunicator, IHostedServ
         {
             Message = new Bridge.Chat.Models.TextMessage
             {
-                From = Message.ToBridgeType(Message.Type.System),
+                From = Bridge.Chat.Models.TextMessage.Type.Notice,
                 Text = message,
                 Time = DateTime.UtcNow
             },
@@ -170,7 +170,7 @@ internal class SocketService : Communicator, IStreamingCommunicator, IHostedServ
         {
             Message = new Bridge.Chat.Models.TextMessage
             {
-                From = Message.ToBridgeType(Message.Type.System),
+                From = Bridge.Chat.Models.TextMessage.Type.Notice,
                 Text = message,
                 Time = DateTime.UtcNow
             },
