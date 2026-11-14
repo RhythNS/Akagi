@@ -1,4 +1,6 @@
-﻿namespace Akagi.Characters.Conversations;
+﻿using MongoDB.Bson.Serialization.Attributes;
+
+namespace Akagi.Characters.Conversations;
 
 internal abstract class Message
 {
@@ -36,6 +38,13 @@ internal abstract class Message
     public required DateTime Time { get; set; }
     public required Type From { get; set; }
     public required string? CharacterId { get; set; }
+
+    /// <summary>
+    /// Said inside a group and not to the user, such as an advisor answering a consultation. The members' models still
+    /// see it; the user's chat history leaves it out.
+    /// </summary>
+    [BsonIgnoreIfDefault]
+    public bool Internal { get; set; }
 
     public abstract Message Copy();
 

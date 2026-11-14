@@ -72,6 +72,8 @@ internal class ConsultCommand : Command
             return Reply(context, $"There is no advisor called '{memberName}'. Available: {available}.");
         }
 
+        // The request and everything the advisor says or does stay between the members; the user sees the persona's reply
+        IDisposable consultation = Conversation.BeginInternal();
         context.Conversation.AddMessage(new TextMessage
         {
             From = Message.Type.System,
@@ -110,6 +112,7 @@ internal class ConsultCommand : Command
         finally
         {
             Depth.Value--;
+            consultation.Dispose();
         }
 
         string answer = CollectAnswer(context.Conversation.Messages.Skip(before), advisor.Id);

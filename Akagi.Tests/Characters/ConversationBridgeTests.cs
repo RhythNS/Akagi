@@ -1,6 +1,8 @@
 using Akagi.Characters;
 using Akagi.Characters.Conversations;
 using Akagi.Receivers.Commands.Life;
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization;
 using BridgeMessage = Akagi.Bridge.Chat.Models.TextMessage;
 
 namespace Akagi.Tests.Characters;
@@ -24,5 +26,44 @@ public class ConversationBridgeTests
 
         Assert.Equal(["Hi", "Hey you", "(voice message)"], bridge.Messages.Select(m => m.Text));
         Assert.Equal(BridgeMessage.Type.Character, bridge.Messages[1].From);
+    }
+
+    [Fact]
+    public void AConsultedAdvisorsAnswerStaysOutOfTheChat()
+    {
+        DateTime time = new(2026, 11, 14, 20, 29, 0, DateTimeKind.Utc);
+        Conversation persona = new() { Id = 1, Time = time };
+        Conversation group = new() { Id = 1, Time = time };
+        AggregateConversation conversation = new(group, [persona]);
+        conversation.AddMessage(new TextMessage { From = Message.Type.User, Text = "Add the workout import to Life", Time = time, CharacterId = null });
+        using (Conversation.BeginInternal())
+        {
+            conversation.AddMessage(new TextMessage { From = Message.Type.System, Text = "[System] [Consultation for Ren from Akagi] add it", Time = time, CharacterId = null });
+            conversation.AddMessage(new CommandMessage { Command = new RecordMoodCommand(), Output = "Created #1", From = Message.Type.Character, Time = time, CharacterId = "ren" });
+            conversation.AddMessage(new TextMessage { From = Message.Type.Character, Text = "Done, created #1.", Time = time, CharacterId = "ren" });
+        }
+        conversation.AddMessage(new TextMessage { From = Message.Type.Character, Text = "I made my first ticket!", Time = time, CharacterId = "akagi" });
+
+        Assert.Equal(["Add the workout import to Life", "I made my first ticket!"], conversation.ToBridgeModel().Messages.Select(m => m.Text));
+        Assert.Equal(["Add the workout import to Life", "I made my first ticket!"], persona.ToBridgeModel().Messages.Select(m => m.Text));
+        // A group that shows its intermediate steps shows them in the history too
+        Assert.Contains("Done, created #1.", group.ToBridgeModel(includeInternal: true).Messages.Select(m => m.Text));
+        // The members' models still read the answer as the advisor's own words
+        TextMessage answer = group.Messages.OfType<TextMessage>().Single(m => m.CharacterId == "ren");
+        Assert.Equal(Message.Type.Character, answer.From);
+        Assert.True(answer.Internal);
+        Assert.True(answer.Copy().Internal);
+    }
+
+    [Fact]
+    public void OnlyInternalMessagesStoreTheFlag()
+    {
+        DateTime time = new(2026, 11, 14, 20, 29, 0, DateTimeKind.Utc);
+        TextMessage shown = new() { From = Message.Type.Character, Text = "Hi", Time = time, CharacterId = null };
+        TextMessage hidden = new() { From = Message.Type.Character, Text = "Hi", Time = time, CharacterId = null, Internal = true };
+
+        Assert.False(shown.ToBsonDocument().Contains(nameof(Message.Internal)));
+        Assert.True(hidden.ToBsonDocument()[nameof(Message.Internal)].AsBoolean);
+        Assert.True(BsonSerializer.Deserialize<TextMessage>(hidden.ToBsonDocument()).Internal);
     }
 }

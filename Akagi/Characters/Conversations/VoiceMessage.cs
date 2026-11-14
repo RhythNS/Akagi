@@ -14,7 +14,8 @@ internal class VoiceMessage : Message
             From = From,
             Content = Content,
             VoiceId = VoiceId,
-            CharacterId = CharacterId
+            CharacterId = CharacterId,
+            Internal = Internal
         };
     }
 }

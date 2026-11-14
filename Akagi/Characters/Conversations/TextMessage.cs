@@ -27,7 +27,8 @@ internal class TextMessage : Message
             Time = Time,
             From = From,
             Text = Text,
-            CharacterId = CharacterId
+            CharacterId = CharacterId,
+            Internal = Internal
         };
     }
 

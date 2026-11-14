@@ -16,7 +16,8 @@ internal class CommandMessage : Message
             From = From,
             Command = Command,
             Output = Output,
-            CharacterId = CharacterId
+            CharacterId = CharacterId,
+            Internal = Internal
         };
     }
 

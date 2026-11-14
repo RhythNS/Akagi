@@ -147,8 +147,8 @@ internal class AggregateConversation : Conversation
         return _master.CountWords(filter);
     }
 
-    public override Bridge.Chat.Models.Conversation ToBridgeModel()
+    public override Bridge.Chat.Models.Conversation ToBridgeModel(bool includeInternal = false)
     {
-        return _master.ToBridgeModel();
+        return _master.ToBridgeModel(includeInternal);
     }
 }

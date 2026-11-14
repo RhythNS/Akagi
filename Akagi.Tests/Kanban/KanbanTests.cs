@@ -675,8 +675,17 @@ public class KanbanConsultationTests
         SinglePuppeteer puppeteer = new() { Name = "Ren Puppeteer", MaxSteps = 3, SystemProcessorId = processor.Id! };
         await puppeteer.Init(NullLogger.Instance, test.Context, processors);
 
-        await puppeteer.ProcessAsync();
+        // As inside Consult: what the module says and does is between the members
+        using (Akagi.Characters.Conversation.BeginInternal())
+        {
+            await puppeteer.ProcessAsync();
+        }
 
+        Message[] added = [.. test.Conversation.Messages.Skip(1)];
+        Assert.NotEmpty(added);
+        Assert.All(added, m => Assert.True(m.Internal));
+        Assert.False(test.Conversation.Messages[0].Internal);
+        Assert.Equal(["Finished the data model!"], test.Conversation.ToBridgeModel().Messages.Select(m => m.Text));
         Assert.Contains("ShowBoard", llm.OfferedTools[0]);
         Assert.Equal(changes, llm.OfferedTools[0].Contains("MoveTicket"));
         KanbanTicket ticket = test.Ticket(1);

@@ -83,16 +83,52 @@ internal class Conversation : DirtyTrackable
     /// </summary>
     public bool IsIncognito => IsCompleted && EndMode == ConversationEndMode.Incognito;
 
+    private static readonly AsyncLocal<int> InternalDepth = new();
+
+    /// <summary>
+    /// Until disposed, messages added on this async flow are marked <see cref="Message.Internal"/>, e.g. everything an
+    /// advisor says and does while it is consulted.
+    /// </summary>
+    public static IDisposable BeginInternal()
+    {
+        InternalDepth.Value++;
+        return new InternalScope();
+    }
+
+    private sealed class InternalScope : IDisposable
+    {
+        private bool _disposed;
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                _disposed = true;
+                InternalDepth.Value--;
+            }
+        }
+    }
+
     public virtual void AddMessage(Message message)
     {
         Dirty = true;
+        MarkInternal(message);
         _messages.Add(message);
     }
 
     public virtual void InsertMessage(int index, Message message)
     {
         Dirty = true;
+        MarkInternal(message);
         _messages.Insert(index, message);
+    }
+
+    private static void MarkInternal(Message message)
+    {
+        if (InternalDepth.Value > 0)
+        {
+            message.Internal = true;
+        }
     }
 
     public virtual IReadOnlyList<Message> GetLastMessages(int count)
@@ -147,11 +183,19 @@ internal class Conversation : DirtyTrackable
             .Sum(x => x.CountWords());
     }
 
-    public virtual Bridge.Chat.Models.Conversation ToBridgeModel()
+    /// <summary>
+    /// The chat history for the website. Messages exchanged inside a group (<see cref="Message.Internal"/>) are left out
+    /// unless <paramref name="includeInternal"/> is set, e.g. for a group that shows the user its intermediate steps.
+    /// </summary>
+    public virtual Bridge.Chat.Models.Conversation ToBridgeModel(bool includeInternal = false)
     {
         List<Bridge.Chat.Models.TextMessage> bridgeMessages = [];
         foreach (Message message in _messages)
         {
+            if (message.Internal && !includeInternal)
+            {
+                continue;
+            }
             switch (message)
             {
                 case TextMessage textMessage:

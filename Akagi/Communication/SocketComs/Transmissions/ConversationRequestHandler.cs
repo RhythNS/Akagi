@@ -32,6 +32,8 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
 
         string id = conversationRequestTransmission.CharacterId;
         ConversationContainer conversations;
+        // What group members said to each other is shown only where the group shows its intermediate steps live too
+        bool includeInternal = false;
         Character? character = await _characterDatabase.GetCharacter(id);
         if (character != null && character.UserId == user.Id)
         {
@@ -48,6 +50,7 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
                 throw new ArgumentException("Character not found or does not belong to the user");
             }
             conversations = group.Conversations;
+            includeInternal = group.UserVisibility.HasFlag(GroupVisibility.Intermediate);
         }
 
         if (conversationRequestTransmission.ConversationId != null)
@@ -62,7 +65,7 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
             {
                 CharacterId = id,
                 ConversationId = conversation.Id,
-                Conversations = [conversation.ToBridgeModel()],
+                Conversations = [conversation.ToBridgeModel(includeInternal)],
             };
             context.Session.SendTransmission(response);
             return;
@@ -72,7 +75,7 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
         {
             CharacterId = id,
             ConversationId = null,
-            Conversations = [.. conversations.List.Select(c => c.ToBridgeModel())],
+            Conversations = [.. conversations.List.Select(c => c.ToBridgeModel(includeInternal))],
         };
         context.Session.SendTransmission(responseTransmission);
     }
