@@ -235,36 +235,122 @@ internal class GraphLoader
         return map;
     }
 
+    /// <summary>
+    /// The stored documents of an instance, reused for the nodes they belong to, plus new instances for new nodes.
+    /// Node indexes of the composed graph shift whenever a graph composed before another one gains or loses nodes, so
+    /// the stored documents (in their old node order) are aligned with the new graph's savable nodes in order, by
+    /// concrete type and name, instead of being taken by index.
+    /// </summary>
     private async Task<List<object>> LoadOrCreateInstances(GraphData graphData, GraphInstance existingGraph)
     {
         Dictionary<int, GraphInstance.SavableInfo> existing = MapExistingSavables(graphData, existingGraph);
-        List<object> nodeInstances = [];
+        List<object> stored = [];
+        foreach (GraphInstance.SavableInfo info in existing.OrderBy(p => p.Key).Select(p => p.Value))
+        {
+            object? loaded = await TryLoadStored(info);
+            if (loaded != null)
+            {
+                stored.Add(loaded);
+            }
+        }
 
+        List<int> savableNodes = [];
+        List<NodeSignature> signatures = [];
         for (int i = 0; i < graphData.Nodes.Count; i++)
         {
             NodeData nodeData = graphData.Nodes[i];
             Type nodeType = GraphNodeUtils.ResolveType(nodeData.TypeName)
                 ?? throw new InvalidOperationException($"Type '{nodeData.TypeName}' could not be found.");
-
-            if (existing.TryGetValue(i, out GraphInstance.SavableInfo? info) && typeof(Savable).IsAssignableFrom(nodeType))
+            if (typeof(Savable).IsAssignableFrom(nodeType) && nodeType != typeof(User))
             {
-                object? existingInstance = await TryLoadExisting(nodeType, info);
-                if (existingInstance != null)
-                {
-                    nodeInstances.Add(existingInstance);
-                    continue;
-                }
+                savableNodes.Add(i);
+                signatures.Add(new NodeSignature(nodeType, PropertyName(nodeData) ?? NameOf(CreateInstance(nodeData))));
             }
+        }
 
-            nodeInstances.Add(CreateInstance(nodeData));
+        Dictionary<int, int> matches = Align(signatures, [.. stored.Select(s => new NodeSignature(s.GetType(), NameOf(s)))]);
+        Dictionary<int, object> reused = matches.ToDictionary(m => savableNodes[m.Key], m => stored[m.Value]);
+
+        List<object> nodeInstances = [];
+        for (int i = 0; i < graphData.Nodes.Count; i++)
+        {
+            nodeInstances.Add(reused.TryGetValue(i, out object? instance) ? instance : CreateInstance(graphData.Nodes[i]));
         }
         return nodeInstances;
     }
 
-    private async Task<object?> TryLoadExisting(Type nodeType, GraphInstance.SavableInfo info)
+    internal readonly record struct NodeSignature(Type Type, string? Name);
+
+    /// <summary>
+    /// Pairs new nodes with stored documents, keeping both in order (a weighted longest common subsequence). Only the
+    /// same concrete type can pair, since a changed node type must not keep its old behavior; the same name on top counts
+    /// more, so a renamed node still finds its document but cannot take the place of one that kept its name.
+    /// Returns new node position to stored position.
+    /// </summary>
+    internal static Dictionary<int, int> Align(IReadOnlyList<NodeSignature> nodes, IReadOnlyList<NodeSignature> stored)
     {
-        IDatabase database = _databaseFactory.GetDatabase((Savable)Activator.CreateInstance(nodeType)!);
-        if (!string.Equals(database.CollectionName, info.CollectionName, StringComparison.OrdinalIgnoreCase))
+        int n = nodes.Count;
+        int m = stored.Count;
+        int[,] score = new int[n + 1, m + 1];
+        for (int i = 1; i <= n; i++)
+        {
+            for (int j = 1; j <= m; j++)
+            {
+                int best = Math.Max(score[i - 1, j], score[i, j - 1]);
+                int weight = Weight(nodes[i - 1], stored[j - 1]);
+                if (weight > 0)
+                {
+                    best = Math.Max(best, score[i - 1, j - 1] + weight);
+                }
+                score[i, j] = best;
+            }
+        }
+
+        Dictionary<int, int> matches = [];
+        for (int i = n, j = m; i > 0 && j > 0;)
+        {
+            int weight = Weight(nodes[i - 1], stored[j - 1]);
+            if (weight > 0 && score[i, j] == score[i - 1, j - 1] + weight)
+            {
+                matches[i - 1] = j - 1;
+                i--;
+                j--;
+            }
+            else if (score[i - 1, j] >= score[i, j - 1])
+            {
+                i--;
+            }
+            else
+            {
+                j--;
+            }
+        }
+        return matches;
+    }
+
+    private static int Weight(NodeSignature node, NodeSignature stored)
+    {
+        if (node.Type != stored.Type)
+        {
+            return 0;
+        }
+        return string.Equals(node.Name, stored.Name, StringComparison.Ordinal) ? 3 : 1;
+    }
+
+    private static string? PropertyName(NodeData node) =>
+        node.Properties.TryGetValue("Name", out object? name) && name != null ? name.ToString() : null;
+
+    private static string? NameOf(object instance) =>
+        instance.GetType().GetProperty("Name", BindingFlags.Public | BindingFlags.Instance)?.GetValue(instance) as string;
+
+    private async Task<object?> TryLoadStored(GraphInstance.SavableInfo info)
+    {
+        IDatabase database;
+        try
+        {
+            database = _databaseFactory.GetDatabase(info.CollectionName);
+        }
+        catch (InvalidOperationException)
         {
             return null;
         }
@@ -277,10 +363,7 @@ internal class GraphLoader
 
         Task task = (Task)method.Invoke(database, [info.SavableId])!;
         await task.ConfigureAwait(false);
-        object? loaded = task.GetType().GetProperty("Result")?.GetValue(task);
-
-        // Only reuse documents of the same concrete type, otherwise a changed node type would keep its old behavior.
-        return loaded != null && loaded.GetType() == nodeType ? loaded : null;
+        return task.GetType().GetProperty("Result")?.GetValue(task);
     }
 
     private async Task<List<Savable>> SetupNodeReferencesAndProperties(GraphData graphData, List<object> nodeInstances, string? userId)

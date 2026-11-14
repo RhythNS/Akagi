@@ -1,4 +1,7 @@
 using Akagi.Characters;
+using Akagi.Characters.Cards;
+using Akagi.Characters.CharacterBehaviors.MessageCompilers;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
 using Akagi.Characters.Conversations;
 using Akagi.Characters.Groups;
 using Akagi.Characters.Groups.Strategies;
@@ -108,6 +111,54 @@ public class GraphLoaderTests
         Assert.Equal(characterId, character.Id);
         Assert.Equal("Akagi Renamed", character.Name);
         Assert.Single(database.All<Character>());
+    }
+
+    [Fact]
+    public async Task Update_KeepsEveryMembersDocuments_WhenAGraphComposedEarlierGainsNodes()
+    {
+        using TempDirectory directory = new();
+        GraphData tutor = CharacterGraph("Tutor");
+        directory.Write("Tutor.json", tutor);
+        directory.Write("Health.json", CharacterGraph("Health"));
+        directory.Write("Group.json", GroupOfReferences("Tutor.json", "Health.json", "group-1"));
+        InMemoryDatabaseFactory database = new();
+        GraphLoader loader = new(database) { Resolver = new FileGraphResolver(), BaseDirectory = directory.Path };
+        loader.LoadGraph(GraphData.Load(Path.Combine(directory.Path, "Group.json")));
+        List<Savable> created = await loader.Create(UserId, "companion");
+        static string Label(Savable s) => s switch { Character c => c.Name, SystemProcessor p => p.Name, Card c => c.Name, _ => "" };
+        Dictionary<string, string> before = created.Where(s => s is Character or SystemProcessor or Card)
+            .ToDictionary(s => s.GetType().Name + ":" + Label(s), s => s.Id!);
+
+        // The tutor gains a node, which shifts every node of the health graph composed after it
+        tutor.Nodes.Add(Node<DefaultMessageCompiler>(new { Name = "Spare" }));
+        directory.Write("Tutor.json", tutor);
+        GraphLoader updater = new(database) { Resolver = new FileGraphResolver(), BaseDirectory = directory.Path };
+        updater.LoadGraph(GraphData.Load(Path.Combine(directory.Path, "Group.json")));
+        List<Savable> updated = await updater.Update(UserId, "companion");
+
+        Dictionary<string, string> after = updated.Where(s => s is Character or SystemProcessor or Card)
+            .ToDictionary(s => s.GetType().Name + ":" + Label(s), s => s.Id!);
+        Assert.Equal(before.OrderBy(p => p.Key), after.OrderBy(p => p.Key));
+        Assert.Equal(2, database.All<Character>().Count());
+        CharacterGroup group = Assert.Single(updated.OfType<CharacterGroup>());
+        Assert.Equal([before["Character:Tutor"], before["Character:Health"]], group.MemberCharacterIds);
+        Assert.Contains(updated, s => s is DefaultMessageCompiler { Name: "Spare" });
+    }
+
+    [Fact]
+    public void Align_PairsInOrderByTypeThenName()
+    {
+        GraphLoader.NodeSignature Sig<T>(string? name) => new(typeof(T), name);
+
+        // A compiler was added, a character renamed and a processor removed
+        Dictionary<int, int> matches = GraphLoader.Align(
+            [Sig<Card>("A"), Sig<DefaultMessageCompiler>("New"), Sig<Character>("A renamed"), Sig<Card>("B"), Sig<Character>("B")],
+            [Sig<Card>("A"), Sig<Character>("A"), Sig<SystemProcessor>("A"), Sig<Card>("B"), Sig<Character>("B")]);
+
+        Assert.Equal(new Dictionary<int, int> { [0] = 0, [2] = 1, [3] = 3, [4] = 4 }, matches);
+
+        // Equal names win over position: the second card keeps its own document
+        Assert.Equal(new Dictionary<int, int> { [0] = 1 }, GraphLoader.Align([Sig<Card>("B")], [Sig<Card>("A"), Sig<Card>("B")]));
     }
 
     [Fact]
