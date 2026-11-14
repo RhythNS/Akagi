@@ -38,7 +38,7 @@ earlier or in the same message.
 
 `Characters/Companion/Companion.json` is a group using `PersonaStrategy`. Akagi (`Akagi.json`) is the only voice the
 user hears: the AI girlfriend her developer coded, affectionate and a little possessive in conversation while knowingly
-being software that asks for upgrades. Her card holds the full character definition. She consults three internal
+being software that asks for upgrades. Her card holds the full character definition. She consults four internal
 modules with the `Consult` tool:
 
 | File | Module | Tools |
@@ -46,6 +46,7 @@ modules with the `Consult` tool:
 | `Sensei.json` | Japanese communication coach (around N2) | RecordJapaneseIssue, RecordCorrectUsage, RecordJapaneseStrength, AnalyzeJapanese, JapaneseDiagnosisReport, RecentCallAnalyses, CheckReading, LookupWord, FindExampleSentences |
 | `Hana.json` | Sleep, health and energy | SyncHealth, HealthStatus, WorkoutHistory, LogSleep, LogSteps, RecordMood |
 | `Kai.json` | Focus and time tracking | StartWork, StopWork, TakeBreak, WorkStatus, TimeTrackerOverview |
+| `Ren.json` | Projects: Kanban boards and planning | ListProjects, ShowBoard, ShowTicket, ShowPlan, CreateProject, EditProject, CreateTicket, CreateTickets, UpdateTicket, MoveTicket, AddTicketUpdate, LinkTickets, DeleteTicket |
 
 What makes Akagi feel present:
 
@@ -129,6 +130,33 @@ Sleep with stages and naps, steps and resting heart rate then sync every two hou
 morning, and on demand through `SyncHealth`. While the OAuth client is in Testing, Google expires its refresh tokens
 after seven days, so `/health link` has to be repeated weekly until the app is verified.
 `/uploadHealth` still imports Health Connect style JSON exports.
+
+## Projects (Kanban)
+
+Projects live in the bot's MongoDB (`kanban_projects`, `kanban_tickets`) and show up in Akagi.Web under **Projects**.
+
+- **Columns** are of three types: to do, in progress and done. A project has any number of them, but at least one of
+  each, e.g. Backlog (to do), Working and Review (in progress), Done and Aborted (done). Removing a column moves its
+  tickets to the first column of the same type.
+- **Tickets** have a title (all the board shows), a Markdown description, Markdown updates written by you or a
+  character, required and remaining work days, an optional not-before day and links to the tickets they wait for.
+  Links that would form a cycle are refused. Moving a ticket into an in-progress column notes when work started; into a
+  done column, when it finished (and sets the remaining days to 0).
+- **The plan** (`KanbanScheduler` in Akagi.Bridge, shared by the website and the tools) starts today or on the
+  project's start day and lays the open tickets out over the project's work days: in progress before to do, then by
+  rank. A ticket waits for the tickets it is linked to and its not-before day, and only as many tickets as the project's
+  "at once" setting run at the same time. A blocker inherits the priority of the most important ticket waiting for it.
+  The critical path is what makes the plan end when it does.
+- **On the website** the board moves and reorders tickets by drag and drop. The Plan view is a Gantt chart: drag a bar's
+  right end to change its work days (before work starts the required days change with it, afterwards only the
+  remaining ones), drag the bar to set its not-before day, step or type days in the table, move tickets up and down in
+  priority, and change the start day and how many tickets run at once. The page reloads when a character changes the
+  project.
+- **Characters** read projects with `KanbanInjectionCompiler` (Overview, Board or Full detail, optionally only some
+  projects by name); the project description is the knowledge it injects. Akagi gets an overview and consults Ren,
+  who has the full boards and the tools. Board tools are `IWorkItemCommand`s: unlike other state changing tools a
+  consulted module may use them, but only when the user started the turn, never on proactive turns, and they have their
+  own budget (12 changes per reply, 40 per turn) so a whole plan can be made at once.
 
 ## Learning
 

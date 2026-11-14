@@ -1,17 +1,26 @@
 using Akagi.Bridge.Chat.Models;
+using Akagi.Characters.CharacterBehaviors.Puppeteers;
+using Akagi.Characters.CharacterBehaviors.SystemProcessors;
+using Akagi.Characters.Conversations;
+using Akagi.LLMs;
+using Akagi.Users;
+using System.Runtime.CompilerServices;
 using Akagi.Bridge.Chat.Transmissions.Requests;
 using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Bridge.Kanban;
 using Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections;
 using Akagi.Communication.SocketComs.Transmissions;
 using Akagi.Kanban;
+using Akagi.Receivers;
 using Akagi.Receivers.Commands;
+using Akagi.Receivers.Commands.Messages;
 using Akagi.Receivers.Commands.Kanban;
 using Akagi.Receivers.Commands.Life;
 using Akagi.Tests.Support;
 using Microsoft.Extensions.Logging.Abstractions;
 using MongoDB.Bson;
 using Command = Akagi.Receivers.Commands.Command;
+using TextMessage = Akagi.Characters.Conversations.TextMessage;
 
 namespace Akagi.Tests.Kanban;
 
@@ -627,5 +636,119 @@ public class KanbanSocketTests
         Assert.Null(moved.Error);
         Assert.Equal(["B", "C"], moved.Tickets.Where(t => t.ColumnId == working).OrderBy(t => t.Rank).Select(t => t.Title));
         Assert.NotNull(moved.Tickets.Single(t => t.Title == "B").StartedAt);
+    }
+}
+
+/// <summary>
+/// Ren as Akagi consults it: the real puppeteer loop with a scripted model.
+/// </summary>
+public class KanbanConsultationTests
+{
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ConsultedModule_ChangesTheBoardOnlyWhenTheUserStartedTheTurn(bool userStarted)
+    {
+        TurnSource consultedOn = userStarted ? TurnSource.User : TurnSource.System;
+        bool changes = userStarted;
+        KanbanTestContext test = new();
+        KanbanProject project = await test.Service.CreateProjectAsync(test.UserId, "Akagi");
+        await test.Service.CreateTicketAsync(test.UserId, project.Id!, "Data model", requiredDays: 2);
+        test.Context.Turn = TurnSource.Consultation;
+        test.Context.ConsultedOn = consultedOn;
+        test.Conversation.AddMessage(new TextMessage { CharacterId = null, From = Message.Type.User, Time = DateTime.UtcNow, Text = "Finished the data model!" });
+
+        ScriptedLLM llm = new(context => context.Conversation.Messages.OfType<CommandMessage>().Any()
+            ? [Say("Moved #1 to Done.")]
+            : [Tool<MoveTicketCommand>(("Ticket", "#1"), ("Column", "Done")), Tool<AddTicketUpdateCommand>(("Ticket", "#1"), ("Text", "Finished, he says."))]);
+        test.Context.LLMFactory = new ScriptedLLMFactory(llm);
+
+        SystemProcessor processor = new()
+        {
+            Name = "Ren Processor",
+            RunMode = ILLM.RunMode.Mixed,
+            CommandNames = ["ShowBoard", "MoveTicket", "AddTicketUpdate"]
+        };
+        processor.Commands = [new ShowBoardCommand(), new MoveTicketCommand(), new AddTicketUpdateCommand()];
+        ProcessorDatabase processors = new();
+        await processors.SaveDocumentAsync(processor);
+        SinglePuppeteer puppeteer = new() { Name = "Ren Puppeteer", MaxSteps = 3, SystemProcessorId = processor.Id! };
+        await puppeteer.Init(NullLogger.Instance, test.Context, processors);
+
+        await puppeteer.ProcessAsync();
+
+        Assert.Contains("ShowBoard", llm.OfferedTools[0]);
+        Assert.Equal(changes, llm.OfferedTools[0].Contains("MoveTicket"));
+        KanbanTicket ticket = test.Ticket(1);
+        Assert.Equal(changes, project.KindOf(ticket.ColumnId) == KanbanColumnKind.Done);
+        Assert.Equal(changes ? 1 : 0, ticket.Updates.Count);
+        string[] outputs = [.. test.Conversation.Messages.OfType<CommandMessage>().Select(m => m.Output)];
+        if (changes)
+        {
+            Assert.Contains(outputs, o => o.StartsWith("Moved #1 Data model from Backlog to Done."));
+        }
+        else
+        {
+            Assert.All(outputs, o => Assert.StartsWith(ToolGuard.RefusalPrefix, o));
+        }
+    }
+
+    private static T Tool<T>(params (string Name, string Value)[] values) where T : Command, new()
+    {
+        T command = new();
+        Argument[] arguments = command.GetDefaultArguments();
+        foreach ((string name, string value) in values)
+        {
+            arguments.Single(a => a.Name == name).Value = value;
+        }
+        command.Arguments = arguments;
+        command.SetFrom(Message.Type.Character, "ren");
+        return command;
+    }
+
+    private static TextMessageCommand Say(string text)
+    {
+        TextMessageCommand command = new();
+        command.SetMessage(text);
+        command.SetFrom(Message.Type.Character, "ren");
+        return command;
+    }
+
+    private sealed class ProcessorDatabase : InMemoryDatabase<SystemProcessor>, ISystemProcessorDatabase
+    {
+        public ProcessorDatabase() : base("system_processors")
+        {
+        }
+
+        public async Task<SystemProcessor> GetSystemProcessor(string id) => (await GetDocumentByIdAsync(id))!;
+
+        public Task<SystemProcessor[]> GetSystemProcessor(string[] ids) => throw new NotSupportedException();
+    }
+
+    private sealed class ScriptedLLMFactory(ILLM llm) : ILLMFactory
+    {
+        public Task<ILLM> Create(User user, LLMDefinition? overrideModel, ILLM.LLMUsage usageType) => Task.FromResult(llm);
+    }
+
+    private sealed class ScriptedLLM(Func<Context, Command[]> script) : ILLM
+    {
+        public List<string[]> OfferedTools { get; } = [];
+
+        public void SetModel(string model)
+        {
+        }
+
+        public Task<Command[]> GetNextSteps(SystemProcessor systemProcessor, Context context)
+        {
+            OfferedTools.Add([.. systemProcessor.CurrentCommands.Select(c => c.Name)]);
+            return Task.FromResult(script(context));
+        }
+
+        public async IAsyncEnumerable<LLMStreamEvent> GetNextStepsStreamAsync(SystemProcessor systemProcessor, Context context,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            await Task.Yield();
+            yield return new StreamCompleteEvent(await GetNextSteps(systemProcessor, context), string.Empty);
+        }
     }
 }

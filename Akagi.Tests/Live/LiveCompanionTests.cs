@@ -12,6 +12,7 @@ using Akagi.Connectors;
 using Akagi.Data;
 using Akagi.Embeddings;
 using Akagi.Flow;
+using Akagi.Kanban;
 using Akagi.Learning;
 using Akagi.Life;
 using Akagi.Life.Japanese.Calls;
@@ -117,7 +118,7 @@ public class LiveCompanionTests
             Bridge.Chat.Models.Character akagi = Assert.Single(listed.Characters, c => c.Name == "Akagi" && group.MemberIds.Contains(c.Id));
             Bridge.Chat.Models.Character sensei = Assert.Single(listed.Characters, c => c.Name == "Sensei" && group.MemberIds.Contains(c.Id));
             Assert.Equal("Companion", group.Name);
-            Assert.Equal(4, group.MemberIds.Length);
+            Assert.Equal(5, group.MemberIds.Length);
             Assert.Contains(akagi.Id, group.MemberIds);
             Assert.Equal(akagi.CardId, group.CardId);
             Assert.True(group.HasImage);
@@ -403,6 +404,7 @@ public class LiveCompanionTests
         services.AddScheduling();
         services.AddLife(configuration);
         services.AddLearning();
+        services.AddKanban();
 
         // Every model call gets the same scripted answer, so no paid API is used
         services.AddSingleton<ILLMFactory, ScriptedLLMFactory>();
