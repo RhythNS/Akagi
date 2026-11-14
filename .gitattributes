@@ -1,2 +1,22 @@
 * text eol=crlf
+
+# Binary files must never get line ending conversion
 *.mp3 binary
+*.wav binary
+*.ogg binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.bmp binary
+*.ico binary
+*.eot binary
+*.otf binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.index binary
