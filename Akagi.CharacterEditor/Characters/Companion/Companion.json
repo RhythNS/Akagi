@@ -15,7 +15,7 @@
         "ErrorMessage": "Akagi got tangled up for a moment ({{error}}). Try again?"
       },
       "ArraySizes": {
-        "MemberCharacterIds": 4,
+        "MemberCharacterIds": 5,
         "InterceptorIds": 0,
         "ReflectorIds": 0
       }
@@ -104,6 +104,20 @@
         "Description": "Akagi answers; the others advise."
       },
       "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Graphs.CharacterGraphReference, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0,
+        "Y": 1300
+      },
+      "Properties": {
+        "GraphPath": "Ren.json",
+        "GraphId": "",
+        "ExportNode": "",
+        "Overrides": []
+      },
+      "ArraySizes": {}
     }
   ],
   "Connections": [
@@ -155,6 +169,13 @@
       "TargetNodeIndex": 0,
       "TargetConnectorName": "StrategyId",
       "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 7,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 0,
+      "TargetConnectorName": "MemberCharacterIds",
+      "TargetArrayIndex": 4
     }
   ],
   "ViewportLocation": {

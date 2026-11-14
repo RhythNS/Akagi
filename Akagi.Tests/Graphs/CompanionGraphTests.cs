@@ -61,7 +61,7 @@ public class CompanionGraphTests
         }
         GraphValidator.CheckDuplicateGraphIds(reports);
 
-        Assert.Equal(5, reports.Count);
+        Assert.Equal(6, reports.Count);
         foreach (GraphValidationReport report in reports)
         {
             Assert.True(report.IsValid && report.WarningCount == 0, report.ToText());
@@ -82,8 +82,8 @@ public class CompanionGraphTests
         PersonaStrategy strategy = Assert.Single(created.OfType<PersonaStrategy>());
         Character akagi = Assert.Single(created.OfType<Character>(), c => c.Name == "Akagi");
         Assert.Equal(akagi.Id, strategy.PersonaCharacterId);
-        Assert.Equal(4, group.MemberCharacterIds.Length);
-        Assert.Equal(["Akagi", "Sensei", "Hana", "Kai"],
+        Assert.Equal(5, group.MemberCharacterIds.Length);
+        Assert.Equal(["Akagi", "Sensei", "Hana", "Kai", "Ren"],
             group.MemberCharacterIds.Select(id => created.OfType<Character>().Single(c => c.Id == id).Name));
 
         Assert.Equal(6, akagi.RoutineIds.Length);
@@ -100,7 +100,7 @@ public class CompanionGraphTests
         string path = Path.Combine(CompanionDirectory(), "Companion.json");
         GraphBundler.BundleResult result = await GraphBundler.BundleAsync(GraphData.Load(path), new FileGraphResolver(), CompanionDirectory());
         Assert.True(result.Success, string.Join(Environment.NewLine, result.Errors));
-        Assert.Equal(["Akagi.json", "Hana.json", "Kai.json", "Sensei.json"], result.Bundle.Embedded!.Select(e => e.Path).Order());
+        Assert.Equal(["Akagi.json", "Hana.json", "Kai.json", "Ren.json", "Sensei.json"], result.Bundle.Embedded!.Select(e => e.Path).Order());
 
         InMemoryDatabaseFactory database = new();
         GraphLoader loader = new(database);
@@ -108,7 +108,7 @@ public class CompanionGraphTests
         List<Savable> created = await loader.Create("65f000000000000000000004", "companion");
 
         CharacterGroup group = Assert.Single(created.OfType<CharacterGroup>());
-        Assert.Equal(["Akagi", "Sensei", "Hana", "Kai"],
+        Assert.Equal(["Akagi", "Sensei", "Hana", "Kai", "Ren"],
             group.MemberCharacterIds.Select(id => created.OfType<Character>().Single(c => c.Id == id).Name));
 
         // Every member has its own embedded card. Akagi's may point to her uploaded picture; the modules have none
@@ -155,6 +155,20 @@ public class CompanionGraphTests
         Assert.Contains(created, s => s is Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.CompanionStateInjectionCompiler);
         Assert.DoesNotContain(created, s => s is StudyNudgeRoutine);
         Assert.Contains(created, s => s is ShortSleepRoutine { ReactToRestless: true });
+
+        // The Kanban module keeps the boards; Akagi only sees an overview and consults it
+        SystemProcessor ren = created.OfType<SystemProcessor>().Single(p => p.Name == "Ren Processor");
+        foreach (string tool in new[] { "ShowBoard", "ShowPlan", "CreateTicket", "MoveTicket", "AddTicketUpdate", "LinkTickets", "EditProject" })
+        {
+            Assert.Contains(tool, ren.CommandNames);
+        }
+        Assert.DoesNotContain("MoveTicket", persona.CommandNames);
+        Assert.Contains("Ren for his projects", persona.SystemInstruction);
+        Assert.Equal(2, created.OfType<Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.KanbanInjectionCompiler>().Count());
+        Assert.Contains(created, s => s is Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.KanbanInjectionCompiler
+        {
+            Detail: Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.KanbanInjectionCompiler.DetailLevel.Full
+        });
     }
 
     [Fact]

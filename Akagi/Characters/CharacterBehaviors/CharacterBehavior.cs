@@ -90,7 +90,7 @@ internal abstract class CharacterBehavior : Savable
     {
         bool shouldContinue;
         int maxSteps = MaxSteps;
-        systemProcessor.OfferedCommands = ToolGuard.Offered(systemProcessor.Commands, Context.Turn);
+        systemProcessor.OfferedCommands = ToolGuard.Offered(systemProcessor.Commands, Context.Turn, Context.ConsultedOn);
 
         do
         {

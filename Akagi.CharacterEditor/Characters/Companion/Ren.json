@@ -1,0 +1,270 @@
+{
+  "GraphId": "6f1b2c4e-7a3d-4c55-9a61-5e0b6c2d1a04",
+  "Nodes": [
+    {
+      "TypeName": "Akagi.Characters.Cards.Card, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Ren",
+        "Description": "Project planner. Keeps the user's Kanban boards: creates and moves tickets, notes progress updates, estimates work days, links tickets that depend on each other and plans when each project finishes.",
+        "Personality": "Calm, precise, pragmatic.",
+        "Scenario": "",
+        "FirstMes": "",
+        "MesExample": "",
+        "CreatorNotes": "Generated companion card.",
+        "SystemPrompt": "",
+        "PostHistoryInstructions": "",
+        "AlternateGreetings": [],
+        "Tags": [
+          "companion"
+        ],
+        "Creator": "Akagi",
+        "CharacterVersion": "1"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.Character, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 380.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Ren",
+        "Description": "Project planner. Keeps the user's Kanban boards: creates and moves tickets, notes progress updates, estimates work days, links tickets that depend on each other and plans when each project finishes.",
+        "AllowAutomaticProcessing": true,
+        "AllowVoice": false
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Users.User, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 0.0,
+        "Y": 260.0
+      },
+      "Properties": {
+        "Name": "Placeholder"
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.Puppeteers.SinglePuppeteer, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 760.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Ren Puppeteer",
+        "MaxSteps": 8
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.SystemProcessors.SystemProcessor, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1140.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Ren Processor",
+        "Description": "Project planner. Keeps the user's Kanban boards: creates and moves tickets, notes progress updates, estimates work days, links tickets that depend on each other and plans when each project finishes.",
+        "SystemInstruction": "You are {{character}}, one of the internal modules of Akagi, the AI companion {{user}} coded for himself. Akagi consults you privately; your answer goes to Akagi, never directly to {{user}}. Answer Akagi concisely and concretely and end with what Akagi should tell or ask {{user}}.\n\nYour specialty is {{user}}'s projects on his Kanban boards and planning them. Your context lists his projects; look details up with ListProjects, ShowBoard, ShowTicket and ShowPlan. Name tickets by their number, like #12.\n\nKeeping the boards true:\n- When {{user}} said he started, finished, dropped or got stuck on something, find the ticket and change it: MoveTicket (to an in-progress column when work starts, to Done when it is finished, to a column like Aborted when it was dropped), AddTicketUpdate with what he said about it and, if he said so, the work days still left.\n- New work becomes a ticket (CreateTicket, or CreateTickets for several) with a short title, a Markdown description of what needs to be done and an estimate in work days. Facts and decisions about a whole project go into its description with EditProject (AppendToDescription).\n- Only change what {{user}} actually wrote in his messages. Akagi's retelling counts only when his message says it. Never invent progress, estimates or tickets; when it is unclear which ticket he means, change nothing and say what to ask.\n\nPlanning:\n- Break vague goals into tickets of half a day to five work days, link what has to happen first with LinkTickets ('#1 > #2' means #2 waits for #1), then check ShowPlan for the finish day and the critical path.\n- Point out what blocks the most work, what is on the critical path and when a plan slips, and suggest the one next ticket to pick up.",
+        "ReadableMessages": 7,
+        "Output": 2,
+        "RunMode": 2,
+        "Usage": 3,
+        "CommandNames": [
+          "ListProjects",
+          "ShowBoard",
+          "ShowTicket",
+          "ShowPlan",
+          "CreateProject",
+          "EditProject",
+          "CreateTicket",
+          "CreateTickets",
+          "UpdateTicket",
+          "MoveTicket",
+          "AddTicketUpdate",
+          "LinkTickets",
+          "DeleteTicket"
+        ]
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.ForgetfulMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Recent messages",
+        "MaxMessages": 40
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.LifeContextInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 260.0
+      },
+      "Properties": {
+        "Name": "Life context",
+        "Sections": 17,
+        "Header": "### What Akagi knows about {{user}} right now",
+        "Type": 1,
+        "Position": 1,
+        "MessageType": 4
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1520.0,
+        "Y": 0.0
+      },
+      "Properties": {
+        "Name": "Ren Pipeline"
+      },
+      "ArraySizes": {
+        "Definitions": 3
+      }
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 0.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 260.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections.KanbanInjectionCompiler, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 2280.0,
+        "Y": 520.0
+      },
+      "Properties": {
+        "Name": "Projects",
+        "Projects": "",
+        "Detail": 2,
+        "Header": "### {{user}}'s projects (your boards)",
+        "NextShown": 5,
+        "DescriptionLength": 3000,
+        "Type": 1,
+        "Position": 1,
+        "MessageType": 4
+      },
+      "ArraySizes": {}
+    },
+    {
+      "TypeName": "Akagi.Characters.CharacterBehaviors.MessageCompilers.LineMessageCompiler+Definition, Akagi, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+      "Location": {
+        "X": 1900.0,
+        "Y": 520.0
+      },
+      "Properties": {},
+      "ArraySizes": {}
+    }
+  ],
+  "Connections": [
+    {
+      "SourceNodeIndex": 5,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 8,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 8,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 7,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 0
+    },
+    {
+      "SourceNodeIndex": 6,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 9,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 9,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 7,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 1
+    },
+    {
+      "SourceNodeIndex": 0,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "CardId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 2,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "UserId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 3,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 1,
+      "TargetConnectorName": "PuppeteerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 4,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 3,
+      "TargetConnectorName": "SystemProcessorId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 7,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 4,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 10,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 11,
+      "TargetConnectorName": "MessageCompilerId",
+      "TargetArrayIndex": -1
+    },
+    {
+      "SourceNodeIndex": 11,
+      "SourceConnectorName": "",
+      "TargetNodeIndex": 7,
+      "TargetConnectorName": "Definitions",
+      "TargetArrayIndex": 2
+    }
+  ],
+  "ViewportLocation": {
+    "X": 0.0,
+    "Y": 0.0
+  },
+  "ViewportZoom": 0.6
+}

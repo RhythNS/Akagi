@@ -31,6 +31,10 @@ internal class Context : ContextBase
     /// </summary>
     public TurnSource Turn { get; set; } = TurnSource.Unknown;
     /// <summary>
+    /// On a <see cref="TurnSource.Consultation"/> turn: what started the persona's turn that asked for it.
+    /// </summary>
+    public TurnSource ConsultedOn { get; set; } = TurnSource.Unknown;
+    /// <summary>
     /// Counts and checks the tool calls of this turn.
     /// </summary>
     public ToolGuard Guard { get; } = new();

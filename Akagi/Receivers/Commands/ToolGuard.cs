@@ -15,10 +15,15 @@ internal sealed class ToolGuard
 
     public const int MaxChangesPerStep = 3;
     public const int MaxChangesPerTurn = 8;
+    /// <summary>Work item changes (<see cref="IWorkItemCommand"/>) count separately; planning touches many tickets.</summary>
+    public const int MaxWorkItemChangesPerStep = 12;
+    public const int MaxWorkItemChangesPerTurn = 40;
 
     private readonly HashSet<string> _stepCalls = [];
     private int _stepChanges;
     private int _turnChanges;
+    private int _stepWorkItemChanges;
+    private int _turnWorkItemChanges;
 
     /// <summary>
     /// Starts a new model step (one model reply with its tool calls).
@@ -27,17 +32,31 @@ internal sealed class ToolGuard
     {
         _stepCalls.Clear();
         _stepChanges = 0;
+        _stepWorkItemChanges = 0;
     }
 
     /// <summary>
-    /// Whether the tool may be offered to the model at all on this kind of turn.
+    /// Whether the tool may be offered to the model at all on this kind of turn. <paramref name="consultedOn"/> is
+    /// what started the persona's turn when this is a consultation.
     /// </summary>
-    public static bool IsOffered(Command command, TurnSource turn)
+    public static bool IsOffered(Command command, TurnSource turn, TurnSource consultedOn = TurnSource.Unknown)
     {
-        return command is not IStateCommand || turn is not (TurnSource.System or TurnSource.Consultation);
+        if (command is not IStateCommand)
+        {
+            return true;
+        }
+        if (turn == TurnSource.Consultation)
+        {
+            return command is IWorkItemCommand && IsUserDriven(consultedOn);
+        }
+        return turn != TurnSource.System;
     }
 
-    public static Command[] Offered(IEnumerable<Command> commands, TurnSource turn) => [.. commands.Where(c => IsOffered(c, turn))];
+    public static Command[] Offered(IEnumerable<Command> commands, TurnSource turn, TurnSource consultedOn = TurnSource.Unknown) =>
+        [.. commands.Where(c => IsOffered(c, turn, consultedOn))];
+
+    /// <summary>A consultation the persona made while answering the user (or with no checks at all).</summary>
+    private static bool IsUserDriven(TurnSource consultedOn) => consultedOn is TurnSource.User or TurnSource.Unknown;
 
     /// <summary>
     /// Null when the call may run, otherwise the tool output explaining why it did not.
@@ -54,7 +73,7 @@ internal sealed class ToolGuard
             return RefusalPrefix + $"{command.Name} is not available while you reach out on your own. Only record or change " +
                    "things when he tells you about them; right now just write to him.";
         }
-        if (context.Turn == TurnSource.Consultation)
+        if (context.Turn == TurnSource.Consultation && !(command is IWorkItemCommand && IsUserDriven(context.ConsultedOn)))
         {
             return RefusalPrefix + $"{command.Name} is not available during a consultation. Only answer the question; the " +
                    "persona records things herself when he tells her.";
@@ -63,6 +82,20 @@ internal sealed class ToolGuard
         if (!_stepCalls.Add(CallKey(command)))
         {
             return RefusalPrefix + "identical to another call in this reply.";
+        }
+        if (command is IWorkItemCommand)
+        {
+            if (_stepWorkItemChanges >= MaxWorkItemChangesPerStep)
+            {
+                return RefusalPrefix + $"at most {MaxWorkItemChangesPerStep} board changes per reply. Continue in the next reply.";
+            }
+            if (_turnWorkItemChanges >= MaxWorkItemChangesPerTurn)
+            {
+                return RefusalPrefix + $"at most {MaxWorkItemChangesPerTurn} board changes per turn. Tell him what is done and what is left.";
+            }
+            _stepWorkItemChanges++;
+            _turnWorkItemChanges++;
+            return null;
         }
         if (_stepChanges >= MaxChangesPerStep)
         {

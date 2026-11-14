@@ -97,6 +97,8 @@ internal class ConsultCommand : Command
                 Group = context.Group,
                 // Advisors answer; only the persona changes stored state, and only when the user told it something
                 Turn = TurnSource.Consultation,
+                // Work item tools may run for the persona when the user started the turn
+                ConsultedOn = context.Turn == TurnSource.Consultation ? context.ConsultedOn : context.Turn,
                 OtherMembers = MemberSpeech.Label,
                 MemberNames = members.Append(context.Character)
                     .Where(m => !string.IsNullOrEmpty(m.Id))

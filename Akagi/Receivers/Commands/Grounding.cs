@@ -38,6 +38,15 @@ internal interface IUserFactCommand : IStateCommand
 }
 
 /// <summary>
+/// Marker for tools that change work items the user manages explicitly, such as Kanban tickets. Unlike other state
+/// tools, a consulted module may use them on the persona's behalf when the user started the turn, and they have a
+/// larger budget per reply, since planning touches many tickets at once.
+/// </summary>
+internal interface IWorkItemCommand : IStateCommand
+{
+}
+
+/// <summary>
 /// Checks that what a tool records is grounded in what the user actually wrote, and compares short texts for
 /// near-duplicates.
 /// </summary>
