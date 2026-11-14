@@ -1,0 +1,95 @@
+.kanban-board {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    align-items: flex-start;
+    padding-bottom: 0.75rem;
+    min-height: 60vh;
+}
+
+.kanban-column {
+    flex: 0 0 17rem;
+    max-width: 17rem;
+    background: var(--tblr-bg-surface-secondary, #f6f8fb);
+    border: 1px solid var(--tblr-border-color, #e6e7e9);
+    border-top: 3px solid var(--kanban-kind-color);
+    border-radius: 6px;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 14rem);
+}
+
+.kanban-column.kind-todo { --kanban-kind-color: var(--tblr-secondary, #667382); }
+.kanban-column.kind-inprogress { --kanban-kind-color: var(--tblr-primary, #066fd1); }
+.kanban-column.kind-done { --kanban-kind-color: var(--tblr-success, #2fb344); }
+
+.kanban-column.drop-target {
+    outline: 2px dashed var(--kanban-kind-color);
+    outline-offset: -2px;
+}
+
+.kanban-column-header {
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid var(--tblr-border-color, #e6e7e9);
+}
+
+.kanban-kind-badge {
+    font-size: 0.65rem;
+    font-weight: 500;
+}
+
+.kanban-kind-badge.kind-todo { background: rgba(102, 115, 130, 0.15); color: var(--tblr-secondary, #667382); }
+.kanban-kind-badge.kind-inprogress { background: rgba(6, 111, 209, 0.12); color: var(--tblr-primary, #066fd1); }
+.kanban-kind-badge.kind-done { background: rgba(47, 179, 68, 0.14); color: var(--tblr-success, #2fb344); }
+
+.kanban-column-body {
+    padding: 0.5rem;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    min-height: 4rem;
+}
+
+.kanban-card {
+    background: var(--tblr-bg-surface, #fff);
+    border: 1px solid var(--tblr-border-color, #e6e7e9);
+    border-radius: 4px;
+    padding: 0.5rem 0.6rem;
+    cursor: grab;
+    overflow-wrap: anywhere;
+    box-shadow: 0 1px 1px rgba(0, 0, 0, 0.03);
+    transition: box-shadow 0.1s ease, border-color 0.1s ease;
+}
+
+.kanban-card:hover,
+.kanban-card:focus-visible {
+    border-color: var(--kanban-kind-color);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    outline: none;
+}
+
+.kanban-column.kind-done .kanban-card {
+    color: var(--tblr-secondary, #667382);
+}
+
+.kanban-card.dragging {
+    opacity: 0.4;
+}
+
+.kanban-drop-marker {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--kanban-kind-color);
+}
+
+.kanban-add-button {
+    color: var(--tblr-secondary, #667382);
+}
+
+@media (max-width: 575.98px) {
+    .kanban-column {
+        flex-basis: 85vw;
+        max-width: 85vw;
+    }
+}

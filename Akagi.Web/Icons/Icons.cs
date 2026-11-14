@@ -78,6 +78,9 @@ public static class Icons
     public static IIconType Bulb => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M3 12h1m8 -9v1m8 8h1m-15.4 -6.4l.7 .7m12.1 -.7l-.7 .7' /><path d='M9 16a5 5 0 1 1 6 0a3.5 3.5 0 0 0 -1 3a2 2 0 0 1 -4 0a3.5 3.5 0 0 0 -1 -3' /><path d='M9.7 17l4.6 0' />");
 
+    public static IIconType LayoutKanban => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M4 4l6 0' /><path d='M14 4l6 0' /><path d='M4 8m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2z' /><path d='M14 8m0 2a2 2 0 0 1 2 -2h2a2 2 0 0 1 2 2v2a2 2 0 0 1 -2 2h-2a2 2 0 0 1 -2 -2z' />");
+
     public static IIconType Calendar => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12z' /><path d='M16 3v4' /><path d='M8 3v4' /><path d='M4 11h16' />");
 

@@ -1,0 +1,447 @@
+@* The plan as a Gantt chart. Rows are the open tickets in priority order; drag a bar's end to change its work days,
+   drag the bar to set the day it starts at the earliest, or change days and order in the table. *@
+@using System.Globalization
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@if (Session.Project is KanbanProjectView project)
+{
+	KanbanPlan plan = Session.Plan;
+	List<GanttRow> rows = Rows(plan);
+	(int from, int to) = Range(plan, rows);
+	int days = to - from;
+	double width = days * _dayWidth;
+	int todayOffset = Session.Today.DayNumber - plan.Calendar.Origin.DayNumber;
+	Dictionary<string, int> rowIndex = rows.Select((r, i) => (r.Item.Ticket.Id, i)).ToDictionary(p => p.Id, p => p.i);
+
+	<div class="gantt-view" @ref="_root" data-day="@_dayWidth.ToString(CultureInfo.InvariantCulture)" data-from="@from.ToString(CultureInfo.InvariantCulture)">
+	<div class="card mb-3">
+		<div class="card-body py-2 d-flex flex-wrap align-items-center gap-3">
+			<div data-plan-summary>
+				@if (plan.FinishDate is DateOnly finish)
+				{
+					<span class="text-secondary">Finishes</span>
+					<strong class="ms-1" data-plan-finish>@Date(finish)</strong>
+					<span class="text-secondary ms-2">@KanbanSession.Days(plan.RemainingDays) work days left in @rows.Count(r => !r.Item.IsHistory) tickets</span>
+				}
+				else
+				{
+					<span class="text-secondary">Nothing open to plan.</span>
+				}
+			</div>
+			<div class="d-flex align-items-center gap-2 ms-auto">
+				<label class="small text-secondary" for="plan-start">Start</label>
+				<input id="plan-start" type="date" class="form-control form-control-sm" style="width:9.5rem" data-plan-start
+					   value="@(project.StartDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" @onchange="SetStartAsync" title="The plan does not start before this day; empty starts today" />
+				<label class="small text-secondary" for="plan-parallel">At once</label>
+				<input id="plan-parallel" type="number" min="1" max="50" class="form-control form-control-sm" style="width:4.5rem" data-plan-parallel
+					   value="@project.Parallel" @onchange="SetParallelAsync" title="How many tickets are worked on at the same time" />
+				<label class="form-check form-switch m-0 small">
+					<input class="form-check-input" type="checkbox" checked="@_showDone" data-show-done @onchange="e => _showDone = e.Value is true" />
+					<span class="form-check-label">Finished</span>
+				</label>
+				<div class="btn-group btn-group-sm" role="group" aria-label="Zoom">
+					@foreach ((string label, int size) in Zooms)
+					{
+						<button type="button" class="btn @(_dayWidth == size ? "btn-primary" : "btn-outline-secondary")" data-zoom="@size" @onclick="() => _dayWidth = size">@label</button>
+					}
+				</div>
+			</div>
+		</div>
+	</div>
+
+	@if (rows.Count == 0)
+	{
+		<div class="card" data-plan-empty>
+			<div class="card-body py-5 text-center text-secondary">No open tickets. Add some on the board to plan them.</div>
+		</div>
+	}
+	else
+	{
+		<div class="gantt card" data-gantt
+			 style="--gantt-day:@(_dayWidth)px; --gantt-row:@(RowHeight)px; --gantt-time:@(width.ToString(CultureInfo.InvariantCulture))px">
+			<div class="gantt-scroll">
+				<div class="gantt-grid">
+					<div class="gantt-row gantt-head">
+						<div class="gantt-left gantt-head-left">
+							<span class="gantt-col-order"></span>
+							<span class="gantt-col-title">Ticket</span>
+							<span class="gantt-col-required" title="Required work days">Req.</span>
+							<span class="gantt-col-remaining" title="Remaining work days">Left</span>
+						</div>
+						<div class="gantt-time">
+							@for (int d = 0; d < days; d++)
+							{
+								DateOnly day = plan.Calendar.Origin.AddDays(from + d);
+								bool off = !plan.Calendar.IsWorkDay(day);
+								<div class="gantt-day @(off ? "off" : "") @(from + d == todayOffset ? "today" : "")" style="left:@Px(d * _dayWidth)">
+									@if (day.Day == 1 || d == 0)
+									{
+										<span class="gantt-month">@day.ToString("MMM yyyy", CultureInfo.InvariantCulture)</span>
+									}
+									<span class="gantt-weekday">@(_dayWidth >= 24 ? day.ToString("ddd", CultureInfo.InvariantCulture)[..2] : "")</span>
+									<span class="gantt-date">@(_dayWidth >= 14 || day.DayOfWeek == DayOfWeek.Monday ? day.Day : "")</span>
+								</div>
+							}
+						</div>
+					</div>
+
+					<div class="gantt-body" style="height:@(rows.Count * RowHeight)px">
+						<div class="gantt-backdrop">
+							@for (int d = 0; d < days; d++)
+							{
+								if (!plan.Calendar.IsWorkDay(plan.Calendar.Origin.AddDays(from + d)))
+								{
+									<div class="gantt-off" style="left:@Px(d * _dayWidth)"></div>
+								}
+							}
+							@if (todayOffset >= from && todayOffset < to)
+							{
+								<div class="gantt-today" style="left:@Px((todayOffset - from) * _dayWidth)" title="Today"></div>
+							}
+						</div>
+						<svg class="gantt-links" width="@Px(width, false)" height="@(rows.Count * RowHeight)" aria-hidden="true">
+							<defs>
+								<marker id="gantt-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+									<path d="M0,0 L8,4 L0,8 z" class="gantt-arrow-head" />
+								</marker>
+							</defs>
+							@foreach (GanttRow row in rows.Where(r => !r.Item.IsHistory))
+							{
+								foreach (string beforeId in row.Item.Ticket.After)
+								{
+									if (rowIndex.TryGetValue(beforeId, out int beforeIndex) && rows[beforeIndex].Item is { IsHistory: false } before)
+									{
+										<path class="gantt-link @(before.Critical && row.Item.Critical ? "critical" : "")" d="@LinkPath(before, beforeIndex, row.Item, rowIndex[row.Item.Ticket.Id], from)" marker-end="url(#gantt-arrow)" data-link="@($"{beforeId}>{row.Item.Ticket.Id}")" />
+									}
+								}
+							}
+						</svg>
+
+						@for (int i = 0; i < rows.Count; i++)
+						{
+							GanttRow row = rows[i];
+							int index = i;
+							KanbanPlannedTicket item = row.Item;
+							KanbanTicketView ticket = item.Ticket;
+							double left = (item.CalendarStart - from) * _dayWidth;
+							double barWidth = (item.CalendarEnd - item.CalendarStart) * _dayWidth;
+							<div class="gantt-row @(item.IsHistory ? "history" : "")" style="top:@(i * RowHeight)px" data-row="@ticket.Id">
+								<div class="gantt-left">
+									<span class="gantt-col-order">
+										@if (!item.IsHistory)
+										{
+											<button type="button" class="btn btn-ghost-secondary gantt-mini" title="Earlier (more important)" data-up disabled="@(!row.CanMoveUp)" @onclick="() => MoveAsync(rows, index, -1)">
+												<Icon IconType="@Icons.ChevronUp" Size="14" />
+											</button>
+											<button type="button" class="btn btn-ghost-secondary gantt-mini" title="Later (less important)" data-down disabled="@(!row.CanMoveDown)" @onclick="() => MoveAsync(rows, index, 1)">
+												<Icon IconType="@Icons.ChevronDown" Size="14" />
+											</button>
+										}
+									</span>
+									<button type="button" class="gantt-col-title gantt-title" data-open title="@($"{ticket.Reference} {ticket.Title}")" @onclick="() => OnOpen.InvokeAsync(ticket.Id)">
+										<span class="text-secondary me-1">@ticket.Reference</span>@ticket.Title
+									</button>
+									@if (item.IsHistory)
+									{
+										<span class="gantt-col-required text-secondary small">@KanbanSession.Days(ticket.RequiredDays)</span>
+										<span class="gantt-col-remaining text-success small">done</span>
+									}
+									else
+									{
+										<span class="gantt-col-required">
+											<input type="number" min="0" step="0.5" class="form-control form-control-sm gantt-input" aria-label="Required work days" data-required
+												   value="@KanbanSession.Days(ticket.RequiredDays)" @onchange="e => SetRequiredAsync(ticket, e)" />
+										</span>
+										<span class="gantt-col-remaining d-flex align-items-center">
+											<button type="button" class="btn btn-ghost-secondary gantt-mini" title="Half a day less" data-less @onclick="() => StepAsync(item, -0.5)">&minus;</button>
+											<input type="number" min="0" step="0.5" class="form-control form-control-sm gantt-input" aria-label="Remaining work days" data-remaining
+												   value="@KanbanSession.Days(ticket.RemainingDays)" @onchange="e => SetRemainingAsync(item, e)" />
+											<button type="button" class="btn btn-ghost-secondary gantt-mini" title="Half a day more" data-more @onclick="() => StepAsync(item, 0.5)">+</button>
+										</span>
+									}
+								</div>
+								<div class="gantt-time">
+									@if (barWidth <= 0.01)
+									{
+										<div class="gantt-milestone @BarClass(item)" style="left:@Px(left)" title="@Tooltip(item)" data-bar="@ticket.Id" @onclick="() => OnOpen.InvokeAsync(ticket.Id)"></div>
+									}
+									else
+									{
+										<div class="gantt-bar @BarClass(item)" style="left:@Px(left); width:@Px(barWidth)" title="@Tooltip(item)" data-bar="@ticket.Id"
+											 data-movable="@(!item.IsHistory)" @onclick="() => OnOpen.InvokeAsync(ticket.Id)">
+											@if (ticket.NotBefore != null && !item.IsHistory)
+											{
+												<span class="gantt-pin" title="@($"Not before {Date(DateOnly.FromDateTime(ticket.NotBefore.Value))}")">&#x1F4CC;</span>
+											}
+											<span class="gantt-bar-label">@(item.IsHistory ? "" : KanbanSession.Days(ticket.RemainingDays) + "d")</span>
+											@if (!item.IsHistory)
+											{
+												<span class="gantt-handle" title="Drag to change the work days" data-handle></span>
+											}
+										</div>
+									}
+									<span class="gantt-after-label" style="left:@Px(left + Math.Max(barWidth, 6) + 6)">@ticket.Title</span>
+								</div>
+							</div>
+						}
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="d-flex flex-wrap gap-3 small text-secondary mt-2" data-legend>
+			<span><span class="gantt-swatch kind-inprogress"></span> in progress</span>
+			<span><span class="gantt-swatch kind-todo"></span> to do</span>
+			<span><span class="gantt-swatch critical"></span> critical path</span>
+			<span><span class="gantt-swatch history"></span> finished</span>
+			<span>Drag a bar's right end to change its days, drag the bar to plan it later. Arrows point from a ticket to the ones waiting for it.</span>
+		</div>
+	}
+	</div>
+}
+
+@code {
+	public const int RowHeight = 40;
+
+	private static readonly (string Label, int Size)[] Zooms = [("Months", 10), ("Weeks", 22), ("Days", 40)];
+
+	private sealed record GanttRow(KanbanPlannedTicket Item, bool CanMoveUp, bool CanMoveDown);
+
+	private ElementReference _root;
+	private IJSObjectReference? _module;
+	private DotNetObjectReference<GanttView>? _self;
+	private bool _attached;
+	private int _dayWidth = 22;
+	private bool _showDone;
+
+	[Parameter, EditorRequired]
+	public KanbanSession Session { get; set; } = default!;
+
+	[Parameter]
+	public EventCallback<string> OnOpen { get; set; }
+
+	private static string Date(DateOnly date) => date.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+	private static string Px(double value, bool unit = true) => value.ToString("0.##", CultureInfo.InvariantCulture) + (unit ? "px" : "");
+
+	/// <summary>
+	/// Finished work (when shown) first, then the open tickets in the order the plan takes them.
+	/// </summary>
+	private List<GanttRow> Rows(KanbanPlan plan)
+	{
+		List<GanttRow> rows = [];
+		if (_showDone)
+		{
+			rows.AddRange(plan.Items.Where(i => i.IsHistory).OrderBy(i => i.CalendarEnd).Select(i => new GanttRow(i, false, false)));
+		}
+		List<KanbanPlannedTicket> open = [.. Session.OpenByPriority().Select(t => plan.Find(t.Id)).OfType<KanbanPlannedTicket>()];
+		for (int i = 0; i < open.Count; i++)
+		{
+			bool up = i > 0 && open[i - 1].Kind == open[i].Kind;
+			bool down = i < open.Count - 1 && open[i + 1].Kind == open[i].Kind;
+			rows.Add(new GanttRow(open[i], up, down));
+		}
+		return rows;
+	}
+
+	private static (int From, int To) Range(KanbanPlan plan, List<GanttRow> rows)
+	{
+		int from = rows.Count == 0 ? 0 : Math.Min(0, (int)Math.Floor(rows.Min(r => r.Item.CalendarStart)));
+		int to = rows.Count == 0 ? 14 : (int)Math.Ceiling(rows.Max(r => r.Item.CalendarEnd));
+		return (from - 1, Math.Max(to + 7, from + 21));
+	}
+
+	private string LinkPath(KanbanPlannedTicket before, int beforeRow, KanbanPlannedTicket after, int afterRow, int from)
+	{
+		double x1 = (before.CalendarEnd - from) * _dayWidth;
+		double y1 = beforeRow * RowHeight + RowHeight / 2.0;
+		double x2 = (after.CalendarStart - from) * _dayWidth;
+		double y2 = afterRow * RowHeight + RowHeight / 2.0;
+		double bend = Math.Max(x1 + 6, Math.Min(x2 - 6, x1 + 12));
+		string P(double v) => v.ToString("0.#", CultureInfo.InvariantCulture);
+		return x2 - 6 >= x1 + 6
+			? $"M{P(x1)},{P(y1)} H{P(bend)} V{P(y2)} H{P(x2 - 1)}"
+			// The later ticket starts left of where the first one ends (a cycle was broken): loop around
+			: $"M{P(x1)},{P(y1)} h8 V{P(y2 - RowHeight / 2.0 + 2)} H{P(x2 - 10)} V{P(y2)} H{P(x2 - 1)}";
+	}
+
+	private static string BarClass(KanbanPlannedTicket item)
+	{
+		List<string> classes = [item.IsHistory ? "history" : "kind-" + item.Kind.ToString().ToLowerInvariant()];
+		if (item.Critical && !item.IsHistory)
+		{
+			classes.Add("critical");
+		}
+		if (item.InCycle)
+		{
+			classes.Add("cycle");
+		}
+		return string.Join(' ', classes);
+	}
+
+	private static string Tooltip(KanbanPlannedTicket item)
+	{
+		string range = item.StartDate == item.EndDate ? Date(item.StartDate) : $"{Date(item.StartDate)} to {Date(item.EndDate)}";
+		List<string> notes = [];
+		if (item.IsHistory)
+		{
+			notes.Add("finished");
+		}
+		else
+		{
+			notes.Add($"{KanbanSession.Days(item.Ticket.RemainingDays)} work days left");
+			if (item.Critical)
+			{
+				notes.Add("on the critical path");
+			}
+			if (item.WaitsForCapacity)
+			{
+				notes.Add("waits until someone is free");
+			}
+			if (item.InCycle)
+			{
+				notes.Add("in a dependency cycle");
+			}
+		}
+		return $"{item.Ticket.Reference} {item.Ticket.Title}\n{range}\n{string.Join(", ", notes)}";
+	}
+
+	private Task SetStartAsync(ChangeEventArgs e)
+	{
+		KanbanProjectView project = Session.Project!.Copy();
+		project.StartDate = DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day)
+			? KanbanSession.Day(day)
+			: null;
+		return Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.SaveProject, Project = project });
+	}
+
+	private Task SetParallelAsync(ChangeEventArgs e)
+	{
+		if (!int.TryParse(e.Value?.ToString(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int parallel) || parallel < 1)
+		{
+			Session.Error = "At least one ticket has to be worked on at a time.";
+			return Task.CompletedTask;
+		}
+		KanbanProjectView project = Session.Project!.Copy();
+		project.Parallel = parallel;
+		return Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.SaveProject, Project = project });
+	}
+
+	private Task MoveAsync(List<GanttRow> rows, int index, int direction)
+	{
+		int other = index + direction;
+		if (other < 0 || other >= rows.Count)
+		{
+			return Task.CompletedTask;
+		}
+		// Swapping the two keeps every other ticket's place
+		string[] order = direction < 0
+			? [rows[index].Item.Ticket.Id, rows[other].Item.Ticket.Id]
+			: [rows[other].Item.Ticket.Id, rows[index].Item.Ticket.Id];
+		return Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.Reorder, OrderedIds = order });
+	}
+
+	/// <summary>
+	/// New remaining work days. Before work starts the estimate itself changes; once started only what is left.
+	/// </summary>
+	internal static KanbanEstimateView Estimate(KanbanPlannedTicket item, double remaining)
+	{
+		remaining = Math.Max(0, Math.Round(remaining * 2, MidpointRounding.AwayFromZero) / 2);
+		return item.Kind == KanbanColumnKind.Todo
+			? new KanbanEstimateView { TicketId = item.Ticket.Id, RequiredDays = remaining, RemainingDays = remaining }
+			: new KanbanEstimateView { TicketId = item.Ticket.Id, RemainingDays = remaining };
+	}
+
+	private Task PlanAsync(params KanbanEstimateView[] estimates) =>
+		Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.Plan, Estimates = estimates });
+
+	private Task StepAsync(KanbanPlannedTicket item, double step) => PlanAsync(Estimate(item, item.Ticket.RemainingDays + step));
+
+	private Task SetRemainingAsync(KanbanPlannedTicket item, ChangeEventArgs e)
+	{
+		if (TicketDialog.ParseDays(e.Value?.ToString()) is not double days)
+		{
+			Session.Error = "Work days are a number of at least 0, like 1.5.";
+			return Task.CompletedTask;
+		}
+		return PlanAsync(item.Kind == KanbanColumnKind.Todo && Math.Abs(item.Ticket.RequiredDays - item.Ticket.RemainingDays) > 1e-9
+			? new KanbanEstimateView { TicketId = item.Ticket.Id, RemainingDays = days }
+			: Estimate(item, days));
+	}
+
+	private Task SetRequiredAsync(KanbanTicketView ticket, ChangeEventArgs e)
+	{
+		if (TicketDialog.ParseDays(e.Value?.ToString()) is not double days)
+		{
+			Session.Error = "Work days are a number of at least 0, like 1.5.";
+			return Task.CompletedTask;
+		}
+		return PlanAsync(new KanbanEstimateView { TicketId = ticket.Id, RequiredDays = days });
+	}
+
+	/// <summary>
+	/// Called by the script after a bar was dragged; positions are calendar days from the plan's first day.
+	/// </summary>
+	[JSInvokable]
+	public async Task BarDragged(string ticketId, string mode, double calendarStart, double calendarEnd)
+	{
+		KanbanPlan plan = Session.Plan;
+		if (plan.Find(ticketId) is not KanbanPlannedTicket item || item.IsHistory)
+		{
+			return;
+		}
+		if (mode == "resize")
+		{
+			double end = plan.Calendar.CalendarToWork(calendarEnd);
+			await PlanAsync(Estimate(item, Math.Max(0.5, end - item.Start)));
+		}
+		else
+		{
+			double start = Math.Round(plan.Calendar.CalendarToWork(calendarStart), MidpointRounding.AwayFromZero);
+			DateTime? notBefore = start <= 0 ? null : KanbanSession.Day(plan.Calendar.StartDate(start));
+			await PlanAsync(new KanbanEstimateView { TicketId = ticketId, SetNotBefore = true, NotBefore = notBefore });
+		}
+		await InvokeAsync(StateHasChanged);
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (_attached || Session.Project == null)
+		{
+			return;
+		}
+		try
+		{
+			_module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Projects/Components/GanttView.razor.js");
+			_self ??= DotNetObjectReference.Create(this);
+			await _module.InvokeVoidAsync("attach", _root, _self);
+			_attached = true;
+		}
+		catch (JSException)
+		{
+		}
+		catch (InvalidOperationException)
+		{
+			// Prerendering has no JavaScript yet
+		}
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		try
+		{
+			if (_module != null)
+			{
+				if (_attached)
+				{
+					await _module.InvokeVoidAsync("detach", _root);
+				}
+				await _module.DisposeAsync();
+			}
+		}
+		catch (JSDisconnectedException)
+		{
+		}
+		_self?.Dispose();
+	}
+}

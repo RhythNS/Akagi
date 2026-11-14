@@ -1,0 +1,64 @@
+.kanban-markdown {
+    overflow-wrap: anywhere;
+}
+
+.kanban-markdown ::deep > :last-child {
+    margin-bottom: 0;
+}
+
+.kanban-markdown ::deep h1,
+.kanban-markdown ::deep h2,
+.kanban-markdown ::deep h3,
+.kanban-markdown ::deep h4 {
+    margin-top: 0.75rem;
+    margin-bottom: 0.4rem;
+}
+
+.kanban-markdown ::deep h1 { font-size: 1.25rem; }
+.kanban-markdown ::deep h2 { font-size: 1.1rem; }
+.kanban-markdown ::deep h3,
+.kanban-markdown ::deep h4 { font-size: 1rem; }
+
+.kanban-markdown ::deep pre {
+    background: var(--tblr-bg-surface-secondary, #f6f8fb);
+    color: var(--tblr-body-color, #182433);
+    border: 1px solid var(--tblr-border-color, #e6e7e9);
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    white-space: pre-wrap;
+}
+
+.kanban-markdown ::deep code {
+    color: var(--tblr-body-color, #182433);
+    background: var(--tblr-bg-surface-secondary, #f6f8fb);
+    padding: 0 0.2rem;
+    border-radius: 3px;
+}
+
+.kanban-markdown ::deep pre code {
+    padding: 0;
+    background: transparent;
+}
+
+.kanban-markdown ::deep table {
+    width: auto;
+    margin-bottom: 0.75rem;
+    border-collapse: collapse;
+}
+
+.kanban-markdown ::deep th,
+.kanban-markdown ::deep td {
+    border: 1px solid var(--tblr-border-color, #e6e7e9);
+    padding: 0.25rem 0.5rem;
+}
+
+.kanban-markdown ::deep blockquote {
+    border-left: 3px solid var(--tblr-border-color, #e6e7e9);
+    padding-left: 0.75rem;
+    color: var(--tblr-secondary, #667382);
+}
+
+.kanban-markdown ::deep ul.contains-task-list {
+    list-style: none;
+    padding-left: 0.5rem;
+}

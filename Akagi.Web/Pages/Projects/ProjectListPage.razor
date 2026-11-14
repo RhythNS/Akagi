@@ -1,0 +1,226 @@
+@page "/Projects"
+
+@using System.Globalization
+@using Akagi.Bridge.Chat.Transmissions.Responses
+@using Akagi.Web.Services.Sockets
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject NavigationManager Navigation
+
+<PageTitle>Projects - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Projects</div>
+			<h2 class="page-title">Kanban boards</h2>
+			<div class="text-secondary small mt-1">
+				Your projects with their boards and plans. Akagi's Ren module keeps them up to date when you tell her about your work.
+			</div>
+		</div>
+		<div class="col-auto ms-auto">
+			<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" data-new @onclick="() => _creating = true">
+				<Icon IconType="@Icons.Plus" Size="16" />
+				<span>New project</span>
+			</button>
+		</div>
+	</div>
+</div>
+
+@if (_error != null)
+{
+	<div class="alert alert-danger" role="alert" data-error>@_error</div>
+}
+
+@if (_creating)
+{
+	<div class="card mb-3" data-create>
+		<div class="card-body">
+			<div class="row g-2 align-items-end">
+				<div class="col-md-5">
+					<label class="form-label" for="new-project-name">Name</label>
+					<input id="new-project-name" class="form-control" data-new-name value="@_name" @oninput="e => _name = e.Value?.ToString() ?? string.Empty"
+						   @onkeydown="OnNameKeyAsync" />
+				</div>
+				<div class="col-md-5">
+					<label class="form-label" for="new-project-columns">Columns</label>
+					<select id="new-project-columns" class="form-select" data-new-preset value="@_preset" @onchange="e => _preset = int.Parse(e.Value!.ToString()!, CultureInfo.InvariantCulture)">
+						@for (int i = 0; i < Presets.Length; i++)
+						{
+							<option value="@i">@string.Join(" · ", Presets[i].Select(c => c.Name))</option>
+						}
+					</select>
+				</div>
+				<div class="col-md-2 d-flex gap-2">
+					<button type="button" class="btn btn-primary flex-fill" data-create-project disabled="@string.IsNullOrWhiteSpace(_name)" @onclick="CreateAsync">Create</button>
+					<button type="button" class="btn btn-ghost-secondary" @onclick="() => _creating = false">Cancel</button>
+				</div>
+			</div>
+			<div class="form-hint mt-2">Columns, work days and more can be changed later in the project's settings.</div>
+		</div>
+	</div>
+}
+
+@if (_projects == null)
+{
+	if (_offline)
+	{
+		<div class="card border-danger">
+			<div class="card-body py-5 text-center">
+				<h3 class="h4 mb-1">Socket Service Offline</h3>
+				<p class="text-secondary mb-3">Unable to reach the Akagi backend. Your projects are stored there.</p>
+				<button type="button" class="btn btn-primary" @onclick="LoadAsync">Retry Connection</button>
+			</div>
+		</div>
+	}
+	else
+	{
+		<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+	}
+}
+else if (_projects.Count == 0)
+{
+	<div class="card" data-empty>
+		<div class="card-body py-5 text-center">
+			<h3 class="mb-1">No projects yet</h3>
+			<p class="text-secondary mb-3">Make one here, or ask Akagi to plan a project with you.</p>
+			<button type="button" class="btn btn-primary" @onclick="() => _creating = true">New project</button>
+		</div>
+	</div>
+}
+else
+{
+	<div class="row row-cards">
+		@foreach (KanbanProjectView project in _projects)
+		{
+			<div class="col-md-6 col-xl-4" data-project="@project.Id">
+				<a class="card card-link h-100 text-reset @(project.Archived ? "opacity-50" : "")" href="@($"Projects/{project.Id}")">
+					<div class="card-body">
+						<div class="d-flex align-items-center mb-1">
+							<h3 class="card-title mb-0 text-truncate">@project.Name</h3>
+							@if (project.Archived)
+							{
+								<span class="badge bg-secondary-lt ms-2">archived</span>
+							}
+						</div>
+						<div class="text-secondary small mb-3">@string.Join(" · ", project.Columns.Select(c => c.Name))</div>
+						<div class="d-flex flex-wrap align-items-baseline gap-3">
+							<div><span class="h2 mb-0" data-open-count>@project.OpenTickets</span> <span class="text-secondary small">open of @project.TicketCount</span></div>
+							<div><span class="h3 mb-0">@KanbanSession.Days(project.RemainingDays)</span> <span class="text-secondary small">work days left</span></div>
+						</div>
+						@if (project.TicketCount > 0)
+						{
+							<div class="progress progress-sm mt-2">
+								<div class="progress-bar bg-success" style="width:@(Percent(project))%" role="progressbar" aria-label="Finished tickets"></div>
+							</div>
+						}
+						<div class="small mt-2" data-finish>
+							@if (project.Finish is DateTime finish)
+							{
+								<span class="text-secondary">Plan finishes</span> <strong>@finish.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture)</strong>
+							}
+							else
+							{
+								<span class="text-secondary">Nothing open.</span>
+							}
+						</div>
+					</div>
+				</a>
+			</div>
+		}
+	</div>
+}
+
+@code {
+	internal static readonly KanbanColumnView[][] Presets =
+	[
+		[
+			new() { Name = "Backlog", Kind = KanbanColumnKind.Todo },
+			new() { Name = "In progress", Kind = KanbanColumnKind.InProgress },
+			new() { Name = "Done", Kind = KanbanColumnKind.Done }
+		],
+		[
+			new() { Name = "Backlog", Kind = KanbanColumnKind.Todo },
+			new() { Name = "Working", Kind = KanbanColumnKind.InProgress },
+			new() { Name = "Review", Kind = KanbanColumnKind.InProgress },
+			new() { Name = "Done", Kind = KanbanColumnKind.Done },
+			new() { Name = "Aborted", Kind = KanbanColumnKind.Done }
+		],
+		[
+			new() { Name = "Ideas", Kind = KanbanColumnKind.Todo },
+			new() { Name = "Next", Kind = KanbanColumnKind.Todo },
+			new() { Name = "Doing", Kind = KanbanColumnKind.InProgress },
+			new() { Name = "Done", Kind = KanbanColumnKind.Done }
+		]
+	];
+
+	private List<KanbanProjectView>? _projects;
+	private bool _offline;
+	private string? _error;
+	private bool _creating;
+	private string _name = string.Empty;
+	private int _preset;
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override Task OnInitializedAsync() => LoadAsync();
+
+	private static int Percent(KanbanProjectView project) =>
+		project.TicketCount == 0 ? 0 : (int)Math.Round(100.0 * (project.TicketCount - project.OpenTickets) / project.TicketCount);
+
+	private async Task LoadAsync()
+	{
+		(KanbanResponseTransmission? response, bool offline) = await KanbanSession.RequestAsync(SocketClientContainer,
+			new KanbanRequestTransmission { Action = KanbanAction.ListProjects });
+		_offline = offline;
+		_error = response?.Error;
+		if (response != null && response.Error == null)
+		{
+			_projects = [.. response.Projects];
+		}
+	}
+
+	private Task OnNameKeyAsync(KeyboardEventArgs e) => e.Key == "Enter" ? CreateAsync() : Task.CompletedTask;
+
+	private async Task CreateAsync()
+	{
+		if (string.IsNullOrWhiteSpace(_name))
+		{
+			return;
+		}
+		KanbanProjectView project = new()
+		{
+			Name = _name.Trim(),
+			Columns = [.. Presets[Math.Clamp(_preset, 0, Presets.Length - 1)].Select(c => c.Copy())]
+		};
+		(KanbanResponseTransmission? response, bool offline) = await KanbanSession.RequestAsync(SocketClientContainer,
+			new KanbanRequestTransmission { Action = KanbanAction.SaveProject, Project = project });
+		_offline = offline;
+		_error = response?.Error;
+		if (response?.Project != null && response.Error == null)
+		{
+			Navigation.NavigateTo($"Projects/{response.Project.Id}");
+		}
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_projects == null && _offline && SocketClientContainer.IsConnected)
+			{
+				await LoadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+	}
+}

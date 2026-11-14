@@ -1,0 +1,201 @@
+@page "/Projects/{ProjectId}"
+@page "/Projects/{ProjectId}/{View}"
+
+@using System.Globalization
+@using Akagi.Web.Services.Sockets
+
+@implements IDisposable
+@inject ISocketClientContainer SocketClientContainer
+@inject NavigationManager Navigation
+
+<PageTitle>@(_session?.Project?.Name ?? "Project") - Akagi</PageTitle>
+
+@if (_session?.Project is KanbanProjectView project)
+{
+	<div class="page-header d-print-none mb-3">
+		<div class="row g-2 align-items-center">
+			<div class="col">
+				<div class="page-pretitle"><a href="Projects" class="text-reset" data-back>Projects</a></div>
+				<h2 class="page-title" data-project-title>@project.Name</h2>
+				<div class="text-secondary small mt-1" data-project-stats>
+					@{ KanbanPlan plan = _session.Plan; int open = _session.Tickets.Count(t => _session.KindOf(t) != KanbanColumnKind.Done); }
+					@open open of @_session.Tickets.Count tickets
+					@if (plan.FinishDate is DateOnly finish)
+					{
+						<span>· @KanbanSession.Days(plan.RemainingDays) work days left · finishes @finish.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture)</span>
+					}
+				</div>
+			</div>
+			<div class="col-auto ms-auto d-flex align-items-center gap-2">
+				<ul class="nav nav-pills" data-views>
+					@foreach ((string key, string label) in Views)
+					{
+						<li class="nav-item">
+							<a class="nav-link @(CurrentView == key ? "active" : "")" href="@($"Projects/{ProjectId}/{key}")" data-view="@key">@label</a>
+						</li>
+					}
+				</ul>
+				<button type="button" class="btn btn-icon btn-ghost-secondary" title="Load again" data-refresh @onclick="ReloadAsync">
+					<Icon IconType="@Icons.Refresh" Size="18" />
+				</button>
+			</div>
+		</div>
+	</div>
+
+	@if (_session.Error != null && _openTicket == null)
+	{
+		<div class="alert alert-danger alert-dismissible" role="alert" data-error>
+			@_session.Error
+			<button type="button" class="btn-close" aria-label="Close" @onclick="() => _session.Error = null"></button>
+		</div>
+	}
+
+	@switch (CurrentView)
+	{
+		case "plan":
+			<GanttView Session="_session" OnOpen="Open" />
+			break;
+		case "settings":
+			<ProjectSettingsView Session="_session" OnDeleted="@(() => Navigation.NavigateTo("Projects"))" />
+			break;
+		default:
+			<KanbanBoardView Session="_session" OnOpen="Open" />
+			break;
+	}
+
+	<TicketDialog Session="_session" TicketId="@_openTicket" OnClose="Close" />
+}
+else if (_offline)
+{
+	<div class="card border-danger">
+		<div class="card-body py-5 text-center">
+			<h3 class="h4 mb-1">Socket Service Offline</h3>
+			<p class="text-secondary mb-3">Unable to reach the Akagi backend. Your projects are stored there.</p>
+			<button type="button" class="btn btn-primary" @onclick="ReloadAsync">Retry Connection</button>
+		</div>
+	</div>
+}
+else if (_session?.Error != null)
+{
+	<div class="card" data-missing>
+		<div class="card-body py-5 text-center">
+			<h3 class="h4 mb-1">@_session.Error</h3>
+			<a href="Projects" class="btn btn-primary mt-2">All projects</a>
+		</div>
+	</div>
+}
+else
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+
+@code {
+	/// <summary>How often the page asks whether a character or another tab changed the project.</summary>
+	public static TimeSpan RefreshInterval { get; set; } = TimeSpan.FromSeconds(15);
+
+	private static readonly (string Key, string Label)[] Views = [("board", "Board"), ("plan", "Plan"), ("settings", "Settings")];
+
+	private KanbanSession? _session;
+	private string? _openTicket;
+	private bool _offline;
+	private CancellationTokenSource? _refresh;
+
+	[Parameter]
+	public string ProjectId { get; set; } = string.Empty;
+
+	[Parameter]
+	public string? View { get; set; }
+
+	[SupplyParameterFromQuery(Name = "ticket")]
+	public string? TicketQuery { get; set; }
+
+	private string CurrentView => View?.ToLowerInvariant() is "plan" or "settings" ? View.ToLowerInvariant() : "board";
+
+	protected override void OnInitialized()
+	{
+		SocketClientContainer.ConnectionStateChanged += OnConnectionStateChanged;
+	}
+
+	protected override async Task OnParametersSetAsync()
+	{
+		if (_session?.ProjectId == ProjectId)
+		{
+			return;
+		}
+		if (_session != null)
+		{
+			_session.Changed -= OnSessionChanged;
+		}
+		_session = new KanbanSession(SocketClientContainer, ProjectId);
+		_session.Changed += OnSessionChanged;
+		_openTicket = TicketQuery;
+		await ReloadAsync();
+		StartRefreshing();
+	}
+
+	private async Task ReloadAsync()
+	{
+		if (_session == null)
+		{
+			return;
+		}
+		_session.Error = null;
+		await _session.LoadAsync();
+		_offline = _session.Offline;
+	}
+
+	private void Open(string ticketId) => _openTicket = ticketId;
+
+	private void Close()
+	{
+		_openTicket = null;
+		_session!.Error = null;
+	}
+
+	private void OnSessionChanged() => _ = InvokeAsync(StateHasChanged);
+
+	private void StartRefreshing()
+	{
+		_refresh?.Cancel();
+		_refresh = new CancellationTokenSource();
+		CancellationToken token = _refresh.Token;
+		KanbanSession session = _session!;
+		_ = Task.Run(async () =>
+		{
+			try
+			{
+				using PeriodicTimer timer = new(RefreshInterval);
+				while (await timer.WaitForNextTickAsync(token))
+				{
+					await session.RefreshIfChangedAsync();
+				}
+			}
+			catch (OperationCanceledException)
+			{
+			}
+		}, token);
+	}
+
+	private void OnConnectionStateChanged()
+	{
+		_ = InvokeAsync(async () =>
+		{
+			if (_session?.Project == null && _offline && SocketClientContainer.IsConnected)
+			{
+				await ReloadAsync();
+			}
+			StateHasChanged();
+		});
+	}
+
+	public void Dispose()
+	{
+		SocketClientContainer.ConnectionStateChanged -= OnConnectionStateChanged;
+		if (_session != null)
+		{
+			_session.Changed -= OnSessionChanged;
+		}
+		_refresh?.Cancel();
+		_refresh?.Dispose();
+	}
+}

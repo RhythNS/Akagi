@@ -1,0 +1,239 @@
+@* A project's name, knowledge, columns and planning settings. Changes are saved together. *@
+@using System.Globalization
+
+@if (_draft != null)
+{
+	List<string> problems = Problems(_draft);
+	<div class="row g-3" data-settings>
+		<div class="col-lg-7">
+			<div class="card mb-3">
+				<div class="card-header"><h3 class="card-title">Project</h3></div>
+				<div class="card-body">
+					<div class="mb-3">
+						<label class="form-label" for="project-name">Name</label>
+						<input id="project-name" class="form-control" data-project-name value="@_draft.Name" @oninput="e => _draft.Name = e.Value?.ToString() ?? string.Empty" />
+					</div>
+					<div>
+						<label class="form-label mb-0">Knowledge</label>
+						<div class="form-hint mb-2">What the project is about and what anyone working on it should know. Characters with a projects injection read it, and Ren adds decisions here.</div>
+						<MarkdownEditor @bind-Value="_draft.Description" Rows="12" Name="project-description" Placeholder="Goals, decisions, links, conventions..." />
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="col-lg-5">
+			<div class="card mb-3">
+				<div class="card-header"><h3 class="card-title">Columns</h3></div>
+				<div class="card-body">
+					<div class="form-hint mb-2">Left to right. Every project needs at least one to-do, one in-progress and one done column; tickets of a removed column move to the first column of the same type.</div>
+					@for (int i = 0; i < _draft.Columns.Length; i++)
+					{
+						int index = i;
+						KanbanColumnView column = _draft.Columns[i];
+						<div class="d-flex align-items-center gap-1 mb-2" data-column-row="@index">
+							<input class="form-control form-control-sm" aria-label="Column name" data-column-name value="@column.Name" @oninput="e => column.Name = e.Value?.ToString() ?? string.Empty" />
+							<select class="form-select form-select-sm" style="width:8.5rem" aria-label="Column type" data-column-kind value="@column.Kind" @onchange="e => column.Kind = Enum.Parse<KanbanColumnKind>(e.Value!.ToString()!)">
+								@foreach (KanbanColumnKind kind in Enum.GetValues<KanbanColumnKind>())
+								{
+									<option value="@kind">@KanbanSession.KindName(kind)</option>
+								}
+							</select>
+							<button type="button" class="btn btn-sm btn-ghost-secondary px-1" title="Move left" disabled="@(index == 0)" @onclick="() => Swap(index, index - 1)">
+								<Icon IconType="@Icons.ChevronUp" Size="14" />
+							</button>
+							<button type="button" class="btn btn-sm btn-ghost-secondary px-1" title="Move right" disabled="@(index == _draft.Columns.Length - 1)" @onclick="() => Swap(index, index + 1)">
+								<Icon IconType="@Icons.ChevronDown" Size="14" />
+							</button>
+							<button type="button" class="btn btn-sm btn-ghost-danger px-1" title="Remove column" data-remove-column @onclick="() => Remove(index)">
+								<Icon IconType="@Icons.Trash" Size="14" />
+							</button>
+						</div>
+					}
+					@foreach (string removed in _removed.Where(id => Count(id) > 0))
+					{
+						<div class="small text-warning" data-removed-note>@Count(removed) ticket(s) in @(Session.Project?.Column(removed)?.Name) will move to the first @(KanbanSession.KindName(Session.Project!.KindOf(removed)).ToLowerInvariant()) column.</div>
+					}
+					<button type="button" class="btn btn-sm btn-outline-primary mt-1" data-add-column @onclick="Add">
+						<Icon IconType="@Icons.Plus" Size="14" class="me-1" />Add column
+					</button>
+				</div>
+			</div>
+			<div class="card mb-3">
+				<div class="card-header"><h3 class="card-title">Planning</h3></div>
+				<div class="card-body">
+					<div class="mb-3">
+						<div class="form-label">Work days</div>
+						<div class="d-flex flex-wrap gap-2" data-work-days>
+							@foreach (DayOfWeek day in WeekOrder)
+							{
+								<label class="form-check form-check-inline m-0">
+									<input class="form-check-input" type="checkbox" checked="@_draft.IsWorkDay(day)" data-work-day="@day" @onchange="e => SetWorkDay(day, e.Value is true)" />
+									<span class="form-check-label">@CultureInfo.InvariantCulture.DateTimeFormat.GetAbbreviatedDayName(day)</span>
+								</label>
+							}
+						</div>
+					</div>
+					<div class="row g-2 mb-3">
+						<div class="col-6">
+							<label class="form-label" for="project-start">Plan starts</label>
+							<input id="project-start" type="date" class="form-control" data-project-start value="@(_draft.StartDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" @onchange="SetStart" />
+							<div class="form-hint">Empty plans from today.</div>
+						</div>
+						<div class="col-6">
+							<label class="form-label" for="project-parallel">Tickets at once</label>
+							<input id="project-parallel" type="number" min="1" max="50" class="form-control" data-project-parallel value="@_draft.Parallel"
+								   @onchange="e => _draft.Parallel = int.TryParse(e.Value?.ToString(), out int n) ? Math.Clamp(n, 1, 50) : 1" />
+						</div>
+					</div>
+					<label class="form-check form-switch">
+						<input class="form-check-input" type="checkbox" checked="@_draft.Archived" data-project-archived @onchange="e => _draft.Archived = e.Value is true" />
+						<span class="form-check-label">Archived (hidden from characters, listed last)</span>
+					</label>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="d-flex flex-wrap align-items-center gap-2">
+		<button type="button" class="btn btn-primary" data-save-settings disabled="@(problems.Count > 0)" @onclick="SaveAsync">Save changes</button>
+		<button type="button" class="btn btn-ghost-secondary" @onclick="Reset">Discard</button>
+		@foreach (string problem in problems)
+		{
+			<span class="text-danger small" data-problem>@problem</span>
+		}
+		@if (_saved)
+		{
+			<span class="text-success small" data-saved>Saved.</span>
+		}
+		<div class="ms-auto">
+			@if (_confirmDelete)
+			{
+				<span class="small me-2">Delete @Session.Project?.Name and all @Session.Tickets.Count tickets for good?</span>
+				<button type="button" class="btn btn-danger btn-sm" data-confirm-delete-project @onclick="DeleteAsync">Delete project</button>
+				<button type="button" class="btn btn-ghost-secondary btn-sm" @onclick="() => _confirmDelete = false">Keep it</button>
+			}
+			else
+			{
+				<button type="button" class="btn btn-ghost-danger btn-sm" data-delete-project @onclick="() => _confirmDelete = true">
+					<Icon IconType="@Icons.Trash" Size="16" class="me-1" />Delete project
+				</button>
+			}
+		</div>
+	</div>
+}
+
+@code {
+	private static readonly DayOfWeek[] WeekOrder =
+		[DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday, DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday];
+
+	private KanbanProjectView? _draft;
+	private readonly HashSet<string> _removed = [];
+	private bool _confirmDelete;
+	private bool _saved;
+
+	[Parameter, EditorRequired]
+	public KanbanSession Session { get; set; } = default!;
+
+	[Parameter]
+	public EventCallback OnDeleted { get; set; }
+
+	protected override void OnParametersSet()
+	{
+		if (_draft == null && Session.Project != null)
+		{
+			Reset();
+		}
+	}
+
+	private void Reset()
+	{
+		_draft = Session.Project?.Copy();
+		_removed.Clear();
+		_saved = false;
+	}
+
+	private int Count(string columnId) => Session.Tickets.Count(t => t.ColumnId == columnId);
+
+	internal static List<string> Problems(KanbanProjectView draft)
+	{
+		List<string> problems = [];
+		if (string.IsNullOrWhiteSpace(draft.Name))
+		{
+			problems.Add("The project needs a name.");
+		}
+		if (draft.Columns.Any(c => string.IsNullOrWhiteSpace(c.Name)))
+		{
+			problems.Add("Every column needs a name.");
+		}
+		foreach (KanbanColumnKind kind in Enum.GetValues<KanbanColumnKind>())
+		{
+			if (draft.Columns.All(c => c.Kind != kind))
+			{
+				problems.Add($"Add at least one {KanbanSession.KindName(kind).ToLowerInvariant()} column.");
+			}
+		}
+		if ((draft.WorkDays & 0x7F) == 0)
+		{
+			problems.Add("Pick at least one work day.");
+		}
+		return problems;
+	}
+
+	private void Swap(int a, int b)
+	{
+		KanbanColumnView[] columns = [.. _draft!.Columns];
+		(columns[a], columns[b]) = (columns[b], columns[a]);
+		_draft.Columns = columns;
+		_saved = false;
+	}
+
+	private void Remove(int index)
+	{
+		KanbanColumnView column = _draft!.Columns[index];
+		if (!string.IsNullOrEmpty(column.Id))
+		{
+			_removed.Add(column.Id);
+		}
+		_draft.Columns = [.. _draft.Columns.Where((_, i) => i != index)];
+		_saved = false;
+	}
+
+	private void Add()
+	{
+		_draft!.Columns = [.. _draft.Columns, new KanbanColumnView { Name = "New column", Kind = KanbanColumnKind.InProgress }];
+		_saved = false;
+	}
+
+	private void SetWorkDay(DayOfWeek day, bool on)
+	{
+		_draft!.WorkDays = on ? _draft.WorkDays | (1 << (int)day) : _draft.WorkDays & ~(1 << (int)day);
+	}
+
+	private void SetStart(ChangeEventArgs e)
+	{
+		_draft!.StartDate = DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly day)
+			? KanbanSession.Day(day)
+			: null;
+	}
+
+	private async Task SaveAsync()
+	{
+		if (_draft == null || Problems(_draft).Count > 0)
+		{
+			return;
+		}
+		if (await Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.SaveProject, Project = _draft }))
+		{
+			Reset();
+			_saved = true;
+		}
+	}
+
+	private async Task DeleteAsync()
+	{
+		if (await Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.DeleteProject }))
+		{
+			await OnDeleted.InvokeAsync();
+		}
+	}
+}

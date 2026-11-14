@@ -1,0 +1,200 @@
+@* The board: columns from left to right, tickets by priority. Drag a ticket to move or reorder it; click it to open it. *@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@if (Session.Project is KanbanProjectView project)
+{
+	<div class="kanban-board" @ref="_root" data-board>
+		@foreach (KanbanColumnView column in project.Columns)
+		{
+			List<KanbanTicketView> tickets = [.. Session.InColumn(column.Id)];
+			bool target = _dragging != null && _overColumn == column.Id;
+			<div class="kanban-column kind-@column.Kind.ToString().ToLowerInvariant() @(target ? "drop-target" : "")" data-column="@column.Id"
+				 @ondragenter="() => Enter(column.Id, null)" @ondragover:preventDefault="true" @ondrop="() => DropAsync(column.Id)">
+				<div class="kanban-column-header">
+					<div class="d-flex align-items-center gap-2">
+						<span class="fw-bold text-truncate" data-column-name>@column.Name</span>
+						<span class="badge kanban-kind-badge kind-@column.Kind.ToString().ToLowerInvariant()">@KanbanSession.KindName(column.Kind)</span>
+						<span class="ms-auto text-secondary small" data-column-count>@tickets.Count</span>
+					</div>
+					@if (column.Kind != KanbanColumnKind.Done && tickets.Count > 0)
+					{
+						<div class="text-secondary small" data-column-days>@KanbanSession.Days(tickets.Sum(t => t.RemainingDays)) work days</div>
+					}
+				</div>
+				<div class="kanban-column-body">
+					@foreach (KanbanTicketView ticket in tickets)
+					{
+						@if (target && _overTicket == ticket.Id && _dragging != ticket.Id)
+						{
+							<div class="kanban-drop-marker"></div>
+						}
+						<div class="kanban-card @(_dragging == ticket.Id ? "dragging" : "")" draggable="true" tabindex="0" role="button"
+							 data-ticket="@ticket.Id" title="@($"{ticket.Reference} {ticket.Title}")"
+							 @ondragstart="() => _dragging = ticket.Id" @ondragend="EndDrag"
+							 @ondragenter="() => Enter(column.Id, ticket.Id)" @ondragenter:stopPropagation="true"
+							 @onclick="() => OnOpen.InvokeAsync(ticket.Id)" @onkeydown="e => OpenByKey(e, ticket.Id)">
+							@ticket.Title
+						</div>
+					}
+					@if (target && _overTicket == null)
+					{
+						<div class="kanban-drop-marker"></div>
+					}
+
+					@if (_adding == column.Id)
+					{
+						<div class="kanban-add" data-add-form="@column.Id">
+							<textarea class="form-control form-control-sm" rows="2" placeholder="Title, Enter to add" data-new-title
+									  value="@_newTitle" @oninput="e => _newTitle = e.Value?.ToString() ?? string.Empty"
+									  @onkeydown="e => AddByKeyAsync(e, column.Id)"></textarea>
+							<div class="d-flex gap-2 mt-1">
+								<button type="button" class="btn btn-sm btn-primary" data-add-ticket @onclick="() => AddAsync(column.Id)">Add</button>
+								<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="() => _adding = null">Done</button>
+							</div>
+						</div>
+					}
+					else
+					{
+						<button type="button" class="btn btn-sm btn-ghost-secondary w-100 justify-content-start kanban-add-button" data-add="@column.Id"
+								@onclick="() => StartAdding(column.Id)">
+							<Icon IconType="@Icons.Plus" Size="14" class="me-1" />Add ticket
+						</button>
+					}
+				</div>
+			</div>
+		}
+	</div>
+}
+
+@code {
+	private ElementReference _root;
+	private IJSObjectReference? _module;
+	private string? _dragging;
+	private string? _overColumn;
+	private string? _overTicket;
+	private string? _adding;
+	private string _newTitle = string.Empty;
+
+	[Parameter, EditorRequired]
+	public KanbanSession Session { get; set; } = default!;
+
+	[Parameter]
+	public EventCallback<string> OnOpen { get; set; }
+
+	private void Enter(string columnId, string? ticketId)
+	{
+		if (_dragging == null)
+		{
+			return;
+		}
+		_overColumn = columnId;
+		_overTicket = ticketId;
+	}
+
+	private void EndDrag()
+	{
+		_dragging = null;
+		_overColumn = null;
+		_overTicket = null;
+	}
+
+	/// <summary>
+	/// Puts the dragged ticket before the ticket it was dragged onto, or at the end of the column.
+	/// </summary>
+	public static List<string> DropOrder(IEnumerable<string> column, string dragged, string? before)
+	{
+		List<string> order = [.. column.Where(id => id != dragged)];
+		int index = before == null || before == dragged ? -1 : order.IndexOf(before);
+		order.Insert(index < 0 ? order.Count : index, dragged);
+		return order;
+	}
+
+	private async Task DropAsync(string columnId)
+	{
+		string? dragged = _dragging;
+		string? before = _overColumn == columnId ? _overTicket : null;
+		EndDrag();
+		if (dragged == null || Session.Ticket(dragged) is not KanbanTicketView ticket)
+		{
+			return;
+		}
+		List<string> current = [.. Session.InColumn(columnId).Select(t => t.Id)];
+		List<string> order = DropOrder(current, dragged, before);
+		if (ticket.ColumnId == columnId && order.SequenceEqual(current))
+		{
+			return;
+		}
+		await Session.SendAsync(new KanbanRequestTransmission
+		{
+			Action = KanbanAction.MoveTicket,
+			TicketId = dragged,
+			ColumnId = columnId,
+			OrderedIds = [.. order]
+		});
+	}
+
+	private Task OpenByKey(KeyboardEventArgs e, string ticketId) =>
+		e.Key is "Enter" or " " ? OnOpen.InvokeAsync(ticketId) : Task.CompletedTask;
+
+	private void StartAdding(string columnId)
+	{
+		_adding = columnId;
+		_newTitle = string.Empty;
+	}
+
+	// The helper script keeps Enter from adding a line break, so Enter adds the ticket and Shift+Enter breaks the line
+	private Task AddByKeyAsync(KeyboardEventArgs e, string columnId) =>
+		e.Key == "Enter" && !e.ShiftKey ? AddAsync(columnId) : Task.CompletedTask;
+
+	private async Task AddAsync(string columnId)
+	{
+		string title = _newTitle.Trim();
+		if (title.Length == 0)
+		{
+			return;
+		}
+		if (await Session.SendAsync(new KanbanRequestTransmission
+		{
+			Action = KanbanAction.SaveTicket,
+			Ticket = new KanbanTicketView { Title = title, ColumnId = columnId }
+		}))
+		{
+			_newTitle = string.Empty;
+		}
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender)
+		{
+			try
+			{
+				_module = await JS.InvokeAsync<IJSObjectReference>("import", "./Pages/Projects/Components/KanbanBoardView.razor.js");
+				await _module.InvokeVoidAsync("attach", _root);
+			}
+			catch (JSException)
+			{
+				// Without the helper dragging still works in Chromium based browsers
+			}
+			catch (InvalidOperationException)
+			{
+				// Prerendering has no JavaScript yet
+			}
+		}
+	}
+
+	public async ValueTask DisposeAsync()
+	{
+		try
+		{
+			if (_module != null)
+			{
+				await _module.DisposeAsync();
+			}
+		}
+		catch (JSDisconnectedException)
+		{
+		}
+	}
+}

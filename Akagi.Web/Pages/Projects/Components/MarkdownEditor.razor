@@ -1,0 +1,49 @@
+@* A Markdown text box with a preview tab. *@
+
+<div class="kanban-md-editor" data-md-editor="@Name">
+	<ul class="nav nav-tabs nav-sm mb-0">
+		<li class="nav-item">
+			<button type="button" class="nav-link py-1 @(_preview ? "" : "active")" data-md-write @onclick="() => _preview = false">Write</button>
+		</li>
+		<li class="nav-item">
+			<button type="button" class="nav-link py-1 @(_preview ? "active" : "")" data-md-preview @onclick="() => _preview = true">Preview</button>
+		</li>
+		<li class="nav-item ms-auto small text-secondary align-self-center pe-1">Markdown</li>
+	</ul>
+	@if (_preview)
+	{
+		<div class="border border-top-0 rounded-bottom p-2 kanban-md-preview" style="min-height:@(Rows * 1.5)rem">
+			<MarkdownView Text="@Value" Empty="Nothing to preview." />
+		</div>
+	}
+	else
+	{
+		<textarea class="form-control rounded-top-0 font-monospace small" rows="@Rows" placeholder="@Placeholder" data-md-input
+				  value="@Value" @oninput="OnInput"></textarea>
+	}
+</div>
+
+@code {
+	private bool _preview;
+
+	[Parameter]
+	public string? Value { get; set; }
+
+	[Parameter]
+	public EventCallback<string> ValueChanged { get; set; }
+
+	[Parameter]
+	public int Rows { get; set; } = 6;
+
+	[Parameter]
+	public string? Placeholder { get; set; }
+
+	[Parameter]
+	public string Name { get; set; } = string.Empty;
+
+	private Task OnInput(ChangeEventArgs e)
+	{
+		Value = e.Value?.ToString() ?? string.Empty;
+		return ValueChanged.InvokeAsync(Value);
+	}
+}

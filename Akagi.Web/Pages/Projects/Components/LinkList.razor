@@ -1,0 +1,63 @@
+@* One direction of a ticket's dependencies, with a picker to add another. *@
+
+<div class="mb-3" data-links="@Name">
+	<div class="form-label mb-1">@Title</div>
+	@if (Linked.Count == 0)
+	{
+		<div class="text-secondary small mb-1">@Empty</div>
+	}
+	<ul class="list-unstyled mb-1">
+		@foreach (KanbanTicketView other in Linked)
+		{
+			bool done = Session.KindOf(other) == KanbanColumnKind.Done;
+			<li class="d-flex align-items-center gap-1 small py-1" data-link="@other.Id">
+				<span class="text-secondary">@other.Reference</span>
+				<span class="text-truncate @(done ? "text-decoration-line-through text-secondary" : "")" title="@other.Title">@other.Title</span>
+				<button type="button" class="btn btn-sm btn-ghost-secondary py-0 px-1 ms-auto" title="Remove link" data-unlink
+						@onclick="() => OnRemove.InvokeAsync(other.Id)">&times;</button>
+			</li>
+		}
+	</ul>
+	@if (Candidates.Count > 0)
+	{
+		<select class="form-select form-select-sm" data-add-link value="" @onchange="AddAsync" aria-label="@($"Add to {Title}")">
+			<option value="">Add a ticket...</option>
+			@foreach (KanbanTicketView candidate in Candidates)
+			{
+				<option value="@candidate.Id">@candidate.Reference @candidate.Title</option>
+			}
+		</select>
+	}
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public KanbanSession Session { get; set; } = default!;
+
+	[Parameter]
+	public string Title { get; set; } = string.Empty;
+
+	[Parameter]
+	public string Empty { get; set; } = string.Empty;
+
+	[Parameter]
+	public string Name { get; set; } = string.Empty;
+
+	[Parameter]
+	public IReadOnlyList<KanbanTicketView> Linked { get; set; } = [];
+
+	[Parameter]
+	public IReadOnlyList<KanbanTicketView> Candidates { get; set; } = [];
+
+	[Parameter]
+	public EventCallback<string> OnAdd { get; set; }
+
+	[Parameter]
+	public EventCallback<string> OnRemove { get; set; }
+
+	private Task AddAsync(ChangeEventArgs e)
+	{
+		string? id = e.Value?.ToString();
+		return string.IsNullOrEmpty(id) ? Task.CompletedTask : OnAdd.InvokeAsync(id);
+	}
+}

@@ -1,0 +1,370 @@
+@* Everything about one ticket: what needs to be done, its updates, days, column and links. *@
+@using System.Globalization
+
+@if (Ticket is KanbanTicketView ticket && Session.Project is KanbanProjectView project)
+{
+	KanbanPlannedTicket? planned = Session.Plan.Find(ticket.Id);
+	<div class="modal modal-blur d-block" tabindex="-1" role="dialog" aria-modal="true" data-ticket-dialog="@ticket.Id" @onkeydown="OnKeyDown">
+		<div class="modal-dialog modal-xl modal-dialog-scrollable" role="document">
+			<div class="modal-content">
+				<div class="modal-header gap-2">
+					<span class="text-secondary fw-medium" data-ticket-number>@ticket.Reference</span>
+					<input class="form-control form-control-flush fs-3 fw-bold flex-fill" aria-label="Title" data-ticket-title
+						   value="@ticket.Title" @onchange="SaveTitleAsync" />
+					<button type="button" class="btn-close" aria-label="Close" data-close @onclick="CloseAsync"></button>
+				</div>
+				<div class="modal-body">
+					@if (Session.Error != null)
+					{
+						<div class="alert alert-danger py-2" role="alert" data-error>@Session.Error</div>
+					}
+					<div class="row g-4">
+						<div class="col-lg-8">
+							<section class="mb-4">
+								<div class="d-flex align-items-center mb-2">
+									<h3 class="h4 mb-0">Description</h3>
+									@if (_description == null)
+									{
+										<button type="button" class="btn btn-sm btn-ghost-primary ms-auto" data-edit-description @onclick="() => _description = ticket.Description">
+											<Icon IconType="@Icons.Edit" Size="16" class="me-1" />Edit
+										</button>
+									}
+								</div>
+								@if (_description != null)
+								{
+									<MarkdownEditor @bind-Value="_description" Rows="10" Name="description" Placeholder="What needs to be done, how to tell it is finished, notes..." />
+									<div class="d-flex gap-2 mt-2">
+										<button type="button" class="btn btn-sm btn-primary" data-save-description @onclick="SaveDescriptionAsync">Save</button>
+										<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="() => _description = null">Cancel</button>
+									</div>
+								}
+								else
+								{
+									<MarkdownView Text="@ticket.Description" Empty="No description yet." />
+								}
+							</section>
+
+							<section>
+								<h3 class="h4 mb-2">Updates <span class="text-secondary fw-normal small">(@ticket.Updates.Length)</span></h3>
+								@if (ticket.Updates.Length == 0)
+								{
+									<div class="text-secondary small mb-3" data-no-updates>No updates yet.</div>
+								}
+								<div class="kanban-updates">
+									@foreach (KanbanUpdateView update in ticket.Updates)
+									{
+										<div class="kanban-update border rounded p-2 mb-2" data-update="@update.Id">
+											<div class="d-flex align-items-center gap-2 small text-secondary mb-1">
+												<span class="fw-medium text-body" data-update-author>@update.Author</span>
+												<span>@update.At.ToLocalTime().ToString("ddd yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture)</span>
+												@if (update.RemainingDays is double remaining)
+												{
+													<span class="badge bg-azure-lt">@KanbanSession.Days(remaining) d left</span>
+												}
+												<span class="ms-auto"></span>
+												@if (_editingUpdate != update.Id)
+												{
+													<button type="button" class="btn btn-sm btn-ghost-secondary py-0 px-1" title="Edit update" data-edit-update @onclick="() => EditUpdate(update)">
+														<Icon IconType="@Icons.Edit" Size="14" />
+													</button>
+													@if (_deletingUpdate == update.Id)
+													{
+														<button type="button" class="btn btn-sm btn-danger py-0" data-confirm-delete-update @onclick="() => DeleteUpdateAsync(update)">Delete</button>
+														<button type="button" class="btn btn-sm btn-ghost-secondary py-0" @onclick="() => _deletingUpdate = null">Keep</button>
+													}
+													else
+													{
+														<button type="button" class="btn btn-sm btn-ghost-danger py-0 px-1" title="Delete update" data-delete-update @onclick="() => _deletingUpdate = update.Id">
+															<Icon IconType="@Icons.Trash" Size="14" />
+														</button>
+													}
+												}
+											</div>
+											@if (_editingUpdate == update.Id)
+											{
+												<MarkdownEditor @bind-Value="_updateEdit" Rows="4" Name="edit-update" />
+												<div class="d-flex gap-2 mt-2">
+													<button type="button" class="btn btn-sm btn-primary" data-save-update @onclick="() => SaveUpdateAsync(update)">Save</button>
+													<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="() => _editingUpdate = null">Cancel</button>
+												</div>
+											}
+											else
+											{
+												<MarkdownView Text="@update.Text" Empty="(only the remaining days changed)" />
+											}
+										</div>
+									}
+								</div>
+								<div class="mt-3" data-new-update>
+									<MarkdownEditor @bind-Value="_newUpdate" Rows="3" Name="new-update" Placeholder="What happened? Progress, problems, decisions..." />
+									<div class="d-flex flex-wrap align-items-center gap-2 mt-2">
+										<label class="small text-secondary" for="update-remaining">Work days left</label>
+										<input id="update-remaining" type="number" min="0" step="0.5" class="form-control form-control-sm" style="width:6rem"
+											   placeholder="@KanbanSession.Days(ticket.RemainingDays)" value="@_newUpdateRemaining" data-update-remaining
+											   @onchange="e => _newUpdateRemaining = e.Value?.ToString()" />
+										<button type="button" class="btn btn-sm btn-primary ms-auto" data-add-update @onclick="AddUpdateAsync"
+												disabled="@(string.IsNullOrWhiteSpace(_newUpdate) && string.IsNullOrWhiteSpace(_newUpdateRemaining))">
+											Add update
+										</button>
+									</div>
+								</div>
+							</section>
+						</div>
+
+						<div class="col-lg-4">
+							<div class="mb-3">
+								<label class="form-label" for="ticket-column">Column</label>
+								<select id="ticket-column" class="form-select" data-ticket-column value="@ticket.ColumnId" @onchange="MoveAsync">
+									@foreach (KanbanColumnView column in project.Columns)
+									{
+										<option value="@column.Id">@column.Name (@KanbanSession.KindName(column.Kind).ToLowerInvariant())</option>
+									}
+								</select>
+							</div>
+							<div class="row g-2 mb-3">
+								<div class="col-6">
+									<label class="form-label" for="ticket-required">Required days</label>
+									<input id="ticket-required" type="number" min="0" step="0.5" class="form-control" data-ticket-required
+										   value="@KanbanSession.Days(ticket.RequiredDays)" @onchange="e => EstimateAsync(e, required: true)" />
+								</div>
+								<div class="col-6">
+									<label class="form-label" for="ticket-remaining">Remaining days</label>
+									<input id="ticket-remaining" type="number" min="0" step="0.5" class="form-control" data-ticket-remaining
+										   value="@KanbanSession.Days(ticket.RemainingDays)" @onchange="e => EstimateAsync(e, required: false)" />
+								</div>
+							</div>
+							<div class="mb-3">
+								<label class="form-label" for="ticket-not-before">Not before</label>
+								<input id="ticket-not-before" type="date" class="form-control" data-ticket-not-before
+									   value="@(ticket.NotBefore?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture))" @onchange="NotBeforeAsync" />
+							</div>
+							<dl class="small mb-3">
+								@if (planned != null && !planned.IsHistory)
+								{
+									<dt>Planned</dt>
+									<dd data-ticket-planned>
+										@Date(planned.StartDate)@(planned.EndDate != planned.StartDate ? $" to {Date(planned.EndDate)}" : "")
+										@if (planned.Critical)
+										{
+											<span class="badge bg-red-lt ms-1">critical</span>
+										}
+										@if (planned.InCycle)
+										{
+											<span class="badge bg-orange-lt ms-1">dependency cycle</span>
+										}
+									</dd>
+								}
+								@if (ticket.StartedAt is DateTime started)
+								{
+									<dt>Started</dt>
+									<dd>@Date(DateOnly.FromDateTime(started.ToLocalTime()))</dd>
+								}
+								@if (ticket.DoneAt is DateTime done)
+								{
+									<dt>Finished</dt>
+									<dd>@Date(DateOnly.FromDateTime(done.ToLocalTime()))</dd>
+								}
+							</dl>
+
+							<LinkList Title="Waits for" Empty="Nothing; it can start any time." Name="before"
+									  Linked="@WaitsFor(ticket)" Candidates="@Candidates(ticket)"
+									  OnAdd="id => LinkAsync(id, ticket.Id)" OnRemove="id => UnlinkAsync(id, ticket.Id)" Session="Session" />
+							<LinkList Title="Needed by" Empty="Nothing waits for it." Name="after"
+									  Linked="@NeededBy(ticket)" Candidates="@Candidates(ticket)"
+									  OnAdd="id => LinkAsync(ticket.Id, id)" OnRemove="id => UnlinkAsync(ticket.Id, id)" Session="Session" />
+
+							<div class="border-top pt-3 mt-3">
+								@if (_confirmDelete)
+								{
+									<div class="small mb-2">Delete @ticket.Reference with its updates? Dropped work can go to a done column instead.</div>
+									<button type="button" class="btn btn-sm btn-danger" data-confirm-delete @onclick="DeleteAsync">Delete ticket</button>
+									<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="() => _confirmDelete = false">Keep it</button>
+								}
+								else
+								{
+									<button type="button" class="btn btn-sm btn-ghost-danger" data-delete @onclick="() => _confirmDelete = true">
+										<Icon IconType="@Icons.Trash" Size="16" class="me-1" />Delete ticket
+									</button>
+								}
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+	<div class="modal-backdrop fade show" @onclick="CloseAsync"></div>
+}
+
+@code {
+	private string? _description;
+	private string _newUpdate = string.Empty;
+	private string? _newUpdateRemaining;
+	private string? _editingUpdate;
+	private string _updateEdit = string.Empty;
+	private string? _deletingUpdate;
+	private bool _confirmDelete;
+	private string? _shownId;
+
+	[Parameter, EditorRequired]
+	public KanbanSession Session { get; set; } = default!;
+
+	[Parameter]
+	public string? TicketId { get; set; }
+
+	[Parameter]
+	public EventCallback OnClose { get; set; }
+
+	private KanbanTicketView? Ticket => Session.Ticket(TicketId);
+
+	protected override void OnParametersSet()
+	{
+		if (_shownId != TicketId)
+		{
+			// Another ticket: drafts of the last one do not belong here
+			_shownId = TicketId;
+			_description = null;
+			_newUpdate = string.Empty;
+			_newUpdateRemaining = null;
+			_editingUpdate = null;
+			_deletingUpdate = null;
+			_confirmDelete = false;
+			Session.Error = null;
+		}
+	}
+
+	private static string Date(DateOnly date) => date.ToString("ddd yyyy-MM-dd", CultureInfo.InvariantCulture);
+
+	private IReadOnlyList<KanbanTicketView> WaitsFor(KanbanTicketView ticket) =>
+		[.. ticket.After.Select(Session.Ticket).OfType<KanbanTicketView>().OrderBy(t => t.Number)];
+
+	private IReadOnlyList<KanbanTicketView> NeededBy(KanbanTicketView ticket) =>
+		[.. Session.Tickets.Where(t => t.After.Contains(ticket.Id)).OrderBy(t => t.Number)];
+
+	private IReadOnlyList<KanbanTicketView> Candidates(KanbanTicketView ticket) =>
+		[.. Session.Tickets.Where(t => t.Id != ticket.Id && !ticket.After.Contains(t.Id) && !t.After.Contains(ticket.Id)).OrderBy(t => t.Number)];
+
+	private Task CloseAsync() => OnClose.InvokeAsync();
+
+	private Task OnKeyDown(KeyboardEventArgs e) => e.Key == "Escape" && _description == null && _editingUpdate == null ? CloseAsync() : Task.CompletedTask;
+
+	private Task<bool> SaveAsync(Action<KanbanTicketView> change)
+	{
+		KanbanTicketView current = Ticket!;
+		KanbanTicketView copy = new()
+		{
+			Id = current.Id,
+			Title = current.Title,
+			Description = current.Description,
+			ColumnId = current.ColumnId,
+			RequiredDays = current.RequiredDays,
+			RemainingDays = current.RemainingDays,
+			NotBefore = current.NotBefore
+		};
+		change(copy);
+		return Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.SaveTicket, Ticket = copy });
+	}
+
+	private async Task SaveTitleAsync(ChangeEventArgs e)
+	{
+		string title = e.Value?.ToString()?.Trim() ?? string.Empty;
+		if (title.Length > 0 && title != Ticket?.Title)
+		{
+			await SaveAsync(t => t.Title = title);
+		}
+	}
+
+	private async Task SaveDescriptionAsync()
+	{
+		string text = _description ?? string.Empty;
+		if (await SaveAsync(t => t.Description = text))
+		{
+			_description = null;
+		}
+	}
+
+	private Task MoveAsync(ChangeEventArgs e) => Session.SendAsync(new KanbanRequestTransmission
+	{
+		Action = KanbanAction.MoveTicket,
+		TicketId = TicketId!,
+		ColumnId = e.Value?.ToString() ?? string.Empty
+	});
+
+	internal static double? ParseDays(string? text) =>
+		double.TryParse(text?.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out double days) && days >= 0 ? days : null;
+
+	private async Task EstimateAsync(ChangeEventArgs e, bool required)
+	{
+		if (ParseDays(e.Value?.ToString()) is not double days)
+		{
+			Session.Error = "Work days are a number of at least 0, like 1.5.";
+			return;
+		}
+		await Session.SendAsync(new KanbanRequestTransmission
+		{
+			Action = KanbanAction.Plan,
+			Estimates = [new KanbanEstimateView { TicketId = TicketId!, RequiredDays = required ? days : null, RemainingDays = required ? null : days }]
+		});
+	}
+
+	private async Task NotBeforeAsync(ChangeEventArgs e)
+	{
+		DateTime? day = DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out DateOnly parsed)
+			? KanbanSession.Day(parsed)
+			: null;
+		await Session.SendAsync(new KanbanRequestTransmission
+		{
+			Action = KanbanAction.Plan,
+			Estimates = [new KanbanEstimateView { TicketId = TicketId!, SetNotBefore = true, NotBefore = day }]
+		});
+	}
+
+	private async Task AddUpdateAsync()
+	{
+		double? remaining = ParseDays(_newUpdateRemaining);
+		if (!string.IsNullOrWhiteSpace(_newUpdateRemaining) && remaining == null)
+		{
+			Session.Error = "Work days left is a number of at least 0, like 1.5.";
+			return;
+		}
+		if (await Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.AddUpdate, TicketId = TicketId!, Text = _newUpdate, RemainingDays = remaining }))
+		{
+			_newUpdate = string.Empty;
+			_newUpdateRemaining = null;
+		}
+	}
+
+	private void EditUpdate(KanbanUpdateView update)
+	{
+		_editingUpdate = update.Id;
+		_updateEdit = update.Text;
+	}
+
+	private async Task SaveUpdateAsync(KanbanUpdateView update)
+	{
+		if (await Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.EditUpdate, TicketId = TicketId!, UpdateId = update.Id, Text = _updateEdit }))
+		{
+			_editingUpdate = null;
+		}
+	}
+
+	private async Task DeleteUpdateAsync(KanbanUpdateView update)
+	{
+		await Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.DeleteUpdate, TicketId = TicketId!, UpdateId = update.Id });
+		_deletingUpdate = null;
+	}
+
+	private Task LinkAsync(string first, string later) =>
+		Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.Link, TicketId = first, OtherTicketId = later });
+
+	private Task UnlinkAsync(string first, string later) =>
+		Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.Unlink, TicketId = first, OtherTicketId = later });
+
+	private async Task DeleteAsync()
+	{
+		if (await Session.SendAsync(new KanbanRequestTransmission { Action = KanbanAction.DeleteTicket, TicketId = TicketId! }))
+		{
+			await CloseAsync();
+		}
+	}
+}

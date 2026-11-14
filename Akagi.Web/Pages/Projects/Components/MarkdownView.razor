@@ -1,0 +1,18 @@
+@* Shows Markdown written by people or characters; see Markdown for what is allowed. *@
+
+@if (string.IsNullOrWhiteSpace(Text))
+{
+	<div class="text-secondary fst-italic small" data-markdown-empty>@Empty</div>
+}
+else
+{
+	<div class="kanban-markdown" data-markdown>@Markdown.ToHtml(Text)</div>
+}
+
+@code {
+	[Parameter]
+	public string? Text { get; set; }
+
+	[Parameter]
+	public string Empty { get; set; } = "Nothing written yet.";
+}
