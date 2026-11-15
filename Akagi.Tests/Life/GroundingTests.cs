@@ -1,4 +1,5 @@
 using Akagi.Characters;
+using Akagi.Characters.CharacterBehaviors.MessageCompilers;
 using Akagi.Characters.CharacterBehaviors.Puppeteers;
 using Akagi.Characters.CharacterBehaviors.Reflectors;
 using Akagi.Characters.CharacterBehaviors.SystemProcessors;
@@ -251,6 +252,54 @@ public class GroundingTests
     }
 
     [Fact]
+    public async Task Reflection_RunsOnlyOnNewMessagesAndRecordsOnlyThose()
+    {
+        // On prod the mood reflection read the last 30 user messages on every run and recorded a visit cancelled two
+        // days earlier again as if it had just happened
+        LifeTestContext test = new();
+        test.Context.Turn = TurnSource.Reflection;
+        int requests = 0;
+        // Every run the model first tries to record the old and the new event, then stops
+        ScriptedLLM llm = new(context =>
+        {
+            requests++;
+            return requests % 2 == 0
+                ? [new StopExecutionCommand()]
+                :
+                [
+                    Tool<RecordMoodCommand>(("Note", "annoyed, Marius cancelled"), ("Evidence", "Marius cancelled")),
+                    Tool<RecordMoodCommand>(("Kind", "victory"), ("Note", "finished the living room"), ("Evidence", "finished the living room"))
+                ];
+        });
+        test.Context.LLMFactory = new ScriptedLLMFactory(llm);
+        SystemProcessor processor = new() { Name = "Mood Reflection", RunMode = ILLM.RunMode.CommandsOnly, CommandNames = ["RecordMood", "StopExecution"] };
+        processor.Commands = [new RecordMoodCommand(), new StopExecutionCommand()];
+        ProcessorDatabase processors = new();
+        await processors.SaveDocumentAsync(processor);
+        SingleReflector reflector = new() { Id = "mood", Name = "MoodReflection", MaxSteps = 2, SystemProcessorId = processor.Id! };
+        await reflector.Init(NullLogger.Instance, test.Context, processors);
+
+        TextMessage old = UserSays("Marius cancelled, kind of annoying");
+        old.Time = DateTime.UtcNow.AddHours(-30);
+        test.Conversation.AddMessage(old);
+        await reflector.ProcessAsync();
+        Assert.Equal(old.Time, test.Character.ReflectedUntil["mood"]);
+        int afterFirst = requests;
+
+        // Nothing new: no model call at all
+        await reflector.ProcessAsync();
+        Assert.Equal(afterFirst, requests);
+
+        test.Conversation.AddMessage(UserSays("I finished the living room"));
+        await reflector.ProcessAsync();
+
+        Assert.Equal(["annoyed, Marius cancelled", "finished the living room"], test.Profile.Mood.Select(m => m.Note));
+        Assert.Contains(test.Conversation.Messages.OfType<CommandMessage>(),
+            m => m.Output.Contains("'Marius cancelled' is from a message you already reflected on"));
+        Assert.Null(test.Context.EvidenceAfterUtc);
+    }
+
+    [Fact]
     public async Task RecordMood_SkipsNearDuplicatesAndOpenConcerns()
     {
         LifeTestContext test = new();
@@ -325,6 +374,32 @@ public class GroundingTests
         Assert.Contains(view, m => m is CommandMessage c && c.CharacterId == "akagi");
         Assert.Contains(view, m => m is TextMessage t && t.Text == "Hey baby");
         Assert.Contains(view, m => m is TextMessage t && t.Text == "How was your day?");
+    }
+
+    [Fact]
+    public async Task RecentMessages_CountOnlyWhatThePersonaSees()
+    {
+        // On prod an advisor's ~225 tool calls filled Akagi's 80 message window, were then hidden from her, and she
+        // answered without seeing the user's message
+        DateTime now = DateTime.UtcNow;
+        List<Message> messages =
+        [
+            new TextMessage { CharacterId = null, From = Message.Type.User, Time = now, Text = "Do we need to think of anything else?" },
+            .. Enumerable.Range(1, 50).Select(i => new CommandMessage
+            {
+                From = Message.Type.Character, CharacterId = "ren", Time = now.AddSeconds(i), Command = new StopExecutionCommand(), Output = $"refused {i}"
+            }),
+            new CommandMessage { From = Message.Type.Character, CharacterId = "akagi", Time = now.AddMinutes(1), Command = new StopExecutionCommand(), Output = "Ren answered: ..." }
+        ];
+        Context context = ViewContext("akagi", "Akagi", MemberSpeech.Hide);
+        ForgetfulMessageCompiler compiler = new() { MaxMessages = 10 };
+        await compiler.Init(Message.Type.All, null!);
+
+        List<Conversation> compiled = await compiler.FilterCompileAsync(context, [new Conversation { Id = 1, Time = now, Messages = messages }]);
+
+        Message[] seen = GroupView.For(compiled.Single().Messages, context);
+        Assert.Equal(2, seen.Length);
+        Assert.Equal("Do we need to think of anything else?", Assert.IsType<TextMessage>(seen[0]).Text);
     }
 
     [Fact]

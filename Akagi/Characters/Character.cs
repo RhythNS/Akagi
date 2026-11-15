@@ -60,6 +60,17 @@ internal class Character : Savable
         get => _memory;
         set => SetProperty(ref _memory, value);
     }
+    private Dictionary<string, DateTime> _reflectedUntil = [];
+    /// <summary>
+    /// Per reflector id: the newest user message it has already reflected on, so a later run does not record the
+    /// same days-old event again as if it just happened.
+    /// </summary>
+    [NodeIgnore]
+    public Dictionary<string, DateTime> ReflectedUntil
+    {
+        get => _reflectedUntil;
+        set => SetProperty(ref _reflectedUntil, value);
+    }
     [NodeReference(typeof(Card))]
     [BsonRepresentation(MongoDB.Bson.BsonType.ObjectId)]
     public string CardId

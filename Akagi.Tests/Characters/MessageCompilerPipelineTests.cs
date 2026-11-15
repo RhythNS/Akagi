@@ -2,6 +2,7 @@ using Akagi.Characters;
 using Akagi.Characters.CharacterBehaviors.MessageCompilers;
 using Akagi.Characters.Conversations;
 using Akagi.Tests.Learning;
+using Akagi.Tests.Support;
 using System.Globalization;
 
 namespace Akagi.Tests.Characters;
@@ -37,7 +38,7 @@ public class MessageCompilerPipelineTests
         // Akagi's pipeline starts with "Recent messages"; uninitialized, it read no type and dropped the whole chat
         LineMessageCompiler line = await Pipeline(Message.Type.All, new ForgetfulMessageCompiler { MaxMessages = 80 });
 
-        List<Conversation> compiled = await line.FilterCompileAsync(null!, [Chat()]);
+        List<Conversation> compiled = await line.FilterCompileAsync(new LifeTestContext().Context, [Chat()]);
 
         Assert.Equal(["Hello can you hear me?", "I'm right here."], compiled.SelectMany(c => c.Messages).OfType<TextMessage>().Select(m => m.Text));
     }
@@ -48,7 +49,7 @@ public class MessageCompilerPipelineTests
         // Mood Reflection reads only the user's own messages
         LineMessageCompiler line = await Pipeline(Message.Type.User, new ForgetfulMessageCompiler { MaxMessages = 30 });
 
-        List<Conversation> compiled = await line.FilterCompileAsync(null!, [Chat()]);
+        List<Conversation> compiled = await line.FilterCompileAsync(new LifeTestContext().Context, [Chat()]);
 
         Assert.Equal(["Hello can you hear me?"], compiled.SelectMany(c => c.Messages).OfType<TextMessage>().Select(m => m.Text));
     }

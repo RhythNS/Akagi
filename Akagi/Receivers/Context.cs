@@ -46,6 +46,11 @@ internal class Context : ContextBase
     /// Names of the group members by character id, used to label their messages.
     /// </summary>
     public IReadOnlyDictionary<string, string> MemberNames { get; set; } = new Dictionary<string, string>();
+    /// <summary>
+    /// On a reflection: only the user's messages after this may be quoted as evidence; earlier ones were reflected on
+    /// already.
+    /// </summary>
+    public DateTime? EvidenceAfterUtc { get; set; }
 
     protected override Savable[] ToTrack => Group != null ? [Character, User, Group] : [Character, User];
 }

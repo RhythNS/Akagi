@@ -115,10 +115,7 @@ internal class ConsultCommand : Command
             consultation.Dispose();
         }
 
-        string answer = CollectAnswer(context.Conversation.Messages.Skip(before), advisor.Id);
-        return Reply(context, string.IsNullOrWhiteSpace(answer)
-            ? $"{advisor.Name} had nothing to add."
-            : $"{advisor.Name} answered:{Environment.NewLine}{answer}");
+        return Reply(context, CollectAnswer(context.Conversation.Messages.Skip(before), advisor.Id, advisor.Name));
     }
 
     /// <summary>
@@ -149,24 +146,74 @@ internal class ConsultCommand : Command
             ?? members.FirstOrDefault(m => m.Name.Contains(trimmed, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>At most this much of the advisor's tool results reaches the persona; the newest are kept.</summary>
+    internal const int MaxToolResultsLength = 4000;
+
     /// <summary>
-    /// The advisor's spoken text plus the results of tools it used, so the persona sees what was looked up.
+    /// What the persona gets back: the advisor's spoken text plus the results of tools it used, so the persona sees
+    /// what was looked up. Refused or failed calls are only counted and repeated results shown once, so an advisor
+    /// that loops does not bury the persona's view. Without a spoken answer the persona is told so plainly, since it
+    /// would otherwise fill the gap itself.
     /// </summary>
-    internal static string CollectAnswer(IEnumerable<Message> messages, string? advisorId)
+    internal static string CollectAnswer(IEnumerable<Message> messages, string? advisorId, string advisorName)
     {
-        List<string> parts = [];
+        List<string> said = [];
+        List<string> results = [];
+        HashSet<string> seen = [];
+        int refused = 0;
         foreach (Message message in messages.Where(m => m.CharacterId == advisorId))
         {
             switch (message)
             {
-                case TextMessage text when message.From == Message.Type.Character:
-                    parts.Add(text.Text);
+                case TextMessage text when message.From == Message.Type.Character && !string.IsNullOrWhiteSpace(text.Text):
+                    said.Add(text.Text.Trim());
                     break;
                 case CommandMessage command when command.Command is not ConsultCommand:
-                    parts.Add($"({command.Command.Name}: {command.Output})");
+                    if (command.Output.StartsWith(ToolGuard.RefusalPrefix, StringComparison.Ordinal)
+                        || command.Output.StartsWith("Error: ", StringComparison.Ordinal))
+                    {
+                        refused++;
+                    }
+                    else if (seen.Add($"{command.Command.Name}\n{command.Output}"))
+                    {
+                        results.Add($"({command.Command.Name}: {command.Output})");
+                    }
                     break;
             }
         }
+
+        if (said.Count == 0 && results.Count == 0 && refused == 0)
+        {
+            return $"{advisorName} had nothing to add.";
+        }
+
+        // The newest results describe the state the advisor left things in
+        List<string> kept = [];
+        int length = 0;
+        int index = results.Count - 1;
+        for (; index >= 0; index--)
+        {
+            if (kept.Count > 0 && length + results[index].Length > MaxToolResultsLength)
+            {
+                break;
+            }
+            kept.Insert(0, results[index]);
+            length += results[index].Length;
+        }
+
+        List<string> parts = [said.Count > 0
+            ? $"{advisorName} answered:"
+            : $"{advisorName} gave no answer (it ran out of steps). Only what is listed here was done; tell the user nothing beyond it."];
+        if (index >= 0)
+        {
+            parts.Add($"({index + 1} earlier tool result(s) left out.)");
+        }
+        parts.AddRange(kept);
+        if (refused > 0)
+        {
+            parts.Add($"({refused} call(s) were refused or failed and changed nothing.)");
+        }
+        parts.AddRange(said);
         return string.Join(Environment.NewLine, parts).Trim();
     }
 

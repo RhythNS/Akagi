@@ -262,10 +262,19 @@ internal class EditProjectCommand : KanbanCommand, IWorkItemCommand
             view.Description = description;
             changes.Add("description replaced");
         }
+        List<string> notes = [];
         if (GetArgument("AppendToDescription") is string append)
         {
-            view.Description = string.IsNullOrWhiteSpace(view.Description) ? append : view.Description.TrimEnd() + Environment.NewLine + Environment.NewLine + append;
-            changes.Add("description extended");
+            if (SameParagraph(view.Description, append) is string existing)
+            {
+                // A model that repeats itself rewords the note each time, so identical-call checks miss it
+                notes.Add($"not appended, the description already says: \"{Shorten(existing, 120)}\"");
+            }
+            else
+            {
+                view.Description = string.IsNullOrWhiteSpace(view.Description) ? append : view.Description.TrimEnd() + Environment.NewLine + Environment.NewLine + append;
+                changes.Add("description extended");
+            }
         }
         (bool setStart, DateTime? start) = DayArgument("StartDate");
         if (setStart)
@@ -280,10 +289,35 @@ internal class EditProjectCommand : KanbanCommand, IWorkItemCommand
         }
         if (changes.Count == 0)
         {
-            return "Not done: nothing to change was given.";
+            return notes.Count > 0 ? $"Not done: {string.Join("; ", notes)}." : "Not done: nothing to change was given.";
         }
         KanbanBoard saved = await service.SaveProjectAsync(userId, view);
-        return $"{saved.Project.Name}: {string.Join(", ", changes)}.";
+        return $"{saved.Project.Name}: {string.Join(", ", changes.Concat(notes))}.";
+    }
+
+    /// <summary>How alike a new note and a paragraph already in the description must be to count as the same.</summary>
+    internal const double SameParagraphSimilarity = 0.75;
+
+    /// <summary>The paragraph of <paramref name="description"/> that says the same as <paramref name="text"/>, if any.</summary>
+    internal static string? SameParagraph(string? description, string text)
+    {
+        if (string.IsNullOrWhiteSpace(description))
+        {
+            return null;
+        }
+        string[] paragraphs = description.ReplaceLineEndings("\n").Split("\n\n", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return paragraphs
+            .Select(p => (Paragraph: p, Similarity: Grounding.WordSimilarity(p, text)))
+            .Where(m => m.Similarity >= SameParagraphSimilarity)
+            .OrderByDescending(m => m.Similarity)
+            .Select(m => m.Paragraph)
+            .FirstOrDefault();
+    }
+
+    private static string Shorten(string text, int length)
+    {
+        string single = text.ReplaceLineEndings(" ").Trim();
+        return single.Length <= length ? single : single[..(length - 3)] + "...";
     }
 }
 

@@ -1,4 +1,5 @@
 using Akagi.Characters.Conversations;
+using Akagi.Characters.Groups;
 using Akagi.Receivers;
 
 namespace Akagi.Characters.CharacterBehaviors.MessageCompilers;
@@ -24,8 +25,9 @@ internal class ForgetfulMessageCompiler : MessageCompiler
                 break;
             }
 
-            foreach (Message message in conversation.Messages
-                .Where(x => (x.From & ReadableMessages) != 0)
+            // Count only what this character's model will see: in a group, other members' tool calls are dropped later,
+            // and a long consultation would otherwise push even the user's message out of the window
+            foreach (Message message in GroupView.For(conversation.Messages.Where(x => (x.From & ReadableMessages) != 0), context)
                 .OrderByDescending(x => x.Time))
             {
                 if (messages.Count >= MaxMessages)

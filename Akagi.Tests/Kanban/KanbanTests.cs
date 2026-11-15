@@ -459,6 +459,28 @@ public class KanbanToolTests
     }
 
     [Fact]
+    public async Task EditProject_DoesNotAppendTheSameNoteTwice()
+    {
+        // Ren appended the same note three times, reworded, then five corrections about it
+        KanbanTestContext test = await WithProject();
+        await test.Run<EditProjectCommand>(("AppendToDescription",
+            "**2026-11-15:** #23 DKB chosen, #22 broker chosen — both already researched and updated; targeted to finish Mon 2026-11-17."));
+
+        string again = await test.Run<EditProjectCommand>(("AppendToDescription",
+            "**2026-11-15:** #23 DKB chosen, #22 broker chosen — both researched and account updates already made, targeted to finish Mon 2026-11-17."));
+        string withOther = await test.Run<EditProjectCommand>(("Parallel", 2), ("AppendToDescription",
+            "**2026-11-15:** #23 DKB chosen, #22 broker chosen — both researched and updated, targeted to finish Mon 2026-11-17."));
+
+        Assert.StartsWith("Not done: not appended, the description already says: \"**2026-11-15:** #23 DKB chosen", again);
+        Assert.StartsWith("Akagi: 2 at a time, not appended, the description already says: \"**2026-11-15:** #23 DKB chosen", withOther);
+        Assert.Single(KanbanCommandParagraphs(test.Projects.Items.Single().Description), p => p.Contains("DKB"));
+        Assert.Contains("description extended", await test.Run<EditProjectCommand>(("AppendToDescription", "Decided: the kitchen stays; the next tenants buy it.")));
+    }
+
+    private static string[] KanbanCommandParagraphs(string description) =>
+        description.ReplaceLineEndings("\n").Split("\n\n", StringSplitOptions.RemoveEmptyEntries);
+
+    [Fact]
     public async Task CreateProject_ParsesColumns()
     {
         KanbanTestContext test = new();

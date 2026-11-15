@@ -141,14 +141,21 @@ internal sealed class ToolGuard
         }
 
         IReadOnlyList<Message> messages = context.Conversation.Messages;
-        IReadOnlyList<string> userTexts = Grounding.RecentUserTexts(messages, DateTime.UtcNow);
-        if (userTexts.Count == 0)
-        {
-            return RefusalPrefix + "he has not written anything recently, so there is nothing to record. Never record " +
-                   "things he did not tell you.";
-        }
+        DateTime now = DateTime.UtcNow;
+        IReadOnlyList<string> userTexts = Grounding.RecentUserTexts(messages, now, context.EvidenceAfterUtc);
         if (!Grounding.IsQuoted(evidence, userTexts))
         {
+            // A reflection sees older messages for context, but those were reflected on before
+            if (context.EvidenceAfterUtc != null && Grounding.IsQuoted(evidence, Grounding.RecentUserTexts(messages, now)))
+            {
+                return RefusalPrefix + $"'{Shorten(evidence)}' is from a message you already reflected on, so it is recorded " +
+                       "already. Only record what he wrote after that; if there is nothing new, stop.";
+            }
+            if (userTexts.Count == 0)
+            {
+                return RefusalPrefix + "he has not written anything recently, so there is nothing to record. Never record " +
+                       "things he did not tell you.";
+            }
             return RefusalPrefix + $"'{Shorten(evidence)}' is not in any of his recent messages. {Grounding.EvidenceName} must " +
                    "be his exact words; only record what he actually told you.";
         }

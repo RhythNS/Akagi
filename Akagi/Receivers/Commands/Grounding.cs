@@ -76,12 +76,12 @@ internal static class Grounding
     /// <summary>
     /// The texts of the user's latest messages in the conversation, newest first.
     /// </summary>
-    public static IReadOnlyList<string> RecentUserTexts(IEnumerable<Message> messages, DateTime nowUtc)
+    public static IReadOnlyList<string> RecentUserTexts(IEnumerable<Message> messages, DateTime nowUtc, DateTime? afterUtc = null)
     {
         List<string> texts = [];
         foreach (Message message in messages.Reverse())
         {
-            if (message.From != Message.Type.User || nowUtc - message.Time > EvidenceAge)
+            if (message.From != Message.Type.User || nowUtc - message.Time > EvidenceAge || message.Time <= afterUtc)
             {
                 continue;
             }
