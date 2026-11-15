@@ -88,6 +88,10 @@ group, as after `/switchToGroup` on Telegram, and group commands such as `/sessi
 `/session end reflect` runs every reflector over it, `/session end incognito` keeps it visible in the history but out
 of every reflector and prompt, and `/session end summary <text>` stores your text as the memory of it.
 `/endConversation` and the `EndConversation` tool now fire the `ConversationEnded` trigger points.
+A conversation that is not a session ends by itself, reflected, once your last message in it is 7 hours old
+(`QuietConversationService`, checked every 5 minutes). Messages the companion sends on its own do not count, and a
+conversation with nothing from you is never ended. In a group every member reflects on the group's conversation,
+since the members' own copies do not hold your messages.
 
 ### Japanese diagnosis and call analysis
 

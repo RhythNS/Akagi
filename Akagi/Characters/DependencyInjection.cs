@@ -38,6 +38,7 @@ static class DependencyInjection
         services.AddSingleton<ICharacterGroupDatabase, CharacterGroupDatabase>();
         services.AddSingleton<IGroupStrategyDatabase, GroupStrategyDatabase>();
         services.AddSingleton<IGroupCheckpointDatabase, GroupCheckpointDatabase>();
+        services.AddHostedService<QuietConversationService>();
 
         RegisterDBClasses();
     }

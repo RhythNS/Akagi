@@ -80,7 +80,11 @@ internal class MemoryConsolidationReflector : Reflector
 
     protected virtual List<Conversation> GetConversationsToConsolidate()
     {
-        return [.. Character.Conversations.List.Where(c =>
+        // A group member's own copy never gets the user's messages; the group's conversations have them. The running
+        // conversation is left for when it ends, since a consolidated conversation is never looked at again.
+        IEnumerable<Conversation> conversations = Context.Group?.Conversations.List ?? Character.Conversations.List;
+        return [.. conversations.Where(c =>
+            c.IsCompleted &&
             c.Messages.Count >= MinMessagesToConsolidate &&
             !c.IsIncognito &&
             !c.IsActiveSession &&

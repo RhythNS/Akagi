@@ -110,11 +110,9 @@ internal class SessionManager
             throw new ArgumentException("A custom summary needs the summary text.", nameof(summary));
         }
 
-        Conversation? primaryEnded = null;
-        if (scope.Group != null)
-        {
-            primaryEnded = scope.Group.Conversations.EndCurrent(mode, nowUtc);
-        }
+        // In a group only the group's conversation has the user's messages; the members' copies hold their own turns
+        Conversation? groupEnded = scope.Group?.Conversations.EndCurrent(mode, nowUtc);
+        Conversation? primaryEnded = groupEnded;
 
         List<(Character Character, Conversation Ended)> ended = [];
         foreach (Character character in scope.Characters)
@@ -137,7 +135,7 @@ internal class SessionManager
         {
             foreach ((Character character, Conversation conversation) in ended)
             {
-                StoreSummaryThought(character, conversation, summary!.Trim(), nowUtc);
+                StoreSummaryThought(character, groupEnded ?? conversation, summary!.Trim(), nowUtc);
                 await StoreSummaryMemoryAsync(character, user, summary!.Trim(), nowUtc);
                 memories++;
             }
@@ -148,7 +146,11 @@ internal class SessionManager
         int reflected = 0;
         if (mode == ConversationEndMode.Reflect)
         {
-            foreach ((Character character, Conversation conversation) in ended.Where(e => e.Ended.Messages.Count > 0))
+            // Every member reflects on the group's conversation, so what the user said reaches their memories
+            IEnumerable<(Character Character, Conversation Ended)> reflecting = groupEnded == null
+                ? ended
+                : ended.Select(e => (e.Character, groupEnded));
+            foreach ((Character character, Conversation conversation) in reflecting.Where(e => e.Ended.Messages.Count > 0))
             {
                 await _receiver.ReflectConversation(character, user, conversation.Id);
                 await _receiver.OnConversationEnded(character, user);

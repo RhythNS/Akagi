@@ -24,28 +24,41 @@ internal class SessionCommand : TextCommand
             return CommandResult.Fail("No active character or group.");
         }
 
-        SessionScope scope = context.Group != null
-            ? await SessionScope.ForGroup(context.Group, context.DatabaseFactory.GetDatabase<ICharacterDatabase>())
-            : SessionScope.ForCharacter(context.Character!);
-        if (scope.Characters.Count == 0)
+        IServiceProvider services = Globals.Instance.ServiceProvider;
+        IReceiver receiver = services.GetRequiredService<IReceiver>();
+        SessionManager sessions = new(receiver, context.DatabaseFactory, services.GetService<IEmbeddingService>());
+        string verb = args.Length > 0 ? args[0].ToLowerInvariant() : "status";
+
+        string? message = null;
+        if (context.Group != null)
         {
-            await Communicator.SendMessage(context.User, "The active group has no members.");
-            return CommandResult.Fail("No members.");
+            // Like a group turn: under the group's lock, so reflections read the group's conversation with the user's messages
+            bool ran = await receiver.TryRunForGroupAsync(context.Group, context.User, async group =>
+                message = await Run(sessions, await SessionScope.ForGroup(group, context.DatabaseFactory.GetDatabase<ICharacterDatabase>()), context, verb, args));
+            message ??= ran ? null : "The group is busy with a reply. Try again in a moment.";
+        }
+        else
+        {
+            message = await Run(sessions, SessionScope.ForCharacter(context.Character!), context, verb, args);
         }
 
-        IServiceProvider services = Globals.Instance.ServiceProvider;
-        SessionManager sessions = new(services.GetRequiredService<IReceiver>(), context.DatabaseFactory, services.GetService<IEmbeddingService>());
-        string verb = args.Length > 0 ? args[0].ToLowerInvariant() : "status";
-        string message = verb switch
+        await Communicator.SendMessage(context.User, message ?? "The active group no longer exists.");
+        return CommandResult.Ok;
+    }
+
+    private async Task<string> Run(SessionManager sessions, SessionScope scope, Context context, string verb, string[] args)
+    {
+        if (scope.Characters.Count == 0)
+        {
+            return "The active group has no members.";
+        }
+        return verb switch
         {
             "start" => await Start(sessions, scope, context, string.Join(' ', args.Skip(1))),
             "end" or "stop" => await End(sessions, scope, context, args.Skip(1).ToArray()),
             "status" => Status(scope),
             _ => $"Unknown option '{args[0]}'. {Description}"
         };
-
-        await Communicator.SendMessage(context.User, message);
-        return CommandResult.Ok;
     }
 
     internal static string Status(SessionScope scope)

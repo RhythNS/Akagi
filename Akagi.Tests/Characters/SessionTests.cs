@@ -61,6 +61,38 @@ internal class RecordingReceiver : IReceiver
     public Task OnPromptContinue(Akagi.Communication.ICommunicator? from, Character character, User user) => throw new NotSupportedException();
     public Task Reflect(Character character, User user, string name) => throw new NotSupportedException();
     public Task OnSystemEvent(Character character, User user, Message message) => throw new NotSupportedException();
+
+    /// <summary>When set, the group or character counts as busy with a turn.</summary>
+    public bool Busy { get; set; }
+
+    public async Task<bool> TryRunForGroupAsync(CharacterGroup group, User user, Func<CharacterGroup, Task> work)
+    {
+        if (Busy)
+        {
+            return false;
+        }
+        await work(group);
+        return true;
+    }
+
+    public async Task<bool> TryRunForCharacterAsync(Character character, User user, Func<Character, Task> work)
+    {
+        if (Busy)
+        {
+            return false;
+        }
+        await work(character);
+        return true;
+    }
+}
+
+internal class InMemoryCharacterGroupDatabase : InMemoryDatabase<CharacterGroup>, ICharacterGroupDatabase
+{
+    public InMemoryCharacterGroupDatabase() : base("characterGroups")
+    {
+    }
+
+    public Task<List<CharacterGroup>> GetGroupsForUser(User user) => Task.FromResult(Items.Where(g => g.UserId == user.Id).ToList());
 }
 
 public class SessionTests
@@ -194,6 +226,8 @@ public class SessionTests
         Character sensei = Fixture.NewCharacter("Sensei");
         CharacterGroup group = new() { Id = ObjectId.GenerateNewId().ToString(), Name = "Companion" };
         SessionScope scope = new() { Group = group, Characters = [akagi, sensei] };
+        // Give the group an older conversation, so its ids differ from the members'
+        group.Conversations.StartNewConversation();
 
         await fixture.Sessions.StartAsync(scope, fixture.User, "N2 grammar", Now);
         AggregateConversation conversation = new(group.Conversations.GetCurrentConversation(),
@@ -205,7 +239,10 @@ public class SessionTests
 
         Assert.True(group.Conversations.List.Single(c => c.IsSession).IsCompleted);
         Assert.Equal(2, result!.Reflected);
-        Assert.Equal([akagi.Id!, sensei.Id!], fixture.Receiver.Reflected.Select(r => r.CharacterId));
+        // Only the group's copy has the user's messages, so both reflect on that one
+        int groupSession = group.Conversations.List.Single(c => c.IsSession).Id;
+        Assert.NotEqual(akagi.Conversations.List.Single(c => c.IsSession).Id, groupSession);
+        Assert.Equal([(akagi.Id!, groupSession), (sensei.Id!, groupSession)], fixture.Receiver.Reflected);
     }
 
     [Fact]

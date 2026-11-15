@@ -35,6 +35,16 @@ internal interface IReceiver
     /// </summary>
     public Task OnConversationEnded(Character character, User user);
     public Task OnSystemEvent(Character character, User user, Message message);
+    /// <summary>
+    /// Runs background work on a group the way a group turn runs: under the group's lock, on a freshly loaded group
+    /// that reflections reuse, so they read the group's conversation (the one with the user's messages). False,
+    /// without running it, when a turn is running or the group is gone.
+    /// </summary>
+    public Task<bool> TryRunForGroupAsync(CharacterGroup group, User user, Func<CharacterGroup, Task> work);
+    /// <summary>
+    /// Runs background work on a freshly loaded character under its lock. False when a turn is running.
+    /// </summary>
+    public Task<bool> TryRunForCharacterAsync(Character character, User user, Func<Character, Task> work);
 }
 internal class Receiver : IReceiver, ICleanable
 {
@@ -96,7 +106,9 @@ internal class Receiver : IReceiver, ICleanable
     }
     public async Task ReflectConversation(Character character, User user, int conversationId)
     {
-        Conversation? conversation = character.Conversations.List.FirstOrDefault(c => c.Id == conversationId);
+        // For a group member the group's conversation is the one with the user's messages
+        Conversation? conversation = RunningPersonaGroup(character)?.Conversations.List.FirstOrDefault(c => c.Id == conversationId)
+            ?? character.Conversations.List.FirstOrDefault(c => c.Id == conversationId);
         if (conversation == null || conversation.IsIncognito)
         {
             return;
@@ -133,6 +145,10 @@ internal class Receiver : IReceiver, ICleanable
             if (conversation != null)
             {
                 context.Conversation = conversation;
+                if (RunningPersonaGroup(character) is CharacterGroup owner && owner.Conversations.List.Contains(conversation))
+                {
+                    context.Group = owner;
+                }
             }
             else
             {
@@ -188,6 +204,52 @@ internal class Receiver : IReceiver, ICleanable
     {
         CharacterGroup? running = _runningGroup.Value;
         return running != null && running.MemberCharacterIds.Contains(character.Id) ? running : null;
+    }
+    public async Task<bool> TryRunForGroupAsync(CharacterGroup group, User user, Func<CharacterGroup, Task> work)
+    {
+        if (!TryLockGroup(group, user))
+        {
+            return false;
+        }
+        CharacterGroup? outerGroup = _runningGroup.Value;
+        try
+        {
+            // Load inside the lock, so a turn that just finished is not saved over
+            CharacterGroup? fresh = await _characterGroupDatabase.GetDocumentByIdAsync(group.Id!);
+            if (fresh == null)
+            {
+                return false;
+            }
+            _runningGroup.Value = fresh;
+            await work(fresh);
+            return true;
+        }
+        finally
+        {
+            _runningGroup.Value = outerGroup;
+            ReleaseGroupLock(group, user);
+        }
+    }
+    public async Task<bool> TryRunForCharacterAsync(Character character, User user, Func<Character, Task> work)
+    {
+        if (!TryLockCharacter(character, user))
+        {
+            return false;
+        }
+        try
+        {
+            Character? fresh = await _databaseFactory.GetDatabase<ICharacterDatabase>().GetCharacter(character.Id!);
+            if (fresh == null)
+            {
+                return false;
+            }
+            await work(fresh);
+            return true;
+        }
+        finally
+        {
+            ReleaseLock(character, user);
+        }
     }
     public async Task OnSystemEvent(Character character, User user, Message message)
     {
