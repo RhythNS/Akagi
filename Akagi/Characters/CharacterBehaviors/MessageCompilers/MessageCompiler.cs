@@ -33,6 +33,8 @@ internal abstract class MessageCompiler : Savable
 
     public async Task<Message[]> CompileAsync(Context context)
     {
+        // The prompt is built from copies, with injected memories and summaries: none of it is a step of the turn
+        using IDisposable quiet = ChatActivityHub.Mute();
         ConversationContainer conversationContainer = context.Group != null ? context.Group.Conversations : context.Character.Conversations;
 
         List<Conversation> filteredConversations = [];

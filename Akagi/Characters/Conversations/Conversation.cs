@@ -1,5 +1,7 @@
 ﻿using Akagi.Characters.Conversations;
+using Akagi.Bridge.Attributes;
 using Akagi.Data;
+using MongoDB.Bson.Serialization.Attributes;
 
 namespace Akagi.Characters;
 
@@ -109,12 +111,19 @@ internal class Conversation : DirtyTrackable
         }
     }
 
+    /// <summary>
+    /// A working prompt rather than a chat (e.g. a call analysis): what is added to it is never reported as a step.
+    /// </summary>
+    [BsonIgnore]
+    [NodeIgnore]
+    public bool IsScratch { get; init; }
+
     public virtual void AddMessage(Message message)
     {
         Dirty = true;
         MarkInternal(message);
         _messages.Add(message);
-        ChatActivityHub.Report(message);
+        Report(message);
     }
 
     public virtual void InsertMessage(int index, Message message)
@@ -122,7 +131,15 @@ internal class Conversation : DirtyTrackable
         Dirty = true;
         MarkInternal(message);
         _messages.Insert(index, message);
-        ChatActivityHub.Report(message);
+        Report(message);
+    }
+
+    private void Report(Message message)
+    {
+        if (!IsScratch)
+        {
+            ChatActivityHub.Report(message);
+        }
     }
 
     private static void MarkInternal(Message message)
@@ -221,10 +238,9 @@ internal class Conversation : DirtyTrackable
             EndMode = EndMode,
             EndedAt = EndedAt
         };
-        foreach (Message message in Messages)
-        {
-            copy.AddMessage(message.Copy());
-        }
+        // Copied as they are: a copy is not new, so nothing is reported as a step or marked internal
+        copy._messages.AddRange(Messages.Select(m => m.Copy()));
+        copy.Dirty = true;
         return copy;
     }
 }

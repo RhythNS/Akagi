@@ -284,7 +284,7 @@ internal class LessonAuthor : ILessonAuthor
         await using AsyncServiceScope scope = _scopes.CreateAsyncScope();
         ICommandFactory commandFactory = scope.ServiceProvider.GetRequiredService<ICommandFactory>();
 
-        Conversation scratch = new() { Id = -1, Time = DateTime.UtcNow };
+        Conversation scratch = new() { Id = -1, Time = DateTime.UtcNow, IsScratch = true };
         scratch.AddMessage(new TextMessage
         {
             From = Message.Type.System,

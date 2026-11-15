@@ -1,5 +1,9 @@
-using Akagi.Characters;
+﻿using Akagi.Characters;
+using Akagi.Characters.CharacterBehaviors.MessageCompilers;
+using Akagi.Characters.CharacterBehaviors.MessageCompilers.Injections;
 using Akagi.Characters.Conversations;
+using Akagi.Tests.Learning;
+using Akagi.Tests.Support;
 using Akagi.Users;
 using static Akagi.Bridge.Chat.Transmissions.Responses.ChatActivityResponseTransmission;
 
@@ -74,6 +78,52 @@ public class ChatActivityTests
         }
 
         Assert.Equal(["here"], seen.Where(s => s.Kind == ActivityKind.Step).Select(s => s.Text));
+    }
+
+    [Fact]
+    public async Task BuildingThePromptIsNotAStep()
+    {
+        // Before every model call the prompt is built from copies of the whole history; reported, the website got the
+        // entire conversation again as steps of the turn on every call
+        (ChatActivityHub hub, List<(string Chat, ActivityKind Kind, string? Text)> seen) = Hub();
+        LifeTestContext life = new();
+        Conversation chat = life.Character.Conversations.GetCurrentConversation();
+        chat.AddMessage(Say("earlier", Message.Type.User));
+        chat.AddMessage(Say("an answer"));
+
+        InMemoryMessageCompilerDatabase database = new();
+        MessageCompiler[] steps =
+        [
+            new ForgetfulMessageCompiler { MaxMessages = 80 },
+            new TextMessageInjectionCompiler
+            {
+                InjectionMessage = Say("injected memory", Message.Type.System),
+                Position = InjectionCompiler.InjectionPosition.End
+            }
+        ];
+        foreach (MessageCompiler step in steps)
+        {
+            await database.SaveDocumentAsync(step);
+        }
+        LineMessageCompiler line = new() { Definitions = [.. steps.Select(s => new LineMessageCompiler.Definition { MessageCompilerId = s.Id! })] };
+        await line.Init(Message.Type.All, database);
+
+        using (hub.BeginTurn(User, "akagi"))
+        using (Conversation.BeginInternal())
+        {
+            chat.AddMessage(Say("new question", Message.Type.User));
+            Message[] prompt = await line.CompileAsync(life.Context);
+            Conversation scratch = new() { Id = -1, Time = DateTime.UtcNow, IsScratch = true };
+            scratch.AddMessage(Say("a call transcript to analyse", Message.Type.System));
+
+            Assert.Equal(4, prompt.Length);
+            // Copies keep the messages as they are; only what is new in a consultation becomes internal
+            Assert.Equal([false, false, true], chat.Copy().Messages.Select(m => m.Internal));
+        }
+
+        Assert.Equal(["new question"], seen.Where(s => s.Kind == ActivityKind.Step).Select(s => s.Text));
+        // The compile did not change the chat itself
+        Assert.Equal(3, chat.Messages.Count);
     }
 
     [Fact]

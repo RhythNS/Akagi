@@ -1178,6 +1178,11 @@
 					{
 						break;
 					}
+					// A step is new; one the chat already holds (same time, sender and content) is not added again
+					if (conv.Messages.Any(m => SameStep(m, message)))
+					{
+						break;
+					}
 					conv.Messages.Add(message);
 					break;
 			}
@@ -1190,6 +1195,14 @@
 	private static bool HasRecentBubble(Conversation conversation, TextMessage text) =>
 		conversation.Messages.TakeLast(12).OfType<TextMessage>()
 			.Any(m => m.IsShownInChat && m.From == text.From && string.Equals(m.Text.Trim(), text.Text.Trim(), StringComparison.Ordinal));
+
+	private static bool SameStep(Message known, Message step) =>
+		known.Time == step.Time && known.From == step.From && known.CharacterId == step.CharacterId &&
+		(known, step) switch
+		{
+			(TextMessage a, TextMessage b) => a.Text == b.Text && a.Tool?.Name == b.Tool?.Name && a.Tool?.Output == b.Tool?.Output,
+			_ => false
+		};
 
 	private void ToggleTurn(string key)
 	{

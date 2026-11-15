@@ -55,7 +55,7 @@ internal class StudyAdvisor : IStudyAdvisor
 
     public async Task<string> WriteAsync(User user, CallInsights insights, CancellationToken cancellationToken)
     {
-        Conversation scratch = new() { Id = -1, Time = DateTime.UtcNow };
+        Conversation scratch = new() { Id = -1, Time = DateTime.UtcNow, IsScratch = true };
         scratch.AddMessage(new TextMessage
         {
             From = Message.Type.System,

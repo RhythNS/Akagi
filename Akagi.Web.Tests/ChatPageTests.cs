@@ -159,6 +159,23 @@ public class ChatPageTests : BunitContext
     }
 
     [Fact]
+    public void StepsTheChatAlreadyHoldsAreNotAddedAgain()
+    {
+        IRenderedComponent<ChatCharacterChatPage> cut = Open();
+
+        _client.OnChatActivityInternal("group1", ActivityKind.TurnStarted, null);
+        _client.OnChatActivityInternal("group1", ActivityKind.Step, Say(Message.Type.User, "Is the plan done?", second: 10));
+        // The history sent again, as an older bot did on every model call
+        _client.OnChatActivityInternal("group1", ActivityKind.Step, Say(Message.Type.System, "[System] [Consultation for Ren from Akagi] Update the board", isInternal: true, second: 1));
+        _client.OnChatActivityInternal("group1", ActivityKind.Step, Tool("AddTicketUpdate", "Added update 2 to #23.", "ren", 2));
+        _client.OnChatActivityInternal("group1", ActivityKind.Step, Tool("ShowPlan", "10 open tickets", "ren", 12));
+
+        cut.WaitForAssertion(() => Assert.Contains("Ren used ShowPlan", cut.Find(".turn-status.is-live").TextContent));
+        cut.Find(".turn-status.is-live").Click();
+        Assert.Equal(["You wrote", "Ren used ShowPlan"], cut.FindAll(".turn-steps .turn-step:not(.live) .step-title").Select(t => t.TextContent));
+    }
+
+    [Fact]
     public void OpeningAChatWhileATurnRunsShowsThatItIsWorking()
     {
         IRenderedComponent<ChatCharacterChatPage> cut = Open(busy: true);

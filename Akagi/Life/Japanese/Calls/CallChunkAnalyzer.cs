@@ -209,7 +209,7 @@ internal partial class ToolCallReviewer : ICallChunkAnalyzer, ICallConsolidator,
 
         // The instruction is the system prompt and the task a user message: providers merge system messages into one, and
         // the instruction alone must open every request alike for the prompt cache to recognize it
-        Conversation scratch = new() { Id = -1, Time = DateTime.UtcNow };
+        Conversation scratch = new() { Id = -1, Time = DateTime.UtcNow, IsScratch = true };
         scratch.AddMessage(new TextMessage
         {
             From = Message.Type.User,
