@@ -52,6 +52,29 @@ public class GroundingTests
         Assert.True(Grounding.Similarity("nervous about the dentist", "excited for the concert on Friday") < 0.4);
     }
 
+    [Theory]
+    // Rewordings one model reply produced while repeating the same tickets (prod, 2026-11-15)
+    [InlineData("Ask landlord about kitchen — leave it or sell to next tenants", "Ask landlord about kitchen — keep it in or sell to next tenants")]
+    [InlineData("Cancel old deposit-free apartment insurance", "Cancel deposit-free apartment insurance")]
+    [InlineData("Find international broker to transfer shares to", "Find international broker for share transfer")]
+    [InlineData("Find international bank account for living in Japan", "Find international bank account for Japan")]
+    [InlineData("2FA audit — remove German phone number from all accounts", "Audit accounts for 2FA tied to German phone number")]
+    [InlineData("2FA audit — remove German phone number from all accounts", "2FA audit before cancelling German phone number")]
+    public void WordSimilarity_SeesReorderedAndRewordedTitles(string a, string b)
+    {
+        Assert.True(Grounding.WordSimilarity(a, b) >= 0.75, $"{Grounding.WordSimilarity(a, b):0.00}");
+    }
+
+    [Theory]
+    [InlineData("Write tests for parser", "Write docs for parser")]
+    [InlineData("Book flight to Tokyo", "Book hotel in Tokyo")]
+    [InlineData("Weekly review KW47", "Weekly review KW48")]
+    [InlineData("Find international broker to transfer shares to", "Find international bank account for living in Japan")]
+    public void WordSimilarity_KeepsDifferentTitlesApart(string a, string b)
+    {
+        Assert.True(Grounding.WordSimilarity(a, b) < 0.75, $"{Grounding.WordSimilarity(a, b):0.00}");
+    }
+
     [Fact]
     public void RecentUserTexts_TakesOnlyRecentUserMessagesNewestFirst()
     {

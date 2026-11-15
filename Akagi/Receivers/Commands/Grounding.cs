@@ -44,6 +44,8 @@ internal interface IUserFactCommand : IStateCommand
 /// </summary>
 internal interface IWorkItemCommand : IStateCommand
 {
+    /// <summary>How many items this call changes, counted against the budget; a bulk create counts each ticket.</summary>
+    int Changes => 1;
 }
 
 /// <summary>
@@ -191,6 +193,65 @@ internal static class Grounding
             }
         }
         return 2.0 * shared / (left.Length - 1 + right.Length - 1);
+    }
+
+    /// <summary>
+    /// Dice coefficient over the content words of two short texts such as titles: word order, small words ("the",
+    /// "for", "und") and a plural s do not count. Unlike <see cref="Similarity"/> it sees "2FA audit of accounts" and
+    /// "Audit accounts for 2FA" as the same, and "Write tests" and "Write docs" as different.
+    /// </summary>
+    public static double WordSimilarity(string? a, string? b)
+    {
+        HashSet<string> left = ContentWords(a);
+        HashSet<string> right = ContentWords(b);
+        if (left.Count == 0 || right.Count == 0)
+        {
+            return 0;
+        }
+        int shared = left.Count(right.Contains);
+        return 2.0 * shared / (left.Count + right.Count);
+    }
+
+    private static readonly HashSet<string> SmallWords =
+    [
+        "a", "an", "the", "and", "or", "of", "to", "for", "in", "on", "at", "by", "from", "with", "about", "into", "all",
+        "any", "before", "after", "it", "its", "his", "her", "my", "your", "our", "their", "this", "that", "is", "are", "be",
+        "der", "die", "das", "den", "dem", "des", "ein", "eine", "einen", "und", "oder", "für", "von", "mit", "zu", "zum",
+        "zur", "im", "am", "auf", "aus", "bei", "nach", "vor"
+    ];
+
+    private static HashSet<string> ContentWords(string? text)
+    {
+        HashSet<string> words = [];
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return words;
+        }
+        StringBuilder word = new();
+        foreach (char c in text.Normalize(NormalizationForm.FormKC).ToLowerInvariant().Append(' '))
+        {
+            if (char.IsLetterOrDigit(c))
+            {
+                word.Append(c);
+                continue;
+            }
+            if (word.Length > 0)
+            {
+                string w = word.ToString();
+                word.Clear();
+                if (SmallWords.Contains(w))
+                {
+                    continue;
+                }
+                // "accounts" and "account" are the same word; "glass" keeps its s
+                if (w.Length > 3 && w.EndsWith('s') && !w.EndsWith("ss", StringComparison.Ordinal))
+                {
+                    w = w[..^1];
+                }
+                words.Add(w);
+            }
+        }
+        return words;
     }
 
     /// <summary>

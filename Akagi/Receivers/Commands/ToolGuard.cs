@@ -15,8 +15,11 @@ internal sealed class ToolGuard
 
     public const int MaxChangesPerStep = 3;
     public const int MaxChangesPerTurn = 8;
-    /// <summary>Work item changes (<see cref="IWorkItemCommand"/>) count separately; planning touches many tickets.</summary>
-    public const int MaxWorkItemChangesPerStep = 12;
+    /// <summary>
+    /// Work item changes (<see cref="IWorkItemCommand"/>) count separately, since planning touches many tickets; each
+    /// ticket of a bulk create counts.
+    /// </summary>
+    public const int MaxWorkItemChangesPerStep = 20;
     public const int MaxWorkItemChangesPerTurn = 40;
 
     private readonly HashSet<string> _stepCalls = [];
@@ -83,18 +86,25 @@ internal sealed class ToolGuard
         {
             return RefusalPrefix + "identical to another call in this reply.";
         }
-        if (command is IWorkItemCommand)
+        if (command is IWorkItemCommand workItem)
         {
-            if (_stepWorkItemChanges >= MaxWorkItemChangesPerStep)
+            int changes = Math.Max(1, workItem.Changes);
+            if (_stepWorkItemChanges + changes > MaxWorkItemChangesPerStep)
             {
-                return RefusalPrefix + $"at most {MaxWorkItemChangesPerStep} board changes per reply. Continue in the next reply.";
+                int left = MaxWorkItemChangesPerStep - _stepWorkItemChanges;
+                return RefusalPrefix + $"at most {MaxWorkItemChangesPerStep} board changes per reply" + (left > 0
+                    ? $"; this call makes {changes} and only {left} more fit. Do at most {left} now and the rest in the next reply."
+                    : ". Continue in the next reply.");
             }
-            if (_turnWorkItemChanges >= MaxWorkItemChangesPerTurn)
+            if (_turnWorkItemChanges + changes > MaxWorkItemChangesPerTurn)
             {
-                return RefusalPrefix + $"at most {MaxWorkItemChangesPerTurn} board changes per turn. Tell him what is done and what is left.";
+                int left = MaxWorkItemChangesPerTurn - _turnWorkItemChanges;
+                return RefusalPrefix + $"at most {MaxWorkItemChangesPerTurn} board changes per turn" + (left > 0
+                    ? $"; this call makes {changes} and only {left} more fit. Do at most {left} now, then tell him what is left."
+                    : ". Tell him what is done and what is left.");
             }
-            _stepWorkItemChanges++;
-            _turnWorkItemChanges++;
+            _stepWorkItemChanges += changes;
+            _turnWorkItemChanges += changes;
             return null;
         }
         if (_stepChanges >= MaxChangesPerStep)

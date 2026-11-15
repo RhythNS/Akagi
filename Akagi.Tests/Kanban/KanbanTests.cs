@@ -499,6 +499,92 @@ public class KanbanToolTests
         Assert.Contains("not available during a consultation", new ToolGuard().Check(Tool<CreateTicketCommand>(("Title", "x")), test.Context));
     }
 
+    [Fact]
+    public async Task WorkItemTools_CountEveryTicketOfABulkCreate()
+    {
+        KanbanTestContext test = await WithProject();
+        test.Context.Turn = TurnSource.Consultation;
+        test.Context.ConsultedOn = TurnSource.User;
+        ToolGuard guard = new();
+        string Lines(string prefix, int count) => string.Join("\n", Enumerable.Range(1, count).Select(i => $"{prefix} {i} | 1"));
+
+        Assert.Equal(15, ((IWorkItemCommand)Tool<CreateTicketsCommand>(("Tickets", Lines("Task", 15)))).Changes);
+        Assert.Null(guard.Check(Tool<CreateTicketsCommand>(("Tickets", Lines("Task", 15))), test.Context));
+
+        string? refusal = guard.Check(Tool<CreateTicketsCommand>(("Tickets", Lines("Chore", 10))), test.Context);
+        Assert.Contains("this call makes 10 and only 5 more fit", refusal);
+        Assert.Null(guard.Check(Tool<CreateTicketsCommand>(("Tickets", Lines("Chore", 5))), test.Context));
+        Assert.Contains("board changes per reply", guard.Check(Tool<CreateTicketCommand>(("Title", "one more")), test.Context));
+    }
+
+    [Fact]
+    public async Task CreateTickets_SkipsTicketsThatAreAlreadyOpen()
+    {
+        // One model reply on prod sent the same five tickets six times, reworded each time
+        KanbanTestContext test = await WithProject();
+        await test.Run<CreateTicketsCommand>(("Tickets",
+            "Ask landlord about kitchen — leave it or sell to next tenants | 1 | Ask him.\n" +
+            "Cancel old deposit-free apartment insurance | 0.5\n" +
+            "2FA audit — remove German phone number from all accounts | 1"));
+
+        string repeated = await test.Run<CreateTicketsCommand>(("Tickets",
+            "Ask landlord about kitchen — keep it in or sell to next tenants | 1 | Ask the landlord.\n" +
+            "Cancel deposit-free apartment insurance | 0.5\n" +
+            "Audit accounts for 2FA tied to German phone number | 1"));
+        Assert.StartsWith("Not done: every ticket is on the board already.", repeated);
+        Assert.Contains("#2 Cancel old deposit-free apartment insurance is already open", repeated);
+        Assert.Equal(3, test.Tickets.Items.Count());
+
+        string mixed = await test.Run<CreateTicketsCommand>(("Tickets",
+            "Find international broker to transfer shares to | 2\n" +
+            "Find international broker for share transfer | 2\n" +
+            "Cancel deposit-free apartment insurance | 0.5"));
+        Assert.Contains("#4 Find international broker to transfer shares to", mixed);
+        Assert.Contains("same as Find international broker to transfer shares to in this list", mixed);
+        Assert.Contains("#2 Cancel old deposit-free apartment insurance is already open", mixed);
+        Assert.Equal(4, test.Tickets.Items.Count());
+    }
+
+    [Fact]
+    public async Task CreateTicket_RefusesAnOpenTicketTwiceButNotAFinishedOne()
+    {
+        KanbanTestContext test = await WithProject();
+        await test.Run<CreateTicketCommand>(("Title", "Cancel old deposit-free apartment insurance"));
+
+        string again = await test.Run<CreateTicketCommand>(("Title", "Cancel the deposit-free apartment insurance"));
+        Assert.Contains("Not done: #1 Cancel old deposit-free apartment insurance is already open", again);
+        Assert.Single(test.Tickets.Items);
+
+        await test.Run<MoveTicketCommand>(("Ticket", "#1"), ("Column", "Done"));
+        Assert.Contains("Created #2", await test.Run<CreateTicketCommand>(("Title", "Cancel old deposit-free apartment insurance")));
+    }
+
+    [Fact]
+    public async Task CreateTickets_KeepsDescriptionsOverSeveralLines()
+    {
+        // On prod each line of these descriptions became a ticket of its own
+        KanbanTestContext test = await WithProject();
+        string created = await test.Run<CreateTicketsCommand>(("Tickets",
+            "Inventory sweep | 2 | Give every item one of four labels:\n" +
+            "- **keep** → boxes to parents\n" +
+            "- **sell**\n" +
+            "\n" +
+            "Done when every room is labelled.\n" +
+            "Sell big furniture | 3 | List it early December.\n" +
+            "Window: **Dec 1 → Dec 20**\n" +
+            "Final clean | 2"));
+
+        Assert.Equal(3, test.Tickets.Items.Count());
+        Assert.Contains("#3 Final clean (2 days)", created);
+        Assert.Equal("Give every item one of four labels:\n- **keep** → boxes to parents\n- **sell**\n\nDone when every room is labelled.",
+            test.Ticket(1).Description);
+        Assert.Equal("List it early December.\nWindow: **Dec 1 → Dec 20**", test.Ticket(2).Description);
+        Assert.Equal(string.Empty, test.Ticket(3).Description);
+
+        // Without any '|' every line is a title
+        Assert.Equal(["Buy boxes", "Book van"], CreateTicketsCommand.Parse("Buy boxes\n- Book van").Select(t => t.Title));
+    }
+
     private static T Tool<T>(params (string Name, string Value)[] arguments) where T : Command, new()
     {
         T command = new();

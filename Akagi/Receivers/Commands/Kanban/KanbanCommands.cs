@@ -87,6 +87,22 @@ internal abstract class KanbanCommand : Command
         return (true, KanbanViews.Day(day));
     }
 
+    /// <summary>How alike two titles must be (<see cref="Grounding.WordSimilarity"/>) to count as the same ticket.</summary>
+    internal const double SameTitleSimilarity = 0.75;
+
+    /// <summary>
+    /// The open ticket whose title says the same as <paramref name="title"/>, if any. A model that repeats itself
+    /// rewords the title each time ("Cancel old insurance", "Cancel the insurance"), so an exact match is not enough.
+    /// </summary>
+    internal static KanbanTicket? SameOpenTicket(KanbanBoard board, string title) => board.Tickets
+        .Where(t => board.Project.KindOf(t.ColumnId) != KanbanColumnKind.Done)
+        .Select(t => (Ticket: t, Similarity: Grounding.WordSimilarity(t.Title, title)))
+        .Where(m => m.Similarity >= SameTitleSimilarity)
+        .OrderByDescending(m => m.Similarity)
+        .ThenBy(m => m.Ticket.Number)
+        .Select(m => m.Ticket)
+        .FirstOrDefault();
+
     protected static Argument Text(string name, string description, bool required = false) => new()
     {
         Name = name,
@@ -293,12 +309,18 @@ internal class CreateTicketCommand : KanbanCommand, IWorkItemCommand
     protected override async Task<string> Run(Context context, KanbanService service, string userId)
     {
         KanbanBoard board = await Board(service, userId);
+        string title = RequireArgument("Title");
+        if (SameOpenTicket(board, title) is KanbanTicket same)
+        {
+            return $"Not done: {same.Reference} {same.Title} is already open and says the same. Change that ticket with " +
+                   "UpdateTicket or AddTicketUpdate, or give this one a title that tells them apart.";
+        }
         KanbanColumn? column = GetArgument("Column") is string columnName ? KanbanLookup.Column(board.Project, columnName) : null;
         List<KanbanTicket> after = KanbanLookup.Tickets(board, GetArgument("After"));
         List<KanbanTicket> before = KanbanLookup.Tickets(board, GetArgument("Before"));
         (_, DateTime? notBefore) = DayArgument("NotBefore");
 
-        KanbanTicket ticket = await service.CreateTicketAsync(userId, board.Project.Id!, RequireArgument("Title"), GetArgument("Description"),
+        KanbanTicket ticket = await service.CreateTicketAsync(userId, board.Project.Id!, title, GetArgument("Description"),
             column?.Id, Days("RequiredDays") ?? 0, null, after.Select(t => t.Id!), notBefore);
         List<string> notes = [];
         foreach (KanbanTicket later in before)
@@ -330,44 +352,120 @@ internal class CreateTicketsCommand : KanbanCommand, IWorkItemCommand
 
     public override string Description =>
         "Create several tickets at once, e.g. when planning a project. One ticket per line: 'Title | work days | description'. " +
-        "Link them afterwards with LinkTickets.";
+        "Tickets already open on the board are not created twice. Link them afterwards with LinkTickets.";
 
     public override Argument[] GetDefaultArguments() =>
     [
         ProjectArgument(),
-        Text("Tickets", "One per line: 'Title | work days | description' (days and description optional).", required: true),
+        Text("Tickets", "One per line: 'Title | work days | description' (days and description optional). Lines without '|' " +
+                        "after a description continue it, so it may be Markdown over several lines.", required: true),
         Text("Column", "Column for all of them; default is the first to-do column.")
     ];
+
+    /// <summary>Each ticket counts against the board change budget, so repeating a whole plan runs out of it.</summary>
+    public int Changes
+    {
+        get
+        {
+            try
+            {
+                return Math.Max(1, Parse(GetArgument("Tickets") ?? string.Empty).Count);
+            }
+            catch (KanbanException)
+            {
+                // The call fails when it runs and says why
+                return 1;
+            }
+        }
+    }
+
+    internal sealed record TicketLine(string Title, double Days, string? Description);
+
+    /// <summary>
+    /// Reads 'Title | days | description' lines. Once any line uses '|', a line without one that follows a description
+    /// belongs to that description (a Markdown list, a "Done when ..." line); otherwise every line is a title.
+    /// </summary>
+    internal static List<TicketLine> Parse(string text)
+    {
+        string[] lines = text.ReplaceLineEndings("\n").Split('\n');
+        bool structured = lines.Any(l => l.Contains('|'));
+        List<(string Title, double Days, StringBuilder? Description)> tickets = [];
+        StringBuilder? openDescription = null;
+
+        foreach (string line in lines)
+        {
+            string trimmed = line.Trim();
+            if (structured && openDescription != null && !trimmed.Contains('|'))
+            {
+                openDescription.Append('\n').Append(line.TrimEnd());
+                continue;
+            }
+            if (trimmed.Length == 0)
+            {
+                continue;
+            }
+
+            string[] parts = trimmed.TrimStart('-', '*', ' ').Split('|', 3, StringSplitOptions.TrimEntries);
+            double days = 0;
+            if (parts.Length > 1 && parts[1].Length > 0 &&
+                !double.TryParse(parts[1].Replace(',', '.').Split(' ')[0], NumberStyles.Float, CultureInfo.InvariantCulture, out days))
+            {
+                throw new KanbanException($"'{parts[1]}' in '{trimmed}' is not a number of work days.");
+            }
+            openDescription = parts.Length > 2 ? new StringBuilder(parts[2]) : null;
+            tickets.Add((parts[0], KanbanService.CheckDays(days), openDescription));
+        }
+
+        return [.. tickets.Select(t => new TicketLine(t.Title, t.Days,
+            t.Description?.ToString().Trim() is { Length: > 0 } description ? description : null))];
+    }
 
     protected override async Task<string> Run(Context context, KanbanService service, string userId)
     {
         KanbanBoard board = await Board(service, userId);
         KanbanColumn? column = GetArgument("Column") is string columnName ? KanbanLookup.Column(board.Project, columnName) : null;
-        string[] lines = RequireArgument("Tickets").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (lines.Length > 30)
-        {
-            return "Not done: at most 30 tickets at once.";
-        }
 
         // Check every line before creating anything, so a typo does not leave half a plan
-        List<(string Title, double Days, string? Description)> parsed = [];
-        foreach (string line in lines)
+        List<TicketLine> parsed = Parse(RequireArgument("Tickets"));
+        if (parsed.Count > ToolGuard.MaxWorkItemChangesPerStep)
         {
-            string[] parts = line.TrimStart('-', '*', ' ').Split('|', 3, StringSplitOptions.TrimEntries);
-            double days = 0;
-            if (parts.Length > 1 && parts[1].Length > 0 &&
-                !double.TryParse(parts[1].Replace(',', '.').Split(' ')[0], NumberStyles.Float, CultureInfo.InvariantCulture, out days))
+            return $"Not done: at most {ToolGuard.MaxWorkItemChangesPerStep} tickets at once; create the rest in the next reply.";
+        }
+
+        List<TicketLine> fresh = [];
+        List<string> skipped = [];
+        foreach (TicketLine line in parsed)
+        {
+            if (SameOpenTicket(board, line.Title) is KanbanTicket open)
             {
-                return $"Not done: '{parts[1]}' in '{line}' is not a number of work days.";
+                skipped.Add($"- {line.Title}: {open.Reference} {open.Title} is already open");
             }
-            parsed.Add((parts[0], KanbanService.CheckDays(days), parts.Length > 2 ? parts[2] : null));
+            else if (fresh.FirstOrDefault(f => Grounding.WordSimilarity(f.Title, line.Title) >= SameTitleSimilarity) is TicketLine earlier)
+            {
+                skipped.Add($"- {line.Title}: same as {earlier.Title} in this list");
+            }
+            else
+            {
+                fresh.Add(line);
+            }
+        }
+        string skippedText = skipped.Count == 0 ? string.Empty
+            : "Not created, already there (change those tickets instead, or give a title that tells them apart):" +
+              Environment.NewLine + string.Join(Environment.NewLine, skipped);
+        if (fresh.Count == 0)
+        {
+            return "Not done: every ticket is on the board already." + Environment.NewLine + skippedText;
         }
 
         StringBuilder created = new("Created:");
-        foreach ((string title, double days, string? description) in parsed)
+        foreach (TicketLine line in fresh)
         {
-            KanbanTicket ticket = await service.CreateTicketAsync(userId, board.Project.Id!, title, description, column?.Id, days);
-            created.Append(Environment.NewLine).Append($"- {ticket.Reference} {ticket.Title} ({KanbanText.Days(days)})");
+            KanbanTicket ticket = await service.CreateTicketAsync(userId, board.Project.Id!, line.Title, line.Description, column?.Id, line.Days);
+            created.Append(Environment.NewLine).Append($"- {ticket.Reference} {ticket.Title} ({KanbanText.Days(line.Days)})");
+        }
+        if (skipped.Count > 0)
+        {
+            created.Append(Environment.NewLine).Append(skippedText);
         }
         return created.ToString();
     }
