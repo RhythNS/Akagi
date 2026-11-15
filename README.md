@@ -73,6 +73,13 @@ without a connected Card is refused at upload (and by `--validate`) instead of f
 The group shows up in Akagi.Web's chat list next to the characters, with Akagi's picture. Messages sent there go to the
 group, as after `/switchToGroup` on Telegram, and group commands such as `/session` apply to it.
 
+Every message in an Akagi.Web chat has a "N steps" button that opens up its turn: the tool calls with their arguments and
+results (refused ones marked), consultations, what the members said to each other, instructions and reflections. While
+a character or group is working, a live row shows the latest step ("Companion is working… · Ren used ShowPlan") and
+opens the same list as it grows. The bot reports this through `IChatActivityFeed` (`ChatActivityHub`): `Receiver`
+starts a turn per chat, every message added to a conversation on that flow is a step, and `SocketService` forwards
+them as `ChatActivityResponseTransmission`. Long tool results and arguments are cut at 4000 and 2000 characters.
+
 ### Self-modification
 
 - `ScheduleCheckIn` creates one-time (`OneTimeRoutine`) or recurring check-ins she decides on herself, e.g. after you

@@ -1,0 +1,111 @@
+.turn-steps {
+	margin: 0.25rem 0 0.75rem 2.5rem;
+	padding: 0.5rem 0.75rem;
+	border-left: 2px solid var(--tblr-border-color, #dce1e7);
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	font-size: 0.8rem;
+	max-width: 52rem;
+}
+
+.turn-step {
+	display: flex;
+	flex-direction: column;
+	gap: 0.2rem;
+	min-width: 0;
+}
+
+.step-head {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-wrap: wrap;
+}
+
+.step-time {
+	color: var(--tblr-secondary, #667382);
+	font-variant-numeric: tabular-nums;
+	font-size: 0.72rem;
+}
+
+.step-title {
+	font-weight: 600;
+}
+
+.turn-step.tool .step-title {
+	font-family: var(--tblr-font-monospace, monospace);
+	font-weight: 500;
+}
+
+.turn-step.refused {
+	opacity: 0.65;
+}
+
+.turn-step.instruction .step-text,
+.turn-step.internal .step-text {
+	color: var(--tblr-secondary, #667382);
+}
+
+.step-text {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.step-text.is-clamped {
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.step-args {
+	display: grid;
+	grid-template-columns: max-content minmax(0, 1fr);
+	gap: 0.1rem 0.75rem;
+	margin: 0;
+}
+
+.step-args dt {
+	font-weight: 500;
+	color: var(--tblr-secondary, #667382);
+}
+
+.step-args dd {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.step-output summary {
+	cursor: pointer;
+	color: var(--tblr-secondary, #667382);
+	font-size: 0.72rem;
+}
+
+.step-output pre {
+	margin: 0.2rem 0 0;
+	max-height: 16rem;
+	overflow: auto;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 0.75rem;
+	padding: 0.4rem 0.5rem;
+	border-radius: 0.25rem;
+	background: var(--tblr-bg-surface-secondary, rgba(0, 0, 0, 0.04));
+	/* Tabler gives pre light text for a dark box; here the box follows the theme */
+	color: var(--tblr-body-color, inherit);
+}
+
+.turn-step.live {
+	flex-direction: row;
+	align-items: center;
+	gap: 0.5rem;
+	color: var(--tblr-primary, #066fd1);
+}
+
+@media (max-width: 576px) {
+	.turn-steps {
+		margin-left: 0.25rem;
+	}
+}

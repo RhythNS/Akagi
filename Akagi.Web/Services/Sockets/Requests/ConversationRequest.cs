@@ -3,7 +3,10 @@ using Akagi.Web.Models.Chat;
 
 namespace Akagi.Web.Services.Sockets.Requests;
 
-public class ConversationRequest : Request<Conversation[], ConversationRequestTransmission>
+/// <summary>A chat's conversations, and whether a turn is running in it right now.</summary>
+public record ConversationHistory(Conversation[] Conversations, bool IsBusy);
+
+public class ConversationRequest : Request<ConversationHistory, ConversationRequestTransmission>
 {
     public required string CharacterId { get; set; } = string.Empty;
     public int? ConversationId { get; set; } = null;

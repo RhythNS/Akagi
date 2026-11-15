@@ -1,4 +1,5 @@
 using Akagi.Bridge.Chat.Transmissions;
+using Akagi.Bridge.Chat.Transmissions.Responses;
 using Akagi.Web.Models;
 using Akagi.Web.Models.Chat;
 using Akagi.Web.Services.Sockets.Requests;
@@ -25,6 +26,8 @@ public class SocketClient : NetCoreServer.TcpClient
     public event OnMessageRecieved? MessageRecieved;
     public event OnStreamChunkReceived? StreamChunkReceived;
     public event Action? ConnectionStateChanged;
+    /// <summary>A chat's live progress: a turn started, a step was added (with its message), the turn ended.</summary>
+    public event Action<string, ChatActivityResponseTransmission.ActivityKind, Message?>? ChatActivityReceived;
 
     private readonly SocketTransmissionHandler[] _transmissionHandlers;
     private readonly SocketService _socketService;
@@ -209,6 +212,11 @@ public class SocketClient : NetCoreServer.TcpClient
     public void OnMessageRecievedInternal(string? characterId, Message message)
     {
         MessageRecieved?.Invoke(characterId, message);
+    }
+
+    public void OnChatActivityInternal(string chatId, ChatActivityResponseTransmission.ActivityKind kind, Message? message)
+    {
+        ChatActivityReceived?.Invoke(chatId, kind, message);
     }
 
     public void OnStreamChunkReceivedInternal(

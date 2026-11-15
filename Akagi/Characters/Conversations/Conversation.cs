@@ -114,6 +114,7 @@ internal class Conversation : DirtyTrackable
         Dirty = true;
         MarkInternal(message);
         _messages.Add(message);
+        ChatActivityHub.Report(message);
     }
 
     public virtual void InsertMessage(int index, Message message)
@@ -121,6 +122,7 @@ internal class Conversation : DirtyTrackable
         Dirty = true;
         MarkInternal(message);
         _messages.Insert(index, message);
+        ChatActivityHub.Report(message);
     }
 
     private static void MarkInternal(Message message)
@@ -184,36 +186,17 @@ internal class Conversation : DirtyTrackable
     }
 
     /// <summary>
-    /// The chat history for the website. Messages exchanged inside a group (<see cref="Message.Internal"/>) are left out
-    /// unless <paramref name="includeInternal"/> is set, e.g. for a group that shows the user its intermediate steps.
+    /// The whole conversation for the website: the chat itself and, flagged, everything behind it (tool calls,
+    /// instructions, what group members said to each other), which the site shows when a turn is opened up.
     /// </summary>
-    public virtual Bridge.Chat.Models.Conversation ToBridgeModel(bool includeInternal = false)
+    public virtual Bridge.Chat.Models.Conversation ToBridgeModel()
     {
         List<Bridge.Chat.Models.TextMessage> bridgeMessages = [];
         foreach (Message message in _messages)
         {
-            if (message.Internal && !includeInternal)
+            if (BridgeMessages.From(message) is Bridge.Chat.Models.TextMessage bridge)
             {
-                continue;
-            }
-            switch (message)
-            {
-                case TextMessage textMessage:
-                    bridgeMessages.Add(textMessage.ToBridgeMessage());
-                    break;
-
-                case VoiceMessage voiceMessage:
-                    bridgeMessages.Add(new Bridge.Chat.Models.TextMessage
-                    {
-                        Time = voiceMessage.Time,
-                        From = Message.ToBridgeType(voiceMessage.From),
-                        Text = string.IsNullOrWhiteSpace(voiceMessage.Content) ? "(voice message)" : voiceMessage.Content
-                    });
-                    break;
-
-                default:
-                    // Tool calls (CommandMessage) and their results are the character's own workings, not part of the chat
-                    break;
+                bridgeMessages.Add(bridge);
             }
         }
 

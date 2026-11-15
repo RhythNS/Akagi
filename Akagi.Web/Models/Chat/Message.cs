@@ -48,6 +48,14 @@ public class Message
 
     public required DateTime Time { get; set; }
     public required Type From { get; set; }
+    /// <summary>The character (in a group: the member) who wrote it.</summary>
+    public string? CharacterId { get; set; }
+    /// <summary>Said inside a group and not to the user, such as a consultation and its answer.</summary>
+    public bool Internal { get; set; }
 
-    public bool IsShownInChat => (ShownInChat & From) == From;
+    /// <summary>
+    /// Whether it is a chat bubble. Everything else (tool calls, instructions, what members said to each other) is
+    /// part of a turn's steps, shown when the turn is opened up.
+    /// </summary>
+    public virtual bool IsShownInChat => !Internal && (ShownInChat & From) == From;
 }

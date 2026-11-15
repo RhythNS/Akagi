@@ -793,7 +793,7 @@ public class KanbanConsultationTests
         Assert.NotEmpty(added);
         Assert.All(added, m => Assert.True(m.Internal));
         Assert.False(test.Conversation.Messages[0].Internal);
-        Assert.Equal(["Finished the data model!"], test.Conversation.ToBridgeModel().Messages.Select(m => m.Text));
+        Assert.Equal(["Finished the data model!"], test.Conversation.ToBridgeModel().Messages.Where(m => !m.Internal).Select(m => m.Text));
         Assert.Contains("ShowBoard", llm.OfferedTools[0]);
         Assert.Equal(changes, llm.OfferedTools[0].Contains("MoveTicket"));
         KanbanTicket ticket = test.Ticket(1);

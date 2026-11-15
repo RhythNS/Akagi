@@ -77,6 +77,8 @@ internal class AggregateConversation : Conversation
     public override void AddMessage(Message message)
     {
         _master.AddMessage(message);
+        // The copies are the same step; it is reported once
+        using IDisposable mute = ChatActivityHub.Mute();
         foreach (Conversation target in _targets)
         {
             target.AddMessage(message.Copy());
@@ -86,6 +88,7 @@ internal class AggregateConversation : Conversation
     public override void InsertMessage(int index, Message message)
     {
         _master.InsertMessage(index, message);
+        using IDisposable mute = ChatActivityHub.Mute();
         foreach (Conversation target in _targets)
         {
             target.InsertMessage(index, message.Copy());
@@ -147,8 +150,8 @@ internal class AggregateConversation : Conversation
         return _master.CountWords(filter);
     }
 
-    public override Bridge.Chat.Models.Conversation ToBridgeModel(bool includeInternal = false)
+    public override Bridge.Chat.Models.Conversation ToBridgeModel()
     {
-        return _master.ToBridgeModel(includeInternal);
+        return _master.ToBridgeModel();
     }
 }

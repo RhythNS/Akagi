@@ -16,4 +16,8 @@ public class ConversationResponseTransmission : Transmission
 
     [Key(2)]
     public required Conversation[] Conversations { get; set; } = [];
+
+    /// <summary>A turn is running in this chat right now; its steps arrive as chat activity.</summary>
+    [Key(3)]
+    public bool IsBusy { get; set; }
 }

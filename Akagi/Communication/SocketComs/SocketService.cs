@@ -43,8 +43,13 @@ internal class SocketService : Communicator, IStreamingCommunicator, IHostedServ
                          IOptionsMonitor<Options> options,
                          ILoggerFactory loggerFactory,
                          IEnumerable<Command> commands,
-                         IEnumerable<SocketTransmissionHandler> transmissionHandlers) : base(receiver)
+                         IEnumerable<SocketTransmissionHandler> transmissionHandlers,
+                         IChatActivityFeed? activity = null) : base(receiver)
     {
+        if (activity != null)
+        {
+            activity.Published += SendActivity;
+        }
         _options = options.CurrentValue;
 
         _databaseFactory = databaseFactory;
@@ -252,6 +257,24 @@ internal class SocketService : Communicator, IStreamingCommunicator, IHostedServ
             session.SendTransmission(transmission);
         }
         _logger.LogInformation("Sent transmission to {Count} sessions for user {UserId}.", sessions.Length, user.Id);
+    }
+
+    /// <summary>
+    /// Forwards a chat's live progress to the user's open pages, see <see cref="IChatActivityFeed"/>.
+    /// </summary>
+    private void SendActivity(User user, string chatId, ChatActivityResponseTransmission.ActivityKind kind, Message? message)
+    {
+        Bridge.Chat.Models.TextMessage? step = message == null ? null : BridgeMessages.From(message);
+        if (kind == ChatActivityResponseTransmission.ActivityKind.Step && step == null)
+        {
+            return;
+        }
+        SocketSession[] sessions = GetSessions(user);
+        ChatActivityResponseTransmission transmission = new() { ChatId = chatId, Kind = kind, Message = step };
+        foreach (SocketSession session in sessions)
+        {
+            session.SendTransmission(transmission);
+        }
     }
 
     public Task<IMessageStream> OpenMessageStreamAsync(User user, Character character, CancellationToken ct = default)

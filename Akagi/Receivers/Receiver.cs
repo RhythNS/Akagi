@@ -67,6 +67,19 @@ internal class Receiver : IReceiver, ICleanable
     private readonly IDatabaseFactory _databaseFactory;
     private readonly IEmbeddingService _embeddingService;
     private readonly ILogger<Receiver> _logger;
+    private readonly IChatActivityFeed? _activity;
+    /// <summary>
+    /// Reports the turn to the website as it happens (a character's or a group's chat), see <see cref="IChatActivityFeed"/>.
+    /// </summary>
+    private IDisposable BeginTurn(User user, string? chatId) =>
+        _activity != null && chatId != null ? _activity.BeginTurn(user, chatId) : NoTurn.Instance;
+    private sealed class NoTurn : IDisposable
+    {
+        public static readonly NoTurn Instance = new();
+        public void Dispose()
+        {
+        }
+    }
     public Receiver(IPuppeteerDatabase puppeteerDatabase,
                     IReflectorDatabase reflectorDatabase,
                     IInterceptorDatabase interceptorDatabase,
@@ -76,8 +89,10 @@ internal class Receiver : IReceiver, ICleanable
                     ILLMFactory llmFactory,
                     IDatabaseFactory databaseFactory,
                     IEmbeddingService embeddingService,
-                    ILogger<Receiver> logger)
+                    ILogger<Receiver> logger,
+                    IChatActivityFeed? activity = null)
     {
+        _activity = activity;
         _puppeteerDatabase = puppeteerDatabase;
         _reflectorDatabase = reflectorDatabase;
         _interceptorDatabase = interceptorDatabase;
@@ -132,6 +147,8 @@ internal class Receiver : IReceiver, ICleanable
         LockCharacter(character, user);
         try
         {
+            // Inside a group turn this joins it; on its own (a conversation ending) it is the group's or character's
+            using IDisposable turn = BeginTurn(user, RunningPersonaGroup(character)?.Id ?? character.Id);
             ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (communicator == null)
             {
@@ -221,6 +238,7 @@ internal class Receiver : IReceiver, ICleanable
                 return false;
             }
             _runningGroup.Value = fresh;
+            using IDisposable turn = BeginTurn(user, fresh.Id);
             await work(fresh);
             return true;
         }
@@ -243,6 +261,7 @@ internal class Receiver : IReceiver, ICleanable
             {
                 return false;
             }
+            using IDisposable turn = BeginTurn(user, fresh.Id);
             await work(fresh);
             return true;
         }
@@ -261,6 +280,7 @@ internal class Receiver : IReceiver, ICleanable
         LockCharacter(character, user);
         try
         {
+            using IDisposable turn = BeginTurn(user, character.Id);
             _logger.LogInformation("Starting system event {SystemEvent} for user {UserId} and character {CharacterId}", message, user.Id, character.Id);
             ICommunicator? communicator = Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (communicator == null)
@@ -292,6 +312,7 @@ internal class Receiver : IReceiver, ICleanable
         }
         try
         {
+            using IDisposable turn = BeginTurn(user, character.Id);
             await using Context context = GetContext(character, user, from);
             context.Turn = message.From == Message.Type.User ? Receivers.Commands.TurnSource.User : Receivers.Commands.TurnSource.System;
             context.Conversation.AddMessage(message);
@@ -338,6 +359,7 @@ internal class Receiver : IReceiver, ICleanable
         List<ContextBase> contexts = [];
         try
         {
+            using IDisposable turn = BeginTurn(user, group.Id);
             ICharacterDatabase characterDatabase = _databaseFactory.GetDatabase<ICharacterDatabase>();
             List<Character> members = [];
             foreach (string memberId in group.MemberCharacterIds)
@@ -423,6 +445,7 @@ internal class Receiver : IReceiver, ICleanable
         }
         try
         {
+            using IDisposable turn = BeginTurn(user, character.Id);
             from ??= Globals.Instance.ServiceProvider.GetRequiredService<ICommunicatorFactory>().Create(user.LastUsedCommunicator);
             if (from == null)
             {

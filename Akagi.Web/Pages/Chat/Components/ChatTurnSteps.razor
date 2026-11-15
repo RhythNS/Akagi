@@ -1,0 +1,81 @@
+@using Akagi.Web.Models.Chat
+@using Akagi.Bridge.Chat.Models
+
+@* Everything that happened in one turn, in order: what was said, tool calls with their arguments and results,
+   instructions and what group members said to each other. *@
+<div class="turn-steps">
+	@foreach (Message step in Steps)
+	{
+		Models.Chat.TextMessage? text = step as Models.Chat.TextMessage;
+		ToolCall? tool = text?.Tool;
+		bool refused = tool != null && IsRefused(tool.Output);
+		string kind = tool != null ? "tool" : step.IsShownInChat ? "said" : step.From == Message.Type.System ? "instruction" : "internal";
+
+		<div class="turn-step @kind @(refused ? "refused" : "")">
+			<div class="step-head">
+				<span class="step-time">@step.Time.ToLocalTime().ToString("HH:mm:ss")</span>
+				<span class="step-title">@ChatTurns.Describe(step, Name)</span>
+				@if (refused)
+				{
+					<span class="badge bg-warning-lt">not done</span>
+				}
+				@if (step.Internal && tool == null)
+				{
+					<span class="badge bg-secondary-lt">internal</span>
+				}
+			</div>
+
+			@if (tool != null)
+			{
+				@if (tool.Arguments.Count > 0)
+				{
+					<dl class="step-args">
+						@foreach (ToolArgument argument in tool.Arguments)
+						{
+							<dt>@argument.Name</dt>
+							<dd>@argument.Value</dd>
+						}
+					</dl>
+				}
+				@if (!string.IsNullOrWhiteSpace(tool.Output))
+				{
+					<details class="step-output" open="@(tool.Output.Length <= OpenOutputLength)">
+						<summary>Result</summary>
+						<pre>@tool.Output</pre>
+					</details>
+				}
+			}
+			else if (!string.IsNullOrWhiteSpace(text?.Text))
+			{
+				<div class="step-text @(step.IsShownInChat ? "is-clamped" : "")">@ChatTurns.StepText(text)</div>
+			}
+		</div>
+	}
+
+	@if (Live)
+	{
+		<div class="turn-step live">
+			<span class="spinner-border spinner-border-sm text-primary" role="status"></span>
+			<span class="step-title">Still working…</span>
+		</div>
+	}
+</div>
+
+@code {
+	/// <summary>Results up to this long are shown right away; longer ones open on a click.</summary>
+	public const int OpenOutputLength = 300;
+
+	[Parameter, EditorRequired]
+	public IReadOnlyList<Message> Steps { get; set; } = [];
+
+	/// <summary>The name for a character id (a group member's, or the chat's own character).</summary>
+	[Parameter, EditorRequired]
+	public Func<string?, string> Name { get; set; } = _ => "Character";
+
+	/// <summary>The turn is still running; more steps follow.</summary>
+	[Parameter]
+	public bool Live { get; set; }
+
+	private static bool IsRefused(string output) =>
+		output.StartsWith("Not done: ", StringComparison.Ordinal) || output.StartsWith("Error: ", StringComparison.Ordinal);
+}

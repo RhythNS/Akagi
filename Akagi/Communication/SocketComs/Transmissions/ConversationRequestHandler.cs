@@ -13,10 +13,12 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
     public override string HandlesType => nameof(ConversationRequestTransmission);
 
     private readonly ICharacterDatabase _characterDatabase;
+    private readonly IChatActivityFeed _activity;
 
-    public ConversationRequestHandler(ICharacterDatabase characterDatabase)
+    public ConversationRequestHandler(ICharacterDatabase characterDatabase, IChatActivityFeed activity)
     {
         _characterDatabase = characterDatabase;
+        _activity = activity;
     }
 
     public override async Task ExecuteAsync(Context context, TransmissionWrapper transmissionWrapper)
@@ -32,8 +34,6 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
 
         string id = conversationRequestTransmission.CharacterId;
         ConversationContainer conversations;
-        // What group members said to each other is shown only where the group shows its intermediate steps live too
-        bool includeInternal = false;
         Character? character = await _characterDatabase.GetCharacter(id);
         if (character != null && character.UserId == user.Id)
         {
@@ -50,7 +50,6 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
                 throw new ArgumentException("Character not found or does not belong to the user");
             }
             conversations = group.Conversations;
-            includeInternal = group.UserVisibility.HasFlag(GroupVisibility.Intermediate);
         }
 
         if (conversationRequestTransmission.ConversationId != null)
@@ -65,7 +64,8 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
             {
                 CharacterId = id,
                 ConversationId = conversation.Id,
-                Conversations = [conversation.ToBridgeModel(includeInternal)],
+                Conversations = [conversation.ToBridgeModel()],
+                IsBusy = _activity.IsBusy(user.Id!, id),
             };
             context.Session.SendTransmission(response);
             return;
@@ -75,7 +75,8 @@ internal class ConversationRequestHandler : SocketTransmissionHandler
         {
             CharacterId = id,
             ConversationId = null,
-            Conversations = [.. conversations.List.Select(c => c.ToBridgeModel(includeInternal))],
+            Conversations = [.. conversations.List.Select(c => c.ToBridgeModel())],
+            IsBusy = _activity.IsBusy(user.Id!, id),
         };
         context.Session.SendTransmission(responseTransmission);
     }

@@ -2,6 +2,7 @@
 @using System.Text
 @using System.Text.RegularExpressions
 @using Akagi.Web.Icons
+@using ActivityKind = Akagi.Bridge.Chat.Transmissions.Responses.ChatActivityResponseTransmission.ActivityKind
 @using Akagi.Web.Models.Chat
 @using Akagi.Web.Pages.Chat.Components
 @using Akagi.Web.Services.Sockets
@@ -48,7 +49,7 @@
 				<div class="min-w-0">
 					<div class="d-flex align-items-center gap-2">
 						<h3 class="card-title m-0 text-truncate">@DisplayName</h3>
-						@if (IsStreamingActive || _isSending)
+						@if (IsStreamingActive || _isSending || IsBusy)
 						{
 							<span class="badge bg-primary-lt d-inline-flex align-items-center gap-1">
 								<span class="status-dot status-dot-animated bg-primary"></span>
@@ -126,14 +127,17 @@
 					</div>
 
 					DateTime? lastDate = null;
+					List<ChatTurn> turns = ChatTurns.Build(conv.Id, conv.Messages);
+					ChatTurn? liveTurn = IsBusy && ReferenceEquals(conv, CurrentConversation) ? turns.LastOrDefault() : null;
 
-					@foreach (Message baseMessage in conv.Messages)
+					@foreach (ChatTurn turn in turns)
 					{
-						if (baseMessage is not TextMessage textMessage || !textMessage.IsShownInChat)
-						{
-							continue;
-						}
+					bool expanded = _expandedTurns.Contains(turn.Key);
+					bool live = ReferenceEquals(turn, liveTurn);
+					int hidden = turn.HiddenCount;
 
+					@foreach (TextMessage textMessage in turn.Bubbles)
+					{
 						DateTime currentDate = textMessage.Time.ToLocalTime().Date;
 						if (lastDate.HasValue && currentDate != lastDate.Value)
 						{
@@ -166,6 +170,16 @@
 									{
 										<span class="badge bg-primary-lt ms-1" style="font-size: 0.6rem;">LIVE</span>
 									}
+									@if (hidden > 0)
+									{
+										<button type="button"
+												class="step-toggle"
+												title="Show everything that happened in this turn"
+												aria-expanded="@(expanded ? "true" : "false")"
+												@onclick="() => ToggleTurn(turn.Key)">
+											@StepsLabel(hidden, expanded)
+										</button>
+									}
 								</div>
 								<div class="bubble-text">
 									@RenderMarkdown(textMessage.Text)
@@ -173,6 +187,35 @@
 							</div>
 						</div>
 					}
+
+					@if (live)
+					{
+						<button type="button" class="turn-status is-live" @onclick="() => ToggleTurn(turn.Key)" aria-expanded="@(expanded ? "true" : "false")">
+							<span class="spinner-border spinner-border-sm" role="status"></span>
+							<span class="text-truncate">@DisplayName is working… @LatestStep(turn)</span>
+							<span class="ms-auto text-nowrap">@StepsLabel(hidden, expanded)</span>
+						</button>
+					}
+					else if (hidden > 0 && !turn.Bubbles.Any())
+					{
+						<button type="button" class="turn-status" @onclick="() => ToggleTurn(turn.Key)" aria-expanded="@(expanded ? "true" : "false")">
+							<span class="text-truncate">@turn.Steps[0].Time.ToLocalTime().ToString("t") • In the background: @ChatTurns.Describe(turn.Steps[0], MemberName)</span>
+							<span class="ms-auto text-nowrap">@StepsLabel(hidden, expanded)</span>
+						</button>
+					}
+
+					@if (expanded)
+					{
+						<ChatTurnSteps Steps="turn.Steps" Name="MemberName" Live="live" />
+					}
+					}
+				}
+				@if (IsBusy && (CurrentConversation?.Messages.Count ?? 0) == 0)
+				{
+					<div class="turn-status is-live">
+						<span class="spinner-border spinner-border-sm" role="status"></span>
+						<span>@DisplayName is working…</span>
+					</div>
 				}
 			}
 		</div>
@@ -387,6 +430,56 @@
 		50% { opacity: 0; }
 	}
 
+	/* Opens a turn's steps: tool calls, consultations and what the members said to each other */
+	.step-toggle {
+		margin-left: auto;
+		padding: 0 0.4rem;
+		border: 1px solid currentColor;
+		border-radius: 999px;
+		background: transparent;
+		color: inherit;
+		opacity: 0.6;
+		font-size: 0.66rem;
+		line-height: 1.4;
+		cursor: pointer;
+	}
+
+	.step-toggle:hover,
+	.step-toggle[aria-expanded="true"] {
+		opacity: 1;
+	}
+
+	.turn-status {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: calc(100% - 2.5rem);
+		max-width: 52rem;
+		margin: 0.1rem 0 0.5rem 2.5rem;
+		padding: 0.3rem 0.6rem;
+		border: 1px dashed var(--tblr-border-color);
+		border-radius: 0.5rem;
+		background: transparent;
+		color: var(--tblr-secondary);
+		font-size: 0.78rem;
+		text-align: left;
+		cursor: pointer;
+		min-width: 0;
+	}
+
+	.turn-status.is-live {
+		border-style: solid;
+		border-color: var(--tblr-primary);
+		color: var(--tblr-primary);
+	}
+
+	@@media (max-width: 576px) {
+		.turn-status {
+			width: 100%;
+			margin-left: 0;
+		}
+	}
+
 	.composer-wrapper {
 		flex-shrink: 0;
 	}
@@ -437,6 +530,11 @@
 	private Character? _character = null;
 	private Conversation[] _conversations = [];
 	private readonly Dictionary<string, TextMessage> _activeStreams = new();
+	// Turns opened up to show their steps, by ChatTurn.Key
+	private readonly HashSet<string> _expandedTurns = [];
+	// Running turns of this chat, from the live chat activity (a count, since a reflection can run inside a turn)
+	private int _runningTurns;
+	private Dictionary<string, string> _memberNames = new(StringComparer.OrdinalIgnoreCase);
 
 	private string _newMessage = string.Empty;
 	private bool _skipNextInputUpdate = false;
@@ -471,6 +569,10 @@
 		IsDirectAssistant ? "Direct Assistant" : (_character?.Name ?? $"Character {CharacterId}");
 
 	private bool IsStreamingActive => _activeStreams.Count > 0;
+
+	private bool IsBusy => _runningTurns > 0;
+
+	private Conversation? CurrentConversation => _conversations.MaxBy(x => x.Time);
 
 	/// <summary>
 	/// "/upg" in the composer lists matching commands until a space starts the arguments.
@@ -531,6 +633,7 @@
 		UnsubscribeFromClient();
 		client.MessageRecieved += OnClientMessageReceived;
 		client.StreamChunkReceived += OnClientStreamChunkReceived;
+		client.ChatActivityReceived += OnClientChatActivity;
 		_subscribedClient = client;
 	}
 
@@ -540,6 +643,7 @@
 		{
 			_subscribedClient.MessageRecieved -= OnClientMessageReceived;
 			_subscribedClient.StreamChunkReceived -= OnClientStreamChunkReceived;
+			_subscribedClient.ChatActivityReceived -= OnClientChatActivity;
 			_subscribedClient = null;
 		}
 	}
@@ -661,7 +765,10 @@
 			{
 				CharacterId = CharacterId,
 			};
-			_conversations = await request.Get(client);
+			ConversationHistory history = await request.Get(client);
+			_conversations = history.Conversations;
+			_runningTurns = history.IsBusy ? 1 : 0;
+			await LoadMemberNamesAsync(client);
 			if (_conversations.Length == 0)
 			{
 				EnsureDefaultConversation();
@@ -1033,10 +1140,108 @@
 		InvokeAsync(() =>
 		{
 			Conversation conv = EnsureDefaultConversation();
+			// The same reply may already have arrived as a step of the running turn
+			if (message is TextMessage { IsShownInChat: true } text && text.From != Message.Type.Notice && HasRecentBubble(conv, text))
+			{
+				return;
+			}
 			conv.Messages.Add(message);
 			_pendingScroll = true;
 			StateHasChanged();
 		});
+	}
+
+	/// <summary>
+	/// Live progress of this chat: steps go into the running turn, so it can be watched while the characters work.
+	/// </summary>
+	private void OnClientChatActivity(string chatId, ActivityKind kind, Message? message)
+	{
+		if (!string.Equals(chatId, CharacterId, StringComparison.OrdinalIgnoreCase))
+		{
+			return;
+		}
+
+		InvokeAsync(() =>
+		{
+			switch (kind)
+			{
+				case ActivityKind.TurnStarted:
+					_runningTurns++;
+					break;
+				case ActivityKind.TurnEnded:
+					_runningTurns = Math.Max(0, _runningTurns - 1);
+					break;
+				case ActivityKind.Step when message != null:
+					Conversation conv = EnsureDefaultConversation();
+					// Bubbles also come as messages or streams: the user's own (shown right away) and the replies
+					if (message is TextMessage { IsShownInChat: true } text && HasRecentBubble(conv, text))
+					{
+						break;
+					}
+					conv.Messages.Add(message);
+					break;
+			}
+			_pendingScroll = true;
+			StateHasChanged();
+		});
+	}
+
+	/// <summary>A bubble the chat shows already among its latest messages, with the same sender and text.</summary>
+	private static bool HasRecentBubble(Conversation conversation, TextMessage text) =>
+		conversation.Messages.TakeLast(12).OfType<TextMessage>()
+			.Any(m => m.IsShownInChat && m.From == text.From && string.Equals(m.Text.Trim(), text.Text.Trim(), StringComparison.Ordinal));
+
+	private void ToggleTurn(string key)
+	{
+		if (!_expandedTurns.Remove(key))
+		{
+			_expandedTurns.Add(key);
+		}
+	}
+
+	private static string StepsLabel(int hidden, bool expanded) =>
+		expanded ? "Hide steps" : hidden == 1 ? "1 step" : $"{hidden} steps";
+
+	/// <summary>The newest step of a running turn the chat does not show, e.g. "· Akagi asks Ren".</summary>
+	private string LatestStep(ChatTurn turn)
+	{
+		Message? last = turn.Steps.LastOrDefault(m => !m.IsShownInChat);
+		return last == null ? string.Empty : "· " + ChatTurns.Describe(last, MemberName);
+	}
+
+	/// <summary>A character's name by id: a group member's, or this chat's own character.</summary>
+	private string MemberName(string? characterId)
+	{
+		if (!string.IsNullOrEmpty(characterId) && _memberNames.TryGetValue(characterId, out string? name))
+		{
+			return name;
+		}
+		return DisplayName;
+	}
+
+	private async Task LoadMemberNamesAsync(SocketClient client)
+	{
+		Dictionary<string, string> names = new(StringComparer.OrdinalIgnoreCase);
+		if (_character != null)
+		{
+			names[_character.Id] = _character.Name;
+			if (_character.IsGroup && _character.MemberIds.Length > 0)
+			{
+				try
+				{
+					Character[] members = await new CharacterListRequest { Ids = _character.MemberIds }.Get(client);
+					foreach (Character member in members.Where(m => m != null))
+					{
+						names[member.Id] = member.Name;
+					}
+				}
+				catch
+				{
+					// Steps then show the group's name; the chat itself works without
+				}
+			}
+		}
+		_memberNames = names;
 	}
 
 	private void OnClientStreamChunkReceived(

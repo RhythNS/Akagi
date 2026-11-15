@@ -1,3 +1,4 @@
+using Akagi.Characters.Conversations;
 using Akagi.Communication.Commands;
 using Akagi.Communication.SocketComs;
 using Akagi.Communication.SocketComs.Transmissions;
@@ -22,6 +23,8 @@ static class DependencyInjection
         Type[] transmissionTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<SocketTransmissionHandler>();
         Array.ForEach(transmissionTypes, transmissionType => services.AddTransient(typeof(SocketTransmissionHandler), transmissionType));
 
+        // Live progress of the chats; the receiver reports turns, the website's socket service forwards them
+        services.AddSingleton<IChatActivityFeed, ChatActivityHub>();
         services.Configure<SocketService.Options>(configuration.GetSection("Socket"));
         services.AddSingleton<SocketService>();
         services.AddHostedService(provider => provider.GetRequiredService<SocketService>());

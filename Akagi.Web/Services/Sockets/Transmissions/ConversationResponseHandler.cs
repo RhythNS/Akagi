@@ -24,7 +24,7 @@ public class ConversationResponseHandler : SocketTransmissionHandler
                 continue;
             }
 
-            request.Fulfill(conversations);
+            request.Fulfill(new ConversationHistory(conversations, characterResponseTransmission.IsBusy));
         }
     }
 }
