@@ -91,6 +91,7 @@ internal abstract class CharacterBehavior : Savable
         bool shouldContinue;
         int maxSteps = MaxSteps;
         systemProcessor.OfferedCommands = ToolGuard.Offered(systemProcessor.Commands, Context.Turn, Context.ConsultedOn);
+        Context.Guard.BeginRun();
 
         do
         {
@@ -124,7 +125,7 @@ internal abstract class CharacterBehavior : Savable
                     return;
                 }
 
-                shouldContinue = await ExecuteCommandsAsync(commands, isStreamed: false);
+                shouldContinue = await ExecuteStepAsync(commands, isStreamed: false);
             }
         } while (shouldContinue);
     }
@@ -174,13 +175,30 @@ internal abstract class CharacterBehavior : Savable
                 return false;
             }
 
-            return await ExecuteCommandsAsync(finalCommands, isStreamed: true);
+            return await ExecuteStepAsync(finalCommands, isStreamed: true);
         }
         catch (Exception ex)
         {
             await stream.AbortAsync(ex);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Runs one model reply. Repeated calls and calls past the per-reply limit are skipped and reported once, so a
+    /// model that fires dozens of calls at once neither runs them nor fills the conversation with refusals.
+    /// </summary>
+    private async Task<bool> ExecuteStepAsync(Command[] commands, bool isStreamed)
+    {
+        (Command[] run, Command[] skipped) = ToolGuard.Limit(commands, Context.Turn);
+        bool shouldContinue = await ExecuteCommandsAsync(run, isStreamed);
+        if (skipped.Length > 0)
+        {
+            Logger.LogInformation("Skipped {Skipped} of {Total} tool calls in one reply for character {CharacterId}",
+                skipped.Length, commands.Length, Character.Id);
+            Context.Conversation.AddMessage(skipped[0].CreateCommandMessage(ToolGuard.SkippedNote(skipped.Length)));
+        }
+        return shouldContinue;
     }
 
     private async Task<bool> ExecuteCommandsAsync(Command[] commands, bool isStreamed = false)

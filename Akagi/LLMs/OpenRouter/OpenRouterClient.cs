@@ -312,7 +312,7 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
             switch (jsonElement.ValueKind)
             {
                 case JsonValueKind.String:
-                    argument.Value = jsonElement.GetString()!;
+                    argument.Value = WithoutClosingTag(jsonElement.GetString()!, argument.Name);
                     break;
                 case JsonValueKind.Number:
                     // Models send 7.0 or 6.5 for integers too; round instead of failing the whole turn
@@ -333,6 +333,16 @@ internal class OpenRouterClient : LLM, IOpenRouterClient
         }
         command.Arguments = args;
         return command;
+    }
+
+    /// <summary>
+    /// Some models write tool calls as XML internally and leak the closing tag into the value, e.g. "...process.&lt;/Text&gt;".
+    /// </summary>
+    internal static string WithoutClosingTag(string value, string argumentName)
+    {
+        string tag = $"</{argumentName}>";
+        string trimmed = value.TrimEnd();
+        return trimmed.EndsWith(tag, StringComparison.OrdinalIgnoreCase) ? trimmed[..^tag.Length].TrimEnd() : value;
     }
 
     private Command[] HandleResponse(SystemProcessor systemProcessor, OpenRouterResponse response, Context context)

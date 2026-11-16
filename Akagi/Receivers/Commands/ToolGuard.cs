@@ -1,17 +1,24 @@
 using Akagi.Characters.Conversations;
+using Akagi.Receivers.Commands.Messages;
 
 namespace Akagi.Receivers.Commands;
 
 /// <summary>
 /// Decides per turn which tools a model may use and refuses calls that would store invented or repeated data:
 /// state changing tools only on turns the user started (or reflections), facts about the user only with a quote
-/// of his words, a few changes per reply, and no identical call twice. Refusals are returned to the model as the
-/// tool result so it can correct itself.
+/// of his words, a few changes per reply, a few tool calls per reply, and no identical call twice in a turn. Refusals
+/// are returned to the model as the tool result so it can correct itself.
 /// </summary>
 internal sealed class ToolGuard
 {
     /// <summary>Every refused call's output starts with this, so later checks can tell refusals from results.</summary>
     public const string RefusalPrefix = "Not done: ";
+
+    /// <summary>
+    /// Tool calls of one model reply that run; the rest are skipped. One prod reply of a weak model asked for 32 calls
+    /// at once, mostly the same board read again.
+    /// </summary>
+    public const int MaxCallsPerStep = 8;
 
     public const int MaxChangesPerStep = 3;
     public const int MaxChangesPerTurn = 8;
@@ -23,10 +30,26 @@ internal sealed class ToolGuard
     public const int MaxWorkItemChangesPerTurn = 40;
 
     private readonly HashSet<string> _stepCalls = [];
+    /// <summary>Every call that ran in this run, with how many changes had run up to it.</summary>
+    private readonly Dictionary<string, int> _runCalls = [];
+    /// <summary>What <see cref="IWorkItemCommand.OncePerTurn"/> calls have changed in this run.</summary>
+    private readonly HashSet<string> _runOnce = [];
+    private int _runChanges;
     private int _stepChanges;
     private int _turnChanges;
     private int _stepWorkItemChanges;
     private int _turnWorkItemChanges;
+
+    /// <summary>
+    /// Starts a model run: one behavior's loop of steps, the model's own turn. Repeats are only refused within a run,
+    /// since the reflectors of one turn share a guard but never see each other's results. Budgets stay per turn.
+    /// </summary>
+    public void BeginRun()
+    {
+        _runCalls.Clear();
+        _runOnce.Clear();
+        _runChanges = 0;
+    }
 
     /// <summary>
     /// Starts a new model step (one model reply with its tool calls).
@@ -37,6 +60,45 @@ internal sealed class ToolGuard
         _stepChanges = 0;
         _stepWorkItemChanges = 0;
     }
+
+    /// <summary>
+    /// Splits one model reply into the calls that run and those skipped: repeats within the reply and every tool call
+    /// past <see cref="MaxCallsPerStep"/>. Messages always run. Skipped calls get no result of their own; the caller
+    /// reports them once with <see cref="SkippedNote"/>.
+    /// </summary>
+    public static (Command[] Run, Command[] Skipped) Limit(IEnumerable<Command> commands, TurnSource turn)
+    {
+        if (turn == TurnSource.Unknown)
+        {
+            return ([.. commands], []);
+        }
+        List<Command> run = [];
+        List<Command> skipped = [];
+        HashSet<string> seen = [];
+        int calls = 0;
+        foreach (Command command in commands)
+        {
+            if (command is MessageCommand)
+            {
+                run.Add(command);
+            }
+            else if (!seen.Add(CallKey(command)) || calls >= MaxCallsPerStep)
+            {
+                skipped.Add(command);
+            }
+            else
+            {
+                calls++;
+                run.Add(command);
+            }
+        }
+        return ([.. run], [.. skipped]);
+    }
+
+    /// <summary>The tool output telling the model that <paramref name="skipped"/> calls of its reply did not run.</summary>
+    public static string SkippedNote(int skipped) =>
+        RefusalPrefix + $"{skipped} more tool call(s) of this reply were skipped: repeats of another call, or past the " +
+        $"limit of {MaxCallsPerStep} calls per reply. Read the results above before calling again, and never repeat a call.";
 
     /// <summary>
     /// Whether the tool may be offered to the model at all on this kind of turn. <paramref name="consultedOn"/> is
@@ -66,8 +128,19 @@ internal sealed class ToolGuard
     /// </summary>
     public string? Check(Command command, Context context)
     {
-        if (context.Turn == TurnSource.Unknown || command is not IStateCommand)
+        if (context.Turn == TurnSource.Unknown)
         {
+            return null;
+        }
+        string key = CallKey(command);
+        if (command is not IStateCommand)
+        {
+            // Reading the same thing again only helps after something changed
+            if (_runCalls.TryGetValue(key, out int changesBefore) && changesBefore == _runChanges)
+            {
+                return RefusalPrefix + "nothing changed since you made this exact call; its result is above.";
+            }
+            _runCalls[key] = _runChanges;
             return null;
         }
 
@@ -82,12 +155,21 @@ internal sealed class ToolGuard
                    "persona records things herself when he tells her.";
         }
 
-        if (!_stepCalls.Add(CallKey(command)))
+        if (!_stepCalls.Add(key))
         {
             return RefusalPrefix + "identical to another call in this reply.";
         }
+        if (_runCalls.ContainsKey(key))
+        {
+            // Includes calls that failed, e.g. a move to a column the board does not have
+            return RefusalPrefix + "you made this exact call earlier in this turn; its result is above. Do not repeat it.";
+        }
         if (command is IWorkItemCommand workItem)
         {
+            if (workItem.OncePerTurn is string once && _runOnce.Contains(once))
+            {
+                return RefusalPrefix + $"{command.Name} already ran for this in this turn. Put everything into that one call.";
+            }
             int changes = Math.Max(1, workItem.Changes);
             if (_stepWorkItemChanges + changes > MaxWorkItemChangesPerStep)
             {
@@ -105,6 +187,11 @@ internal sealed class ToolGuard
             }
             _stepWorkItemChanges += changes;
             _turnWorkItemChanges += changes;
+            if (workItem.OncePerTurn is string ran)
+            {
+                _runOnce.Add(ran);
+            }
+            Passed(key);
             return null;
         }
         if (_stepChanges >= MaxChangesPerStep)
@@ -127,7 +214,14 @@ internal sealed class ToolGuard
 
         _stepChanges++;
         _turnChanges++;
+        Passed(key);
         return null;
+    }
+
+    private void Passed(string key)
+    {
+        _runChanges++;
+        _runCalls[key] = _runChanges;
     }
 
     private static string? CheckEvidence(Command command, Context context)

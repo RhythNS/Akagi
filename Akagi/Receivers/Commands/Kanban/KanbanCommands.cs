@@ -282,7 +282,8 @@ internal class EditProjectCommand : KanbanCommand, IWorkItemCommand
             view.StartDate = start;
             changes.Add(start is DateTime day ? $"plan starts {KanbanText.Date(day)}" : "plan starts today");
         }
-        if (GetIntArgument("Parallel") is int parallel)
+        // Models fill in every argument; 0 means it was left alone, not "no tickets at a time"
+        if (GetIntArgument("Parallel") is int parallel and > 0)
         {
             view.Parallel = parallel;
             changes.Add($"{Math.Clamp(parallel, 1, 50)} at a time");
@@ -604,6 +605,10 @@ internal class AddTicketUpdateCommand : KanbanCommand, IWorkItemCommand
         Text("Text", "Markdown update.", required: true),
         Number("RemainingDays", "Work days still left after this update.")
     ];
+
+    // One prod reply added three reworded updates saying the same thing to one ticket
+    public string? OncePerTurn =>
+        $"update:{GetArgument("Project")?.Trim().ToLowerInvariant()}:{GetArgument("Ticket")?.Trim().TrimStart('#').ToLowerInvariant()}";
 
     protected override async Task<string> Run(Context context, KanbanService service, string userId)
     {

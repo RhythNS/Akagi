@@ -522,6 +522,52 @@ public class KanbanToolTests
     }
 
     [Fact]
+    public void Limit_SkipsRepeatsAndCallsPastThePerReplyLimit()
+    {
+        Command[] reply =
+        [
+            Tool<ShowBoardCommand>(),
+            Tool<ShowBoardCommand>(),
+            .. Enumerable.Range(1, 10).Select(i => Tool<ShowTicketCommand>(("Ticket", $"#{i}"))),
+        ];
+
+        (Command[] run, Command[] skipped) = ToolGuard.Limit(reply, TurnSource.User);
+
+        Assert.Equal(ToolGuard.MaxCallsPerStep, run.Length);
+        Assert.Equal(reply.Length - ToolGuard.MaxCallsPerStep, skipped.Length);
+        Assert.Single(run, c => c is ShowBoardCommand);
+        Assert.Equal(reply.Length, ToolGuard.Limit(reply, TurnSource.Unknown).Run.Length);
+    }
+
+    [Fact]
+    public async Task Guard_RefusesRepeatsAcrossRepliesUntilSomethingChanged()
+    {
+        KanbanTestContext test = await WithProject();
+        test.Context.Turn = TurnSource.User;
+        ToolGuard guard = new();
+
+        Assert.Null(guard.Check(Tool<ShowBoardCommand>(), test.Context));
+        guard.BeginStep();
+        Assert.Contains("nothing changed", guard.Check(Tool<ShowBoardCommand>(), test.Context));
+        Assert.Null(guard.Check(Tool<MoveTicketCommand>(("Ticket", "#1"), ("Column", "Waiting")), test.Context));
+        Assert.Null(guard.Check(Tool<ShowBoardCommand>(), test.Context));
+        guard.BeginStep();
+        Assert.Contains("earlier in this turn", guard.Check(Tool<MoveTicketCommand>(("Ticket", "#1"), ("Column", "Waiting")), test.Context));
+        Assert.Null(guard.Check(Tool<AddTicketUpdateCommand>(("Ticket", "#1"), ("Text", "Sent.")), test.Context));
+        Assert.Contains("already ran", guard.Check(Tool<AddTicketUpdateCommand>(("Ticket", "1"), ("Text", "Sent it all.")), test.Context));
+        Assert.Null(guard.Check(Tool<AddTicketUpdateCommand>(("Ticket", "#2"), ("Text", "Sent.")), test.Context));
+    }
+
+    [Theory]
+    [InlineData("Waiting for the bank.</Text>", "Waiting for the bank.")]
+    [InlineData("Waiting for the bank. </text>\n", "Waiting for the bank.")]
+    [InlineData("Use <b>bold</b>", "Use <b>bold</b>")]
+    public void LeakedClosingTag_IsRemovedFromToolArguments(string value, string expected)
+    {
+        Assert.Equal(expected, Akagi.LLMs.OpenRouter.OpenRouterClient.WithoutClosingTag(value, "Text"));
+    }
+
+    [Fact]
     public async Task WorkItemTools_CountEveryTicketOfABulkCreate()
     {
         KanbanTestContext test = await WithProject();
@@ -769,25 +815,7 @@ public class KanbanConsultationTests
         ScriptedLLM llm = new(context => context.Conversation.Messages.OfType<CommandMessage>().Any()
             ? [Say("Moved #1 to Done.")]
             : [Tool<MoveTicketCommand>(("Ticket", "#1"), ("Column", "Done")), Tool<AddTicketUpdateCommand>(("Ticket", "#1"), ("Text", "Finished, he says."))]);
-        test.Context.LLMFactory = new ScriptedLLMFactory(llm);
-
-        SystemProcessor processor = new()
-        {
-            Name = "Ren Processor",
-            RunMode = ILLM.RunMode.Mixed,
-            CommandNames = ["ShowBoard", "MoveTicket", "AddTicketUpdate"]
-        };
-        processor.Commands = [new ShowBoardCommand(), new MoveTicketCommand(), new AddTicketUpdateCommand()];
-        ProcessorDatabase processors = new();
-        await processors.SaveDocumentAsync(processor);
-        SinglePuppeteer puppeteer = new() { Name = "Ren Puppeteer", MaxSteps = 3, SystemProcessorId = processor.Id! };
-        await puppeteer.Init(NullLogger.Instance, test.Context, processors);
-
-        // As inside Consult: what the module says and does is between the members
-        using (Akagi.Characters.Conversation.BeginInternal())
-        {
-            await puppeteer.ProcessAsync();
-        }
+        await RunRen(test, llm, maxSteps: 3);
 
         Message[] added = [.. test.Conversation.Messages.Skip(1)];
         Assert.NotEmpty(added);
@@ -807,6 +835,69 @@ public class KanbanConsultationTests
         else
         {
             Assert.All(outputs, o => Assert.StartsWith(ToolGuard.RefusalPrefix, o));
+        }
+    }
+
+    [Fact]
+    public async Task ConsultedModule_AskedForAMissingColumn_DoesNotRepeatItself()
+    {
+        // Prod 2026-11-16: asked to move a ticket to "Waiting" (no such column), Ren's model sent 32 calls per reply,
+        // mostly the same board read, added three reworded updates and retried the move in the next reply
+        KanbanTestContext test = new();
+        KanbanProject project = await test.Service.CreateProjectAsync(test.UserId, "Akagi");
+        await test.Service.CreateTicketAsync(test.UserId, project.Id!, "Bank account", requiredDays: 2);
+        test.Context.Turn = TurnSource.Consultation;
+        test.Context.ConsultedOn = TurnSource.User;
+        test.Conversation.AddMessage(new TextMessage { CharacterId = null, From = Message.Type.User, Time = DateTime.UtcNow, Text = "Move it to waiting" });
+
+        int step = 0;
+        ScriptedLLM llm = new(_ => ++step switch
+        {
+            1 =>
+            [
+                .. Enumerable.Range(0, 12).Select(_ => Tool<ShowBoardCommand>()),
+                .. Enumerable.Range(0, 10).Select(i => Tool<ShowBoardCommand>(("DoneShown", i % 2 == 0 ? "3" : "5"))),
+                Tool<MoveTicketCommand>(("Ticket", "#1"), ("Column", "Waiting")),
+                Tool<AddTicketUpdateCommand>(("Ticket", "#1"), ("Text", "Docs submitted, waiting for the bank.")),
+                Tool<AddTicketUpdateCommand>(("Ticket", "#1"), ("Text", "Docs sent today; now waiting for the bank to process.")),
+                Tool<AddTicketUpdateCommand>(("Ticket", "1"), ("Text", "Bank account docs sent; follow up once they respond.")),
+            ],
+            2 => [Tool<MoveTicketCommand>(("Ticket", "#1"), ("Column", "Waiting")), Tool<ShowBoardCommand>()],
+            3 => [Tool<ShowBoardCommand>()],
+            _ => [Say("The board has no Waiting column, so #1 stays in Backlog with a note.")]
+        });
+        await RunRen(test, llm, maxSteps: 5);
+
+        string[] outputs = [.. test.Conversation.Messages.OfType<CommandMessage>().Select(m => m.Output)];
+        Assert.Single(test.Ticket(1).Updates);
+        Assert.Single(outputs, o => o.Contains("has no column 'Waiting'"));
+        Assert.Contains(ToolGuard.SkippedNote(19), outputs);
+        Assert.Equal(2, outputs.Count(o => o.Contains("AddTicketUpdate already ran for this in this turn")));
+        Assert.Contains(outputs, o => o.Contains("exact call earlier in this turn"));
+        Assert.Contains(outputs, o => o.Contains("nothing changed since you made this exact call"));
+        // 7 distinct calls + skip note in reply 1, 2 in reply 2, 1 in reply 3
+        Assert.Equal(11, outputs.Length);
+        Assert.Equal(4, step);
+    }
+
+    private static async Task RunRen(KanbanTestContext test, ScriptedLLM llm, int maxSteps)
+    {
+        test.Context.LLMFactory = new ScriptedLLMFactory(llm);
+        SystemProcessor processor = new()
+        {
+            Name = "Ren Processor",
+            RunMode = ILLM.RunMode.Mixed,
+            CommandNames = ["ShowBoard", "MoveTicket", "AddTicketUpdate"]
+        };
+        processor.Commands = [new ShowBoardCommand(), new MoveTicketCommand(), new AddTicketUpdateCommand()];
+        ProcessorDatabase processors = new();
+        await processors.SaveDocumentAsync(processor);
+        SinglePuppeteer puppeteer = new() { Name = "Ren Puppeteer", MaxSteps = maxSteps, SystemProcessorId = processor.Id! };
+        await puppeteer.Init(NullLogger.Instance, test.Context, processors);
+        // As inside Consult: what the module says and does is between the members
+        using (Akagi.Characters.Conversation.BeginInternal())
+        {
+            await puppeteer.ProcessAsync();
         }
     }
 

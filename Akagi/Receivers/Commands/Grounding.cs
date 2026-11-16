@@ -46,6 +46,12 @@ internal interface IWorkItemCommand : IStateCommand
 {
     /// <summary>How many items this call changes, counted against the budget; a bulk create counts each ticket.</summary>
     int Changes => 1;
+
+    /// <summary>
+    /// What this call changes that should change at most once per turn, e.g. the ticket an update goes to; null when
+    /// it may run several times. A repeating model rewords each call, so identical-call checks miss it.
+    /// </summary>
+    string? OncePerTurn => null;
 }
 
 /// <summary>
