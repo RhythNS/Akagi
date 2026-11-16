@@ -64,9 +64,6 @@ public class StockTrade : Savable
 
     public string Note { get; set; } = string.Empty;
 
-    /// <summary>The broker's id for trades read from an export, so importing the same file twice adds nothing.</summary>
-    public string? Reference { get; set; }
-
     /// <summary>Shares × price, without fees.</summary>
     [BsonIgnore]
     public decimal Amount => Shares * Price;

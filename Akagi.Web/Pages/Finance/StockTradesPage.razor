@@ -115,10 +115,6 @@ else
 	{
 		<TradeForm Account="account" Portfolio="portfolio" Mode="TradeFormMode.New" Isin="@SecurityFilter" OnSave="SaveAsync" OnCancel="() => _newTrade = false" />
 	}
-	@if (_editing != null)
-	{
-		<TradeForm Account="account" Portfolio="portfolio" Trade="_editing" Mode="TradeFormMode.Edit" OnSave="SaveAsync" OnCancel="() => _editing = null" />
-	}
 
 	<PendingTrades Session="_session" OnChanged="StateHasChanged" />
 
@@ -262,6 +258,15 @@ else
 									}
 								</td>
 							</tr>
+							@if (_editing?.Id == trade.Id)
+							{
+								@* Right under the trade: the list can be long, a form at the top of the page is out of sight *@
+								<tr data-edit-row="@trade.Id">
+									<td colspan="8">
+										<TradeForm @key="trade.Id" Account="account" Portfolio="portfolio" Trade="_editing" Mode="TradeFormMode.Edit" OnSave="SaveAsync" OnCancel="() => _editing = null" />
+									</td>
+								</tr>
+							}
 						}
 					</tbody>
 				</table>

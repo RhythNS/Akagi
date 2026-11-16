@@ -338,6 +338,30 @@ public class FinancePageTests : BunitContext
     }
 
     [Fact]
+    public async Task A_trade_is_edited_right_under_its_row()
+    {
+        Seed();
+        StockTrade sale = Done(A, TradeSide.Sell, 1, 120, new DateTime(2026, 11, 2, 9, 0, 0, DateTimeKind.Utc));
+        _store.Trades.Add(sale);
+        IRenderedComponent<StockTradesPage> cut = RenderAccountPage<StockTradesPage>();
+        Assert.Empty(cut.FindAll("[data-trade-form]"));
+
+        await cut.Find($"[data-edit-trade='{sale.Id}']").ClickAsync();
+
+        IElement row = cut.Find($"[data-trade='{sale.Id}']");
+        Assert.Equal($"{sale.Id}", row.NextElementSibling!.GetAttribute("data-edit-row"));
+        Assert.Single(cut.FindAll("[data-trade-form]"));
+        Assert.Equal("1", cut.Find("[data-trade-form] [data-field='shares']").GetAttribute("value"));
+
+        await Change(cut.Find("[data-trade-form] [data-field='shares']"), "2");
+        await cut.Find("[data-trade-save]").ClickAsync();
+        cut.Settled();
+
+        Assert.Empty(cut.FindAll("[data-trade-form]"));
+        Assert.Equal(2, _store.Trades.Single(t => t.Id == sale.Id).Shares);
+    }
+
+    [Fact]
     public async Task Securities_sold_completely_are_hidden_until_asked_for()
     {
         StockAccount account = Seed();
