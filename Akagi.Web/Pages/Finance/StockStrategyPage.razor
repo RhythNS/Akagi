@@ -1,0 +1,194 @@
+@page "/Finance/Stocks/{Id}/Strategy"
+
+@inject IFinanceStore Store
+@inject IQuoteService Quotes
+
+<PageTitle>Strategy - @(_session?.Account?.Name ?? "Stock portfolio") - Akagi</PageTitle>
+
+<StockHeader Account="_session?.Account" Active="strategy" />
+
+@if (_session == null)
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+else if (_session.Account is not StockAccount account || _session.Portfolio is not StockPortfolio portfolio)
+{
+	<div class="card"><div class="card-body text-secondary" data-missing>This account does not exist any more. <a href="Finance">Back to the overview</a></div></div>
+}
+else if (account.Securities.Count == 0)
+{
+	<div class="card"><div class="card-body text-secondary" data-no-securities>Add securities on the <a href="Finance/Stocks/@Id">holdings</a> tab first.</div></div>
+}
+else
+{
+	<div class="card mb-3">
+		<div class="card-header">
+			<div>
+				<h3 class="card-title">Target share of the portfolio</h3>
+				<div class="text-secondary small">How much of the portfolio each security should be. The planner buys toward these.</div>
+			</div>
+		</div>
+		<div class="table-responsive">
+			<table class="table table-vcenter card-table" data-strategy>
+				<thead>
+					<tr>
+						<th>Security</th>
+						<th class="fin-num">Share now</th>
+						<th class="fin-num" style="width: 10rem;">Target %</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (StockSecurity security in account.Securities)
+					{
+						decimal weight = portfolio.Value > 0 ? portfolio.Holding(security.Isin).Value / portfolio.Value * 100 : 0;
+						<tr data-target-row="@security.Isin">
+							<td>
+								<div class="fw-medium">@security.DisplayName</div>
+								<div class="text-secondary small">@security.Isin</div>
+							</td>
+							<td class="fin-num">@Money.Percent(weight)</td>
+							<td class="fin-num">
+								<div class="input-group input-group-sm justify-content-end">
+									<input class="form-control text-end fin-input-sm" inputmode="decimal" value="@_targets[security.Isin]" data-target="@security.Isin"
+										   @onchange="e => _targets[security.Isin] = e.Value?.ToString() ?? string.Empty" />
+									<span class="input-group-text">%</span>
+								</div>
+							</td>
+						</tr>
+					}
+				</tbody>
+				<tfoot>
+					<tr>
+						<td class="fw-medium">Sum</td>
+						<td></td>
+						<td class="fin-num fw-medium @(SumOk ? "text-success" : "text-warning")" data-sum>@Money.Percent(Sum)</td>
+					</tr>
+				</tfoot>
+			</table>
+		</div>
+		<div class="card-body">
+			@if (!SumOk && Sum > 0)
+			{
+				<div class="alert alert-warning py-2" data-sum-warning>The targets add up to @Money.Percent(Sum), not 100 %. The planner scales them, so they still count in proportion.</div>
+			}
+			<div class="d-flex flex-wrap gap-2 mb-3">
+				<button type="button" class="btn btn-sm btn-outline-secondary" data-even @onclick="Even">Split evenly</button>
+				<button type="button" class="btn btn-sm btn-outline-secondary" data-from-current @onclick="FromCurrent" disabled="@(portfolio.Value <= 0)">Use the shares now</button>
+				<button type="button" class="btn btn-sm btn-ghost-secondary" data-clear-targets @onclick="Clear">Clear</button>
+			</div>
+			<label class="form-check form-switch">
+				<input class="form-check-input" type="checkbox" checked="@_wholeShares" data-field="whole-shares" @onchange="e => _wholeShares = (bool)e.Value!" />
+				<span class="form-check-label">Plan whole shares only (turn off if the broker sells fractions)</span>
+			</label>
+			@if (_error != null)
+			{
+				<div class="alert alert-danger mt-2" data-strategy-error>@_error</div>
+			}
+			@if (_saved)
+			{
+				<div class="alert alert-success mt-2 py-2" data-strategy-saved>Saved. <a href="Finance/Stocks/@Id/Plan">Plan an investment</a></div>
+			}
+		</div>
+		<div class="card-footer">
+			<button type="button" class="btn btn-primary" data-save-strategy @onclick="SaveAsync">Save strategy</button>
+		</div>
+	</div>
+}
+
+@code {
+	[Parameter]
+	public string Id { get; set; } = string.Empty;
+
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	private StockSession? _session;
+	private Dictionary<string, string> _targets = new(StringComparer.OrdinalIgnoreCase);
+	private bool _wholeShares = true;
+	private string? _error;
+	private bool _saved;
+
+	protected override async Task OnParametersSetAsync()
+	{
+		if (CurrentUser?.Id is not string userId || _session?.AccountId == Id)
+		{
+			return;
+		}
+		_session = await StockSession.LoadAsync(Store, Quotes, userId, Id);
+		if (_session.Account is StockAccount account)
+		{
+			_targets = account.Securities.ToDictionary(s => s.Isin, s => account.TargetPercent(s.Isin) is decimal t && t != 0 ? Money.Input(t, 2) : string.Empty, StringComparer.OrdinalIgnoreCase);
+			_wholeShares = account.WholeShares;
+		}
+	}
+
+	private decimal Sum => _targets.Values.Sum(v => Money.Parse(v) ?? 0);
+
+	private bool SumOk => Math.Abs(Sum - 100) < 0.01m;
+
+	private void Even()
+	{
+		int count = _targets.Count;
+		if (count == 0)
+		{
+			return;
+		}
+		decimal each = Math.Floor(100m / count * 100) / 100;
+		List<string> keys = [.. _targets.Keys];
+		foreach (string key in keys)
+		{
+			_targets[key] = Money.Input(each, 2);
+		}
+		// The rounding rest goes to the first so they add up to 100
+		_targets[keys[0]] = Money.Input(100 - each * (count - 1), 2);
+		_saved = false;
+	}
+
+	private void FromCurrent()
+	{
+		StockPortfolio portfolio = _session!.Portfolio!;
+		foreach (string key in _targets.Keys.ToList())
+		{
+			_targets[key] = Money.Input(Math.Round(portfolio.Holding(key).Value / portfolio.Value * 100, 2), 2);
+		}
+		_saved = false;
+	}
+
+	private void Clear()
+	{
+		foreach (string key in _targets.Keys.ToList())
+		{
+			_targets[key] = string.Empty;
+		}
+		_saved = false;
+	}
+
+	private async Task SaveAsync()
+	{
+		_error = null;
+		_saved = false;
+		StockAccount account = _session!.Account!;
+		Dictionary<string, decimal> parsed = [];
+		foreach ((string isin, string text) in _targets)
+		{
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				parsed[isin] = 0;
+				continue;
+			}
+			if (Money.Parse(text) is not decimal value || value < 0 || value > 100)
+			{
+				_error = $"{account.DisplayName(isin)}: a target is 0 to 100 %.";
+				return;
+			}
+			parsed[isin] = value;
+		}
+		foreach ((string isin, decimal value) in parsed)
+		{
+			account.SetTarget(isin, value);
+		}
+		account.WholeShares = _wholeShares;
+		await _session.SaveAccountAsync();
+		_saved = true;
+	}
+}

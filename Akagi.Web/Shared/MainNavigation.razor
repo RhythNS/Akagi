@@ -122,6 +122,16 @@
 				</NavLink>
 			</li>
 
+			<!-- Finance -->
+			<li class="nav-item @(IsFinanceActive ? "active" : "")">
+				<NavLink class="nav-link d-flex align-items-center" href="Finance" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
+					<span class="nav-link-icon d-md-none d-lg-inline-block">
+						<Icon class="icon" IconType="@Icons.Wallet" />
+					</span>
+					<span class="nav-link-title">Finance</span>
+				</NavLink>
+			</li>
+
 			<!-- Settings -->
 			<li class="nav-item @(IsSettingsActive ? "active" : "")">
 				<NavLink class="nav-link d-flex align-items-center" href="Settings/Models" Match="NavLinkMatch.Prefix" @onclick="CloseMobileMenu">
@@ -212,6 +222,9 @@
 
 	private bool IsProjectsActive =>
 		_currentPath.StartsWith("Projects", StringComparison.OrdinalIgnoreCase);
+
+	private bool IsFinanceActive =>
+		_currentPath.StartsWith("Finance", StringComparison.OrdinalIgnoreCase);
 
 	private bool IsSettingsActive =>
 		_currentPath.StartsWith("Settings", StringComparison.OrdinalIgnoreCase);

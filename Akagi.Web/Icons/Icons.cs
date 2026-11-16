@@ -141,4 +141,10 @@ public static class Icons
 
     public static IIconType Barbell => new TablerIcon(
         @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M2 12h1' /><path d='M6 8h-2a1 1 0 0 0 -1 1v6a1 1 0 0 0 1 1h2' /><path d='M6 7v10a1 1 0 0 0 1 1h1a1 1 0 0 0 1 -1v-10a1 1 0 0 0 -1 -1h-1a1 1 0 0 0 -1 1z' /><path d='M9 12h6' /><path d='M15 7v10a1 1 0 0 0 1 1h1a1 1 0 0 0 1 -1v-10a1 1 0 0 0 -1 -1h-1a1 1 0 0 0 -1 1z' /><path d='M18 8h2a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-2' /><path d='M22 12h-1' />");
+
+    public static IIconType Wallet => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M17 8v-3a1 1 0 0 0 -1 -1h-10a2 2 0 0 0 0 4h12a1 1 0 0 1 1 1v3m0 4v3a1 1 0 0 1 -1 1h-12a2 2 0 0 1 -2 -2v-12' /><path d='M20 12v4h-4a2 2 0 0 1 0 -4h4' />");
+
+    public static IIconType ChartLine => new TablerIcon(
+        @"<path stroke='none' d='M0 0h24v24H0z' fill='none'/><path d='M4 19l16 0' /><path d='M4 15l4 -6l4 2l4 -5l4 4' />");
 }

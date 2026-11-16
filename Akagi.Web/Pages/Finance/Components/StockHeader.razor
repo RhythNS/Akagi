@@ -1,0 +1,32 @@
+@* Title and tabs shared by the pages of one stock account. *@
+<div class="page-header d-print-none mb-3">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle"><a href="Finance" class="text-reset">Finance</a> · Stock portfolio</div>
+			<h2 class="page-title" data-account-name>@(Account?.Name ?? "Stock portfolio")</h2>
+		</div>
+		<div class="col-auto ms-auto d-flex flex-wrap gap-2">
+			@Actions
+		</div>
+	</div>
+</div>
+@if (Account?.Id is string id)
+{
+	<ul class="nav nav-tabs mb-3" data-tabs>
+		<li class="nav-item"><a class="nav-link @(Active == "holdings" ? "active" : "")" href="Finance/Stocks/@id" data-tab="holdings">Holdings</a></li>
+		<li class="nav-item"><a class="nav-link @(Active == "strategy" ? "active" : "")" href="Finance/Stocks/@id/Strategy" data-tab="strategy">Strategy</a></li>
+		<li class="nav-item"><a class="nav-link @(Active == "plan" ? "active" : "")" href="Finance/Stocks/@id/Plan" data-tab="plan">Plan investment</a></li>
+		<li class="nav-item"><a class="nav-link @(Active == "trades" ? "active" : "")" href="Finance/Stocks/@id/Trades" data-tab="trades">Trades</a></li>
+	</ul>
+}
+
+@code {
+	[Parameter]
+	public StockAccount? Account { get; set; }
+
+	[Parameter]
+	public string Active { get; set; } = "holdings";
+
+	[Parameter]
+	public RenderFragment? Actions { get; set; }
+}

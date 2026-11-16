@@ -16,6 +16,9 @@ static class DependencyInjection
         services.AddSingleton<IEntryDatabase, EntryDatabase>();
         services.AddSingleton<IDefinitionDatabase, DefinitionDatabase>();
         services.AddSingleton<IWorkoutDatabase, WorkoutDatabase>();
+        services.AddSingleton<IFinanceAccountDatabase, FinanceAccountDatabase>();
+        services.AddSingleton<IStockTradeDatabase, StockTradeDatabase>();
+        services.AddSingleton<IPriceHistoryDatabase, PriceHistoryDatabase>();
         BsonSerializer.RegisterSerializer(typeof(Dictionary<string, object>), new DictionaryStringObjectBsonSerializer());
     }
 }

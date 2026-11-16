@@ -1,0 +1,294 @@
+@page "/Finance"
+
+@inject IFinanceStore Store
+@inject IAccountSystems Systems
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+<PageTitle>Finance - Akagi</PageTitle>
+
+<div class="page-header d-print-none mb-4">
+	<div class="row g-2 align-items-center">
+		<div class="col">
+			<div class="page-pretitle">Finance</div>
+			<h2 class="page-title">Overview</h2>
+			<div class="text-secondary small mt-1">All accounts together: what they are worth, what went in, and what they made.</div>
+		</div>
+		<div class="col-auto ms-auto d-flex gap-2">
+			@if (_reports.Count > 0)
+			{
+				<button type="button" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" disabled="@_refreshing" data-refresh @onclick="() => RefreshAsync(force: true)">
+					<Icon IconType="@Icons.Refresh" Size="16" />
+					<span>@(_refreshing ? "Updating prices…" : "Update prices")</span>
+				</button>
+			}
+			<button type="button" class="btn btn-primary d-inline-flex align-items-center gap-2" data-new-account @onclick="() => _creating = !_creating">
+				<Icon IconType="@Icons.Plus" Size="16" />
+				<span>New account</span>
+			</button>
+		</div>
+	</div>
+</div>
+
+@if (_creating || (_loaded && _accounts.Count == 0))
+{
+	<div class="card mb-4" data-create>
+		<div class="card-body">
+			@if (_accounts.Count == 0)
+			{
+				<h3 class="mb-1">Start with an account</h3>
+				<p class="text-secondary">Each account keeps one kind of records. More kinds can come later; the overview adds them all up.</p>
+			}
+			<div class="row g-3 align-items-end">
+				<div class="col-md-5">
+					<label class="form-label required" for="account-name">Name</label>
+					<input id="account-name" class="form-control" maxlength="80" placeholder="ETF portfolio, Depot at the bank…" value="@_newName" data-field="account-name"
+						   @oninput="e => _newName = e.Value?.ToString() ?? string.Empty" />
+				</div>
+				<div class="col-md-4">
+					<label class="form-label" for="account-kind">Kind</label>
+					<select id="account-kind" class="form-select" value="@_newKind" data-field="account-kind" @onchange="e => _newKind = Enum.Parse<AccountKind>(e.Value?.ToString() ?? nameof(AccountKind.Stocks))">
+						@foreach (IAccountSystem system in Systems.All)
+						{
+							<option value="@system.Kind">@system.Label</option>
+						}
+					</select>
+				</div>
+				<div class="col-md-3 d-flex gap-2">
+					<button type="button" class="btn btn-primary" data-create-save @onclick="CreateAsync">Create</button>
+					@if (_accounts.Count > 0)
+					{
+						<button type="button" class="btn btn-ghost-secondary" @onclick="() => _creating = false">Cancel</button>
+					}
+				</div>
+			</div>
+			<div class="form-hint mt-2">@Systems.For(_newKind).Description</div>
+			@if (_createError != null)
+			{
+				<div class="alert alert-danger mt-3 mb-0" data-create-error>@_createError</div>
+			}
+		</div>
+	</div>
+}
+
+@if (!_loaded)
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+else if (_reports.Count > 0)
+{
+	PeriodResult all = Performance.Over(_series, _flows, Timeframe.All, _today);
+	PeriodResult selected = Performance.Over(_series, _flows, _timeframe, _today);
+
+	<div class="row row-cards mb-3">
+		<div class="col-sm-6 col-lg-3">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Worth now</div>
+				<div class="h1 mb-0" data-total-value>@Money.Format(Total(r => r.Value))</div>
+			</div></div>
+		</div>
+		<div class="col-sm-6 col-lg-3">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Money put in</div>
+				<div class="h1 mb-0" data-total-invested>@Money.Format(Total(r => r.Invested))</div>
+				<div class="text-secondary small">Buys minus what sales paid out</div>
+			</div></div>
+		</div>
+		<div class="col-sm-6 col-lg-3">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Made in total</div>
+				<div class="h1 mb-0 @FinanceText.GainClass(Total(r => r.Gain))" data-total-gain>@Money.Signed(Total(r => r.Gain))</div>
+				<div class="small @FinanceText.GainClass(all.Percent)">@Money.SignedPercent(all.Percent) since the start</div>
+			</div></div>
+		</div>
+		<div class="col-sm-6 col-lg-3">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Made in @_timeframe.Label.ToLowerInvariant()</div>
+				<div class="h1 mb-0 @FinanceText.GainClass(selected.Gain)" data-period-gain>@Money.Signed(selected.Gain)</div>
+				<div class="small @FinanceText.GainClass(selected.Percent)">@Money.SignedPercent(selected.Percent)</div>
+			</div></div>
+		</div>
+	</div>
+
+	<div class="card mb-3">
+		<div class="card-header">
+			<h3 class="card-title">Made over time</h3>
+		</div>
+		<div class="table-responsive">
+			<table class="table table-vcenter card-table" data-timeframes>
+				<thead>
+					<tr>
+						<th>Timeframe</th>
+						<th class="fin-num">Worth at the start</th>
+						<th class="fin-num">Put in during it</th>
+						<th class="fin-num">Worth at the end</th>
+						<th class="fin-num">Made</th>
+						<th class="fin-num">Return</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (Timeframe timeframe in Timeframe.Presets)
+					{
+						PeriodResult result = Performance.Over(_series, _flows, timeframe, _today);
+						<tr class="@(timeframe == _timeframe ? "table-active" : "")" style="cursor: pointer;" data-timeframe="@timeframe.Key" @onclick="() => _timeframe = timeframe">
+							<td>
+								<div>@timeframe.Label</div>
+								<div class="text-secondary small">since @FinanceText.Day(result.From)</div>
+							</td>
+							<td class="fin-num">@Money.Format(result.StartValue)</td>
+							<td class="fin-num">@Money.Signed(result.NetFlow)</td>
+							<td class="fin-num">@Money.Format(result.EndValue)</td>
+							<td class="fin-num fw-medium @FinanceText.GainClass(result.Gain)" data-made>@Money.Signed(result.Gain)</td>
+							<td class="fin-num @FinanceText.GainClass(result.Percent)">@Money.SignedPercent(result.Percent)</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="card-body">
+			<ValueChart Series="ChartSeries(selected)" Title="@($"Worth over {_timeframe.Label.ToLowerInvariant()}")" ValueLabel="Worth" />
+			<div class="text-secondary small mt-2">
+				Made = worth at the end − worth at the start − money put in during the timeframe, so new money is not counted as profit.
+				The return weighs money by how long it was in.
+			</div>
+		</div>
+	</div>
+
+	<div class="card mb-3">
+		<div class="card-header"><h3 class="card-title">Accounts</h3></div>
+		<div class="table-responsive">
+			<table class="table table-vcenter card-table" data-accounts>
+				<thead>
+					<tr>
+						<th>Account</th>
+						<th class="fin-num">Worth</th>
+						<th class="fin-num">Put in</th>
+						<th class="fin-num">Made in @_timeframe.Label.ToLowerInvariant()</th>
+						<th class="fin-num">Made in total</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (AccountReport report in _reports)
+					{
+						PeriodResult period = Performance.Over(report.Series, report.Flows, _timeframe, _today);
+						<tr data-account="@report.Account.Id">
+							<td>
+								<a href="@report.Link" class="fw-medium">@report.Account.Name</a>
+								<div class="text-secondary small">
+									@Systems.For(report.Account.Kind).Label · @report.Summary
+									@if (report.Pending > 0)
+									{
+										<span class="badge bg-yellow-lt ms-1">@report.Pending pending</span>
+									}
+								</div>
+							</td>
+							<td class="fin-num">@Money.Format(report.Value, report.Account.Currency)</td>
+							<td class="fin-num">@Money.Format(report.Invested, report.Account.Currency)</td>
+							<td class="fin-num @FinanceText.GainClass(period.Gain)">@Money.Signed(period.Gain, report.Account.Currency)
+								<div class="small">@Money.SignedPercent(period.Percent)</div>
+							</td>
+							<td class="fin-num @FinanceText.GainClass(report.Gain)">@Money.Signed(report.Gain, report.Account.Currency)</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	</div>
+
+	@if (_reports.SelectMany(r => r.Warnings).Any())
+	{
+		<div class="alert alert-warning" data-warnings>
+			<div class="fw-medium mb-1">Some prices are missing or old</div>
+			<ul class="mb-0">
+				@foreach (string warning in _reports.SelectMany(r => r.Warnings).Distinct())
+				{
+					<li>@warning</li>
+				}
+			</ul>
+		</div>
+	}
+	@if (_currencies.Count > 1)
+	{
+		<div class="alert alert-info">The totals add up accounts in @string.Join(", ", _currencies) without converting them.</div>
+	}
+}
+
+@code {
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	private List<FinanceAccount> _accounts = [];
+	private List<AccountReport> _reports = [];
+	private List<ValuePoint> _series = [];
+	private List<CashFlow> _flows = [];
+	private List<string> _currencies = [];
+	private Timeframe _timeframe = Timeframe.Year;
+	private DateOnly _today;
+	private bool _loaded;
+	private bool _refreshing;
+	private bool _creating;
+	private string _newName = string.Empty;
+	private AccountKind _newKind = AccountKind.Stocks;
+	private string? _createError;
+
+	protected override Task OnInitializedAsync() => LoadAsync(refresh: false, force: false);
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender && _accounts.Count > 0)
+		{
+			await RefreshAsync(force: false);
+		}
+	}
+
+	private async Task RefreshAsync(bool force)
+	{
+		_refreshing = true;
+		StateHasChanged();
+		await LoadAsync(refresh: true, force: force);
+		_refreshing = false;
+		StateHasChanged();
+	}
+
+	private async Task LoadAsync(bool refresh, bool force)
+	{
+		_today = StockAccountSystem.Today(Clock);
+		if (CurrentUser?.Id is not string userId)
+		{
+			_loaded = true;
+			return;
+		}
+		_accounts = await Store.AccountsAsync(userId);
+		List<AccountReport> reports = [];
+		PriceRefresh mode = force ? PriceRefresh.All : refresh ? PriceRefresh.Stale : PriceRefresh.None;
+		foreach (FinanceAccount account in _accounts)
+		{
+			reports.Add(await Systems.For(account.Kind).ReportAsync(account, mode));
+		}
+		_reports = reports;
+		(_series, _flows) = AccountReport.Combine(_reports);
+		_currencies = [.. _accounts.Select(a => a.Currency).Distinct()];
+		_loaded = true;
+	}
+
+	private decimal Total(Func<AccountReport, decimal> value) => _reports.Sum(value);
+
+	private List<ValuePoint> ChartSeries(PeriodResult period) => [.. _series.Where(p => p.Day >= period.From && p.Day <= period.To)];
+
+	private async Task CreateAsync()
+	{
+		_createError = null;
+		if (CurrentUser?.Id is not string userId)
+		{
+			return;
+		}
+		string name = _newName.Trim();
+		if (name.Length == 0)
+		{
+			_createError = "Give the account a name.";
+			return;
+		}
+		FinanceAccount account = await Store.SaveAccountAsync(FinanceAccount.Create(_newKind, userId, name));
+		Navigation.NavigateTo(Systems.For(account.Kind).Link(account));
+	}
+}

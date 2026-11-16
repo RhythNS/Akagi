@@ -1,0 +1,206 @@
+@* Settings of one security: the name, the quote symbol prices are fetched for, and a hand-typed price. *@
+<div class="border rounded p-3 mb-2" data-security-editor="@Security.Isin">
+	<div class="row g-3">
+		<div class="col-md-5">
+			<label class="form-label" for="sec-name-@_key">Name</label>
+			<input id="sec-name-@_key" class="form-control" maxlength="120" value="@_name" data-field="name" @onchange="e => _name = e.Value?.ToString() ?? string.Empty" />
+		</div>
+		<div class="col-md-4">
+			<label class="form-label" for="sec-symbol-@_key">Quote symbol</label>
+			<div class="input-group">
+				<input id="sec-symbol-@_key" class="form-control" maxlength="30" placeholder="e.g. SXR8.DE" value="@_symbol" data-field="symbol"
+					   @onchange="e => { _symbol = e.Value?.ToString() ?? string.Empty; _check = null; }" />
+				<button type="button" class="btn btn-outline-secondary" disabled="@(!Quotes.Enabled || _busy)" data-check @onclick="CheckAsync">Check</button>
+			</div>
+			<div class="form-hint">Yahoo Finance symbol; .DE is Xetra, .F Frankfurt. Empty: prices only from trades and by hand.</div>
+		</div>
+		<div class="col-md-3">
+			<label class="form-label" for="sec-price-@_key">Price by hand</label>
+			<input id="sec-price-@_key" class="form-control" inputmode="decimal" placeholder="@Money.Symbol(Currency)" value="@_manual" data-field="manual-price"
+				   @onchange="e => _manual = e.Value?.ToString() ?? string.Empty" />
+			<div class="form-hint">Used while it is the newest price.</div>
+		</div>
+	</div>
+	@if (_check != null)
+	{
+		<div class="alert @(_checkOk ? "alert-success" : "alert-warning") mt-3 mb-0 py-2" data-check-result>@_check</div>
+	}
+	@if (Quotes.Enabled)
+	{
+		<div class="mt-3">
+			<div class="d-flex flex-wrap gap-2 align-items-center">
+				<input class="form-control form-control-sm" style="max-width: 18rem;" value="@_query" placeholder="ISIN, name or symbol" data-field="query"
+					   @onchange="e => _query = e.Value?.ToString() ?? string.Empty" />
+				<button type="button" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" disabled="@_busy" data-search @onclick="SearchAsync">
+					<Icon IconType="@Icons.Search" Size="14" /><span>Find listings</span>
+				</button>
+			</div>
+			@if (_candidates != null)
+			{
+				@if (_candidates.Count == 0)
+				{
+					<div class="text-secondary small mt-2">Nothing found. Type the symbol yourself, or search for the name.</div>
+				}
+				else
+				{
+					<div class="d-flex flex-wrap gap-2 mt-2">
+						@foreach (QuoteCandidate candidate in _candidates)
+						{
+							<button type="button" class="btn btn-sm @(candidate.Symbol == _symbol ? "btn-primary" : "btn-outline-primary")" data-candidate="@candidate.Symbol"
+									@onclick="() => Pick(candidate)">
+								@candidate.Symbol <span class="text-secondary ms-1">@candidate.Exchange</span>
+							</button>
+						}
+					</div>
+				}
+			}
+		</div>
+	}
+	@if (_error != null)
+	{
+		<div class="alert alert-danger mt-3 mb-0 py-2" data-security-error>@_error</div>
+	}
+	<div class="d-flex flex-wrap gap-2 mt-3">
+		<button type="button" class="btn btn-primary btn-sm" data-security-save @onclick="SaveAsync">Save</button>
+		<button type="button" class="btn btn-ghost-secondary btn-sm" @onclick="OnClose">Close</button>
+		@if (CanRemove)
+		{
+			@if (_confirmRemove)
+			{
+				<button type="button" class="btn btn-danger btn-sm ms-auto" data-remove-yes @onclick="OnRemove">Remove @Security.DisplayName</button>
+				<button type="button" class="btn btn-ghost-secondary btn-sm" @onclick="() => _confirmRemove = false">Keep</button>
+			}
+			else
+			{
+				<button type="button" class="btn btn-ghost-danger btn-sm ms-auto" data-remove @onclick="() => _confirmRemove = true">Remove</button>
+			}
+		}
+		else
+		{
+			<span class="text-secondary small ms-auto align-self-center">Has trades, so it stays.</span>
+		}
+	</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public StockSecurity Security { get; set; } = default!;
+
+	[Parameter]
+	public string Currency { get; set; } = "EUR";
+
+	[Parameter]
+	public bool CanRemove { get; set; }
+
+	[Parameter]
+	public EventCallback OnSaved { get; set; }
+
+	[Parameter]
+	public EventCallback OnClose { get; set; }
+
+	[Parameter]
+	public EventCallback OnRemove { get; set; }
+
+	[Inject]
+	private IQuoteService Quotes { get; set; } = default!;
+
+	[Inject]
+	private TimeProvider Clock { get; set; } = default!;
+
+	private readonly string _key = Guid.NewGuid().ToString("N")[..8];
+	private string _name = string.Empty;
+	private string _symbol = string.Empty;
+	private string _manual = string.Empty;
+	private string _query = string.Empty;
+	private List<QuoteCandidate>? _candidates;
+	private string? _check;
+	private bool _checkOk;
+	private string? _error;
+	private bool _busy;
+	private bool _confirmRemove;
+	private StockSecurity? _loadedFor;
+
+	protected override void OnParametersSet()
+	{
+		if (ReferenceEquals(_loadedFor, Security))
+		{
+			return;
+		}
+		_loadedFor = Security;
+		_name = Security.Name;
+		_symbol = Security.Symbol;
+		_manual = Security.ManualPrice is decimal price ? Money.Input(price, 4) : string.Empty;
+		_query = Security.Isin;
+	}
+
+	private void Pick(QuoteCandidate candidate)
+	{
+		_symbol = candidate.Symbol;
+		if (string.IsNullOrWhiteSpace(_name))
+		{
+			_name = candidate.Name;
+		}
+		_check = null;
+	}
+
+	private async Task SearchAsync()
+	{
+		_busy = true;
+		_candidates = await Quotes.SearchAsync(string.IsNullOrWhiteSpace(_query) ? Security.Isin : _query);
+		_busy = false;
+	}
+
+	private async Task CheckAsync()
+	{
+		if (string.IsNullOrWhiteSpace(_symbol))
+		{
+			_check = "Enter a symbol first.";
+			_checkOk = false;
+			return;
+		}
+		_busy = true;
+		try
+		{
+			QuoteSeries series = await Quotes.CheckAsync(_symbol);
+			string last = series.Points.Count > 0 ? $"last close {Money.Input(series.Points[^1].Close, 4)} {series.Currency} on {FinanceText.Day(series.Points[^1].Date)}" : "no recent closes";
+			string currencyNote = QuoteCurrency.Normalize(series.Currency).Currency == Currency.ToUpperInvariant()
+				? string.Empty
+				: $" Quoted in {series.Currency}: prices are converted to {Currency} with the day's rate.";
+			_check = $"{series.Name} on {series.Exchange}, {last}.{currencyNote}";
+			_checkOk = series.Points.Count > 0;
+			if (string.IsNullOrWhiteSpace(_name))
+			{
+				_name = series.Name;
+			}
+		}
+		catch (QuoteException exception)
+		{
+			_check = exception.Message;
+			_checkOk = false;
+		}
+		_busy = false;
+	}
+
+	private async Task SaveAsync()
+	{
+		_error = null;
+		decimal? manual = null;
+		if (!string.IsNullOrWhiteSpace(_manual))
+		{
+			if (Money.Parse(_manual) is not decimal parsed || parsed <= 0)
+			{
+				_error = "The price is a number above 0.";
+				return;
+			}
+			manual = parsed;
+		}
+		Security.Name = _name.Trim();
+		Security.Symbol = _symbol.Trim().ToUpperInvariant();
+		if (manual != Security.ManualPrice)
+		{
+			Security.ManualPrice = manual;
+			Security.ManualPriceAt = manual == null ? null : Clock.GetUtcNow().UtcDateTime;
+		}
+		await OnSaved.InvokeAsync();
+	}
+}

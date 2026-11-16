@@ -1,0 +1,365 @@
+@page "/Finance/Stocks/{Id}/Trades"
+
+@inject IFinanceStore Store
+@inject IQuoteService Quotes
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+<PageTitle>Trades - @(_session?.Account?.Name ?? "Stock portfolio") - Akagi</PageTitle>
+
+<StockHeader Account="_session?.Account" Active="trades">
+	<Actions>
+		@if (_session?.Account != null)
+		{
+			<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" data-new-trade @onclick="() => { _editing = null; _newTrade = !_newTrade; }">
+				<Icon IconType="@Icons.Plus" Size="16" /><span>Record trade</span>
+			</button>
+		}
+	</Actions>
+</StockHeader>
+
+@if (_session == null)
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+else if (_session.Account is not StockAccount account || _session.Portfolio is not StockPortfolio portfolio)
+{
+	<div class="card"><div class="card-body text-secondary" data-missing>This account does not exist any more. <a href="Finance">Back to the overview</a></div></div>
+}
+else
+{
+	List<StockTrade> shown = Filtered(portfolio);
+	List<StockTrade> shownDone = [.. shown.Where(t => t.Status == TradeStatus.Done)];
+
+	<div class="card mb-3">
+		<div class="card-body">
+			<div class="row g-2">
+				<div class="col-md-4">
+					<label class="form-label" for="filter-security">Security</label>
+					<select id="filter-security" class="form-select" value="@(SecurityFilter ?? "")" data-filter="security" @onchange="e => SetSecurity(e.Value?.ToString())">
+						<option value="">All securities</option>
+						@foreach (StockSecurity security in account.Securities)
+						{
+							<option value="@security.Isin">@security.DisplayName</option>
+						}
+					</select>
+				</div>
+				<div class="col-6 col-md-2">
+					<label class="form-label" for="filter-side">Side</label>
+					<select id="filter-side" class="form-select" value="@_side" data-filter="side" @onchange="e => _side = e.Value?.ToString() ?? string.Empty">
+						<option value="">Buys and sales</option>
+						<option value="@TradeSide.Buy">Buys</option>
+						<option value="@TradeSide.Sell">Sales</option>
+					</select>
+				</div>
+				<div class="col-6 col-md-3">
+					<label class="form-label" for="filter-status">Status</label>
+					<select id="filter-status" class="form-select" value="@_status" data-filter="status" @onchange="e => _status = e.Value?.ToString() ?? string.Empty">
+						<option value="">Done and pending</option>
+						<option value="@TradeStatus.Done">Done</option>
+						<option value="@TradeStatus.Pending">Pending</option>
+						<option value="@TradeStatus.Cancelled">Cancelled</option>
+						<option value="all">Everything</option>
+					</select>
+				</div>
+				<div class="col-md-3">
+					<label class="form-label" for="filter-time">Timeframe</label>
+					<select id="filter-time" class="form-select" value="@_timeframe.Key" data-filter="time" @onchange="e => _timeframe = Timeframe.Find(e.Value?.ToString())">
+						@foreach (Timeframe timeframe in Timeframe.Presets)
+						{
+							<option value="@timeframe.Key">@timeframe.Label</option>
+						}
+					</select>
+				</div>
+			</div>
+		</div>
+	</div>
+
+	<div class="row row-cards mb-3">
+		<div class="col-6 col-lg">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Trades</div>
+				<div class="h2 mb-0" data-count>@shownDone.Count</div>
+				<div class="text-secondary small">@shownDone.Count(t => t.Side == TradeSide.Buy) buys, @shownDone.Count(t => t.Side == TradeSide.Sell) sales</div>
+			</div></div>
+		</div>
+		<div class="col-6 col-lg">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Bought for</div>
+				<div class="h2 mb-0" data-bought>@Money.Format(shownDone.Where(t => t.Side == TradeSide.Buy).Sum(t => t.Amount + t.Fees), account.Currency)</div>
+			</div></div>
+		</div>
+		<div class="col-6 col-lg">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Sold for</div>
+				<div class="h2 mb-0" data-sold>@Money.Format(shownDone.Where(t => t.Side == TradeSide.Sell).Sum(t => t.Amount - t.Fees), account.Currency)</div>
+			</div></div>
+		</div>
+		<div class="col-6 col-lg">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Fees</div>
+				<div class="h2 mb-0" data-fees>@Money.Format(shownDone.Sum(t => t.Fees), account.Currency)</div>
+			</div></div>
+		</div>
+		<div class="col-6 col-lg">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Plan vs. broker</div>
+				@{ decimal slip = shownDone.Where(t => t.PlanId != null && t.PlannedPrice > 0).Sum(Slippage); }
+				<div class="h2 mb-0 @FinanceText.GainClass(slip)" data-slippage>@Money.Signed(slip, account.Currency)</div>
+				<div class="text-secondary small">Planned trades: + means better than planned</div>
+			</div></div>
+		</div>
+	</div>
+
+	@if (_newTrade)
+	{
+		<TradeForm Account="account" Portfolio="portfolio" Mode="TradeFormMode.New" Isin="@SecurityFilter" OnSave="SaveAsync" OnCancel="() => _newTrade = false" />
+	}
+	@if (_editing != null)
+	{
+		<TradeForm Account="account" Portfolio="portfolio" Trade="_editing" Mode="TradeFormMode.Edit" OnSave="SaveAsync" OnCancel="() => _editing = null" />
+	}
+
+	<PendingTrades Session="_session" OnChanged="StateHasChanged" />
+
+	@if (SecurityFilter is string isin && account.Security(isin) is StockSecurity selected)
+	{
+		Holding holding = portfolio.Holding(isin);
+		<div class="card mb-3" data-security-detail="@isin">
+			<div class="card-header">
+				<div>
+					<h3 class="card-title">@selected.DisplayName</h3>
+					<div class="text-secondary small">@isin@(string.IsNullOrEmpty(selected.Symbol) ? "" : " · " + selected.Symbol)@(_session.Prices.QuoteCurrencyOf(isin) is string quoted && QuoteCurrency.Normalize(quoted).Currency != account.Currency ? $" · quoted in {quoted}, shown in {account.Currency}" : "")</div>
+				</div>
+			</div>
+			<div class="card-body">
+				<div class="row g-3 mb-3">
+					<div class="col-6 col-md-2"><div class="subheader">Shares</div><div class="h3 mb-0">@Money.Shares(holding.Shares)</div></div>
+					<div class="col-6 col-md-2"><div class="subheader">Bought at (avg)</div><div class="h3 mb-0">@(holding.Shares > 0 ? Money.Format(holding.AverageCost, account.Currency) : "–")</div></div>
+					<div class="col-6 col-md-2"><div class="subheader">Price</div><div class="h3 mb-0">@(holding.Price is PriceAt p ? Money.Format(p.Price, account.Currency) : "–")</div></div>
+					<div class="col-6 col-md-2"><div class="subheader">Not sold yet</div><div class="h3 mb-0 @FinanceText.GainClass(holding.UnrealizedGain)">@Money.Signed(holding.UnrealizedGain, account.Currency)</div><div class="small @FinanceText.GainClass(holding.UnrealizedPercent)">@Money.SignedPercent(holding.UnrealizedPercent)</div></div>
+					<div class="col-6 col-md-2"><div class="subheader">From sales</div><div class="h3 mb-0 @FinanceText.GainClass(holding.RealizedGain)" data-realized>@Money.Signed(holding.RealizedGain, account.Currency)</div></div>
+					<div class="col-6 col-md-2"><div class="subheader">Made in total</div><div class="h3 mb-0 @FinanceText.GainClass(holding.TotalGain)" data-total>@Money.Signed(holding.TotalGain, account.Currency)</div></div>
+				</div>
+				<ValueChart Series="PriceSeries(isin)" Title="Price" ValueLabel="Price per share" Currency="@account.Currency" ShowInvested="false" Markers="Markers(portfolio, isin)" />
+			</div>
+		</div>
+	}
+	else
+	{
+		<div class="card mb-3">
+			<div class="card-header"><h3 class="card-title">Per security</h3></div>
+			<div class="table-responsive">
+				<table class="table table-vcenter card-table" data-per-security>
+					<thead>
+						<tr>
+							<th>Security</th>
+							<th class="fin-num">Trades</th>
+							<th class="fin-num">Bought for</th>
+							<th class="fin-num">Sold for</th>
+							<th class="fin-num">Shares</th>
+							<th class="fin-num">Not sold yet</th>
+							<th class="fin-num">From sales</th>
+							<th class="fin-num">Made in total</th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (Holding holding in portfolio.Holdings.Where(h => h.Buys + h.Sells > 0))
+						{
+							<tr data-security-row="@holding.Isin">
+								<td>
+									<a href="Finance/Stocks/@Id/Trades?isin=@holding.Isin" class="fw-medium" @onclick="() => SetSecurity(holding.Isin)" @onclick:preventDefault>@_session.Name(holding.Isin)</a>
+									<div class="text-secondary small">first @FinanceText.When(holding.FirstTrade)</div>
+								</td>
+								<td class="fin-num">@holding.Buys / @holding.Sells</td>
+								<td class="fin-num">@Money.Format(holding.Bought, account.Currency)</td>
+								<td class="fin-num">@Money.Format(holding.Sold, account.Currency)</td>
+								<td class="fin-num">@Money.Shares(holding.Shares)</td>
+								<td class="fin-num @FinanceText.GainClass(holding.UnrealizedGain)">@Money.Signed(holding.UnrealizedGain, account.Currency)</td>
+								<td class="fin-num @FinanceText.GainClass(holding.RealizedGain)">@Money.Signed(holding.RealizedGain, account.Currency)</td>
+								<td class="fin-num fw-medium @FinanceText.GainClass(holding.TotalGain)">@Money.Signed(holding.TotalGain, account.Currency)</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		</div>
+	}
+
+	<div class="card mb-3">
+		<div class="card-header"><h3 class="card-title">Trade log</h3></div>
+		@if (shown.Count == 0)
+		{
+			<div class="card-body text-secondary" data-no-trades>No trades match.</div>
+		}
+		else
+		{
+			<div class="table-responsive">
+				<table class="table table-vcenter card-table" data-trades>
+					<thead>
+						<tr>
+							<th>When</th>
+							<th>Security</th>
+							<th class="fin-num">Shares</th>
+							<th class="fin-num">Price</th>
+							<th class="fin-num">Amount</th>
+							<th class="fin-num">Fees</th>
+							<th class="fin-num">Price since</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (StockTrade trade in shown.OrderByDescending(t => t.ExecutedAt ?? t.CreatedAt))
+						{
+							decimal? since = Since(portfolio, trade);
+							<tr data-trade="@trade.Id" class="@(trade.Status == TradeStatus.Cancelled ? "text-secondary" : "")">
+								<td>
+									<div>@FinanceText.When(trade.ExecutedAt ?? trade.CreatedAt)</div>
+									<div>
+										<span class="badge @FinanceText.SideClass(trade.Side)">@FinanceText.Side(trade.Side)</span>
+										@if (trade.Status != TradeStatus.Done)
+										{
+											<span class="badge @FinanceText.StatusClass(trade.Status) ms-1">@trade.Status</span>
+										}
+									</div>
+								</td>
+								<td>
+									<div>@_session.Name(trade.Isin)</div>
+									@if (!string.IsNullOrEmpty(trade.Note))
+									{
+										<div class="text-secondary small">@trade.Note</div>
+									}
+								</td>
+								<td class="fin-num">@Money.Shares(trade.Status == TradeStatus.Done ? trade.Shares : trade.PlannedShares)
+									@if (trade.Status == TradeStatus.Done && trade.PlanId != null && trade.PlannedShares != trade.Shares)
+									{
+										<div class="text-secondary small">planned @Money.Shares(trade.PlannedShares)</div>
+									}
+								</td>
+								<td class="fin-num">@Money.Format(trade.Status == TradeStatus.Done ? trade.Price : trade.PlannedPrice, account.Currency, 4)
+									@if (trade.Status == TradeStatus.Done && trade.PlanId != null && trade.PlannedPrice > 0 && trade.PlannedPrice != trade.Price)
+									{
+										<div class="small @FinanceText.GainClass(Slippage(trade))" title="Price the plan expected">planned @Money.Format(trade.PlannedPrice, account.Currency, 2)</div>
+									}
+								</td>
+								<td class="fin-num">@Money.Format(trade.Status == TradeStatus.Done ? trade.Amount : trade.PlannedShares * trade.PlannedPrice, account.Currency)</td>
+								<td class="fin-num">@(trade.Fees != 0 ? Money.Format(trade.Fees, account.Currency) : "–")</td>
+								<td class="fin-num @FinanceText.GainClass(trade.Side == TradeSide.Buy ? since : -since)" title="Price now against the trade's price">@Money.SignedPercent(since)</td>
+								<td class="text-end text-nowrap">
+									<button type="button" class="btn btn-sm btn-ghost-secondary" title="Change" data-edit-trade="@trade.Id" @onclick="() => { _newTrade = false; _editing = trade; }">
+										<Icon IconType="@Icons.Edit" Size="14" />
+									</button>
+									@if (_confirmDelete == trade.Id)
+									{
+										<button type="button" class="btn btn-sm btn-danger" data-delete-yes @onclick="() => DeleteAsync(trade)">Delete</button>
+										<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="() => _confirmDelete = null">Keep</button>
+									}
+									else
+									{
+										<button type="button" class="btn btn-sm btn-ghost-danger" title="Delete" data-delete-trade="@trade.Id" @onclick="() => _confirmDelete = trade.Id">
+											<Icon IconType="@Icons.Trash" Size="14" />
+										</button>
+									}
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+	</div>
+}
+
+@code {
+	[Parameter]
+	public string Id { get; set; } = string.Empty;
+
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	[SupplyParameterFromQuery(Name = "isin")]
+	public string? SecurityFilter { get; set; }
+
+	private StockSession? _session;
+	private string _side = string.Empty;
+	private string _status = string.Empty;
+	private Timeframe _timeframe = Timeframe.All;
+	private bool _newTrade;
+	private StockTrade? _editing;
+	private string? _confirmDelete;
+
+	protected override async Task OnParametersSetAsync()
+	{
+		if (CurrentUser?.Id is not string userId || _session?.AccountId == Id)
+		{
+			return;
+		}
+		_session = await StockSession.LoadAsync(Store, Quotes, userId, Id);
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender && _session is { Missing: false, Refreshed: false })
+		{
+			await _session.ReloadAsync(refresh: true);
+			StateHasChanged();
+		}
+	}
+
+	private DateOnly Today => StockAccountSystem.Today(Clock);
+
+	private void SetSecurity(string? isin)
+	{
+		SecurityFilter = string.IsNullOrEmpty(isin) ? null : isin;
+		Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("isin", SecurityFilter), replace: true);
+	}
+
+	private List<StockTrade> Filtered(StockPortfolio portfolio)
+	{
+		DateOnly from = _timeframe.StartFor(Today);
+		return [.. _session!.Trades.Where(t =>
+			(SecurityFilter == null || string.Equals(t.Isin, SecurityFilter, StringComparison.OrdinalIgnoreCase)) &&
+			(_side == string.Empty || t.Side.ToString() == _side) &&
+			(_status == "all" || (_status == string.Empty ? t.Status != TradeStatus.Cancelled : t.Status.ToString() == _status)) &&
+			StockPortfolio.Day(t.ExecutedAt ?? t.CreatedAt) > from)];
+	}
+
+	/// <summary>What the price difference to the plan was worth: + when it went better than planned.</summary>
+	private static decimal Slippage(StockTrade trade) =>
+		(trade.Side == TradeSide.Buy ? trade.PlannedPrice - trade.Price : trade.Price - trade.PlannedPrice) * trade.Shares;
+
+	/// <summary>Change of the price from the trade to now, in percent.</summary>
+	private static decimal? Since(StockPortfolio portfolio, StockTrade trade)
+	{
+		decimal price = trade.Status == TradeStatus.Done ? trade.Price : trade.PlannedPrice;
+		return portfolio.Holding(trade.Isin).Price is PriceAt now && price > 0 ? (now.Price - price) / price * 100 : null;
+	}
+
+	private List<ValuePoint> PriceSeries(string isin)
+	{
+		DateOnly from = _timeframe.StartFor(Today);
+		return [.. _session!.Prices.Points(isin).Where(p => p.Day > from).Select(p => new ValuePoint(p.Day, p.Price, 0))];
+	}
+
+	private List<ChartMarker> Markers(StockPortfolio portfolio, string isin) =>
+		[.. portfolio.Done.Where(t => string.Equals(t.Isin, isin, StringComparison.OrdinalIgnoreCase))
+			.Select(t => new ChartMarker(StockPortfolio.Day(t.ExecutedAt!.Value), t.Price, t.Side == TradeSide.Buy,
+				$"{FinanceText.Side(t.Side)} {Money.Shares(t.Shares)} at {Money.Format(t.Price, portfolio.Account.Currency)} on {FinanceText.When(t.ExecutedAt)}"))];
+
+	private async Task SaveAsync(StockTrade trade)
+	{
+		await _session!.SaveTradeAsync(trade);
+		_newTrade = false;
+		_editing = null;
+	}
+
+	private async Task DeleteAsync(StockTrade trade)
+	{
+		await _session!.DeleteTradeAsync(trade);
+		_confirmDelete = null;
+		if (_editing?.Id == trade.Id)
+		{
+			_editing = null;
+		}
+	}
+}

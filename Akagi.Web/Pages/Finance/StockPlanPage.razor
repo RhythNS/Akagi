@@ -1,0 +1,433 @@
+@page "/Finance/Stocks/{Id}/Plan"
+
+@inject IFinanceStore Store
+@inject IQuoteService Quotes
+@inject TimeProvider Clock
+
+<PageTitle>Plan investment - @(_session?.Account?.Name ?? "Stock portfolio") - Akagi</PageTitle>
+
+<StockHeader Account="_session?.Account" Active="plan" />
+
+@if (_session == null)
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+else if (_session.Account is not StockAccount account || _session.Portfolio is not StockPortfolio portfolio || _plan == null)
+{
+	<div class="card"><div class="card-body text-secondary" data-missing>This account does not exist any more. <a href="Finance">Back to the overview</a></div></div>
+}
+else if (account.Securities.Count == 0)
+{
+	<div class="card"><div class="card-body text-secondary" data-no-securities>Add securities on the <a href="Finance/Stocks/@Id">holdings</a> tab first.</div></div>
+}
+else
+{
+	@if (_done != null)
+	{
+		<div class="alert alert-success d-flex flex-wrap align-items-center gap-2" data-plan-done>
+			<span>@_done</span>
+			<a class="ms-auto" href="Finance/Stocks/@Id">Holdings</a>
+			<a href="Finance/Stocks/@Id/Trades">Trades</a>
+		</div>
+	}
+	@if (account.Strategy.Count == 0)
+	{
+		<div class="alert alert-info" data-no-strategy>There is no strategy yet, so the planner has nothing to aim for. <a href="Finance/Stocks/@Id/Strategy">Set target shares</a> or plan by hand below.</div>
+	}
+	@if (portfolio.Pending.Count > 0)
+	{
+		<div class="alert alert-warning" data-pending-note>@portfolio.Pending.Count pending @(portfolio.Pending.Count == 1 ? "trade is" : "trades are") not counted in the holdings below. Record or cancel them first for an exact plan.</div>
+	}
+
+	<div class="card mb-3">
+		<div class="card-body">
+			<div class="row g-3 align-items-end">
+				<div class="col-sm-5 col-lg-3">
+					<label class="form-label" for="plan-cash">Money to invest</label>
+					<div class="input-group">
+						<input id="plan-cash" class="form-control" inputmode="decimal" placeholder="0" value="@_cash" data-field="cash" @onchange="SetCash" />
+						<span class="input-group-text">@Money.Symbol(account.Currency)</span>
+					</div>
+				</div>
+				<div class="col d-flex flex-wrap gap-2">
+					<button type="button" class="btn btn-primary" data-suggest @onclick="() => Run(p => p.SuggestBuys())" title="Only buys, toward the targets">Suggest buys</button>
+					<button type="button" class="btn btn-outline-primary" data-rebalance @onclick="() => Run(p => p.SuggestRebalance())" title="Sells what is over its target too">Rebalance with sales</button>
+					<button type="button" class="btn btn-outline-secondary" data-fill @onclick="() => Run(p => p.Fill())" title="Spends what is left on the rows you did not change">Spend the rest</button>
+					<button type="button" class="btn btn-ghost-secondary" data-clear @onclick="() => Run(p => p.Clear())">Clear</button>
+				</div>
+			</div>
+			<div class="form-hint mt-2">
+				Change any row by hand: a positive number buys, a negative one sells. Sales add to the money left over;
+				"Spend the rest" puts it into the rows you did not touch.
+			</div>
+		</div>
+		<div class="table-responsive">
+			<table class="table table-vcenter card-table" data-plan>
+				<thead>
+					<tr>
+						<th>Security</th>
+						<th class="fin-num">Price</th>
+						<th class="fin-num">Held</th>
+						<th class="fin-num">Now / target</th>
+						<th class="text-center">Buy (+) / sell (−)</th>
+						<th class="fin-num" title="Money a sale brings in (+) or a buy takes (−)">Money in / out</th>
+						<th class="fin-num">After</th>
+						<th class="fin-num">Share after</th>
+					</tr>
+				</thead>
+				<tbody>
+					@foreach (PlanRow row in _plan.Rows)
+					{
+						decimal drift = _plan.Drift(row);
+						<tr data-plan-row="@row.Isin" class="@(row.Delta != 0 ? "table-active" : "")">
+							<td>
+								<div class="fw-medium">@row.Name</div>
+								<div class="text-secondary small">@row.Isin@(row.Edited ? " · changed by hand" : "")</div>
+							</td>
+							<td class="fin-num">
+								<input class="form-control form-control-sm text-end fin-input-sm ms-auto" inputmode="decimal" value="@Money.Input(row.Price, 4)" data-price="@row.Isin"
+									   title="Price the plan counts with; change it to match the broker" @onchange="e => SetPrice(row, e.Value?.ToString())" />
+							</td>
+							<td class="fin-num">@Money.Shares(row.Shares)<div class="text-secondary small">@Money.Format(row.Value, account.Currency)</div></td>
+							<td class="fin-num">@Money.Percent(_plan.PercentBefore(row)) / @Money.Percent(row.TargetPercent)</td>
+							<td>
+								<div class="input-group input-group-sm flex-nowrap justify-content-center">
+									<button type="button" class="btn btn-outline-secondary" data-minus="@row.Isin" @onclick="() => Step(row, -1)">−</button>
+									<input class="form-control text-center @(row.Delta > 0 ? "text-success" : row.Delta < 0 ? "text-danger" : "")" style="max-width: 5.5rem;" inputmode="decimal"
+										   value="@Money.Input(row.Delta)" data-delta="@row.Isin" @onchange="e => SetDelta(row, e.Value?.ToString())" />
+									<button type="button" class="btn btn-outline-secondary" data-plus="@row.Isin" @onclick="() => Step(row, 1)">+</button>
+								</div>
+							</td>
+							<td class="fin-num @(row.Cost < 0 ? "text-success" : "")" data-cost="@row.Isin">@(row.Delta == 0 ? "–" : Money.Signed(-row.Cost, account.Currency))</td>
+							<td class="fin-num" data-after="@row.Isin">@Money.Shares(row.SharesAfter)<div class="text-secondary small">@Money.Format(row.ValueAfter, account.Currency)</div></td>
+							<td class="fin-num">
+								<div>@Money.Percent(_plan.PercentAfter(row))</div>
+								@if (row.TargetPercent > 0 || row.ValueAfter > 0)
+								{
+									<div class="small @(Math.Abs(drift) >= 2 ? "text-warning" : "text-secondary")">@(Math.Abs(drift) < 0.05m ? "on target" : (drift > 0 ? "+" : "−") + Money.Percent(Math.Abs(drift)) + " from target")</div>
+								}
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="card-body border-top">
+			<div class="row g-3">
+				<div class="col-6 col-md-3">
+					<div class="subheader">Money to invest</div>
+					<div class="h3 mb-0">@Money.Format(_plan.Cash, account.Currency)</div>
+				</div>
+				<div class="col-6 col-md-3">
+					<div class="subheader">From sales</div>
+					<div class="h3 mb-0" data-sales>@Money.Format(_plan.Sales, account.Currency)</div>
+				</div>
+				<div class="col-6 col-md-3">
+					<div class="subheader">Buys</div>
+					<div class="h3 mb-0" data-buys>@Money.Format(_plan.Buys, account.Currency)</div>
+				</div>
+				<div class="col-6 col-md-3">
+					<div class="subheader">Left over</div>
+					<div class="h3 mb-0 @(_plan.Leftover < -0.005m ? "text-danger" : "")" data-leftover>@Money.Format(_plan.Leftover, account.Currency)</div>
+				</div>
+			</div>
+			@foreach (string problem in _plan.Problems())
+			{
+				<div class="alert alert-danger mt-3 mb-0 py-2" data-plan-problem>@problem</div>
+			}
+			<div class="text-secondary small mt-2">Prices are estimates; fees are not included. Record what really went through when the trades are done.</div>
+		</div>
+		@if (_applying == null)
+		{
+			<div class="card-footer d-flex flex-wrap gap-2">
+				<button type="button" class="btn btn-primary" disabled="@(!CanSave)" data-save-pending @onclick="SavePendingAsync">Save as pending trades</button>
+				<button type="button" class="btn btn-success" disabled="@(!CanSave)" data-apply @onclick="StartApply">Apply: record trades as done…</button>
+				<span class="text-secondary small align-self-center">Pending: place the orders now, record them when they go through. Apply: they already went through.</span>
+			</div>
+		}
+	</div>
+
+	@if (_applying != null)
+	{
+		<div class="card mb-3 border-success" data-apply-form>
+			<div class="card-header">
+				<div>
+					<h3 class="card-title">Record what went through</h3>
+					<div class="text-secondary small">Enter the exact shares and amounts from the broker. Prices follow from the amounts.</div>
+				</div>
+			</div>
+			<div class="card-body">
+				<div class="mb-3" style="max-width: 16rem;">
+					<label class="form-label" for="apply-time">When</label>
+					<input id="apply-time" type="datetime-local" class="form-control" value="@_applyTime" data-field="apply-time" @onchange="e => _applyTime = e.Value?.ToString() ?? string.Empty" />
+				</div>
+				<div class="table-responsive">
+					<table class="table table-vcenter">
+						<thead>
+							<tr>
+								<th>Trade</th>
+								<th style="width: 9rem;">Shares</th>
+								<th style="width: 11rem;">Total amount</th>
+								<th style="width: 8rem;">Fees</th>
+								<th class="fin-num">Price per share</th>
+							</tr>
+						</thead>
+						<tbody>
+							@foreach (ApplyRow apply in _applying)
+							{
+								<tr data-apply-row="@apply.Trade.Isin">
+									<td>
+										<span class="badge @FinanceText.SideClass(apply.Trade.Side) me-1">@FinanceText.Side(apply.Trade.Side)</span>
+										@account.DisplayName(apply.Trade.Isin)
+									</td>
+									<td><input class="form-control form-control-sm" inputmode="decimal" value="@apply.Shares" data-apply-shares="@apply.Trade.Isin" @onchange="e => apply.Shares = e.Value?.ToString() ?? string.Empty" /></td>
+									<td><input class="form-control form-control-sm" inputmode="decimal" value="@apply.Total" data-apply-total="@apply.Trade.Isin" @onchange="e => apply.Total = e.Value?.ToString() ?? string.Empty" /></td>
+									<td><input class="form-control form-control-sm" inputmode="decimal" value="@apply.Fees" data-apply-fees="@apply.Trade.Isin" @onchange="e => apply.Fees = e.Value?.ToString() ?? string.Empty" /></td>
+									<td class="fin-num">@(apply.Price() is decimal price ? Money.Format(price, account.Currency, 4) : "–")</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+				@if (_applyError != null)
+				{
+					<div class="alert alert-danger mb-0" data-apply-error>@_applyError</div>
+				}
+			</div>
+			<div class="card-footer d-flex gap-2">
+				<button type="button" class="btn btn-success" data-apply-save @onclick="ApplyAsync">Record @_applying.Count @(_applying.Count == 1 ? "trade" : "trades")</button>
+				<button type="button" class="btn btn-ghost-secondary" @onclick="() => _applying = null">Back to the plan</button>
+			</div>
+		</div>
+	}
+
+	<PendingTrades Session="_session" OnChanged="RebuildPlan" />
+}
+
+@code {
+	[Parameter]
+	public string Id { get; set; } = string.Empty;
+
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	private StockSession? _session;
+	private InvestmentPlan? _plan;
+	private string _cash = string.Empty;
+	private List<ApplyRow>? _applying;
+	private string _applyTime = string.Empty;
+	private string? _applyError;
+	private string? _done;
+
+	protected override async Task OnParametersSetAsync()
+	{
+		if (CurrentUser?.Id is not string userId || _session?.AccountId == Id)
+		{
+			return;
+		}
+		_session = await StockSession.LoadAsync(Store, Quotes, userId, Id);
+		RebuildPlan();
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender && _session is { Missing: false, Refreshed: false })
+		{
+			await _session.ReloadAsync(refresh: true);
+			RebuildPlan();
+			StateHasChanged();
+		}
+	}
+
+	/// <summary>A plan from the current holdings and prices, keeping the changes made so far.</summary>
+	private void RebuildPlan()
+	{
+		if (_session?.Portfolio is not StockPortfolio portfolio)
+		{
+			_plan = null;
+			return;
+		}
+		InvestmentPlan? old = _plan;
+		_plan = InvestmentPlan.For(portfolio, Money.Parse(_cash) ?? 0);
+		if (old == null)
+		{
+			return;
+		}
+		foreach (PlanRow row in _plan.Rows)
+		{
+			if (old.Rows.FirstOrDefault(r => r.Isin == row.Isin) is PlanRow previous)
+			{
+				row.Delta = previous.Delta;
+				row.Edited = previous.Edited;
+				if (previous.Edited && previous.Price > 0)
+				{
+					row.Price = previous.Price;
+				}
+			}
+		}
+	}
+
+	private bool CanSave => _plan != null && _plan.Rows.Any(r => r.Delta != 0) && !_plan.Rows.Any(r => r.SharesAfter < 0 || (r.Delta != 0 && r.Price <= 0));
+
+	private void SetCash(ChangeEventArgs e)
+	{
+		_cash = e.Value?.ToString() ?? string.Empty;
+		if (_plan != null)
+		{
+			_plan.Cash = Math.Max(0, Money.Parse(_cash) ?? 0);
+		}
+		_done = null;
+	}
+
+	private void Run(Action<InvestmentPlan> action)
+	{
+		if (_plan != null)
+		{
+			action(_plan);
+			_done = null;
+		}
+	}
+
+	private void SetDelta(PlanRow row, string? text)
+	{
+		if (Money.Parse(text) is decimal delta)
+		{
+			row.Delta = delta;
+			row.Edited = true;
+		}
+		else if (string.IsNullOrWhiteSpace(text))
+		{
+			row.Delta = 0;
+			row.Edited = true;
+		}
+		_done = null;
+	}
+
+	private void Step(PlanRow row, int step)
+	{
+		row.Delta += step;
+		row.Edited = true;
+		_done = null;
+	}
+
+	private void SetPrice(PlanRow row, string? text)
+	{
+		if (Money.Parse(text) is decimal price && price > 0)
+		{
+			row.Price = price;
+			row.Edited = true;
+		}
+	}
+
+	private async Task SavePendingAsync()
+	{
+		if (_plan == null || _session == null || !CanSave)
+		{
+			return;
+		}
+		List<StockTrade> trades = _plan.ToTrades(_session.UserId, _session.AccountId, Clock.GetUtcNow().UtcDateTime);
+		foreach (StockTrade trade in trades)
+		{
+			await Store.SaveTradeAsync(trade);
+		}
+		await AfterSaveAsync($"Saved {trades.Count} pending {(trades.Count == 1 ? "trade" : "trades")}. Record each one when it goes through.");
+	}
+
+	private void StartApply()
+	{
+		if (_plan == null || _session == null || !CanSave)
+		{
+			return;
+		}
+		_applyTime = FinanceText.InputTime(Clock.GetUtcNow().UtcDateTime);
+		_applyError = null;
+		_applying = [.. _plan.ToTrades(_session.UserId, _session.AccountId, Clock.GetUtcNow().UtcDateTime).Select(t => new ApplyRow(t))];
+	}
+
+	private async Task ApplyAsync()
+	{
+		if (_applying == null || _session == null)
+		{
+			return;
+		}
+		_applyError = null;
+		DateTime? when = FinanceText.ParseInputTime(_applyTime);
+		if (when == null)
+		{
+			_applyError = "Enter when the trades went through.";
+			return;
+		}
+		foreach (ApplyRow apply in _applying)
+		{
+			if (apply.Problem(_session.Name(apply.Trade.Isin)) is string problem)
+			{
+				_applyError = problem;
+				return;
+			}
+			decimal held = _session.Portfolio?.Holding(apply.Trade.Isin).Shares ?? 0;
+			if (apply.Trade.Side == TradeSide.Sell && Money.Parse(apply.Shares) > held)
+			{
+				_applyError = $"{_session.Name(apply.Trade.Isin)}: only {Money.Shares(held)} shares are held.";
+				return;
+			}
+		}
+		foreach (ApplyRow apply in _applying)
+		{
+			StockTrade trade = apply.Trade;
+			trade.Shares = Money.Parse(apply.Shares)!.Value;
+			trade.Price = apply.Price()!.Value;
+			trade.Fees = Money.Parse(apply.Fees) ?? 0;
+			trade.Status = TradeStatus.Done;
+			trade.ExecutedAt = when;
+			await Store.SaveTradeAsync(trade);
+		}
+		int count = _applying.Count;
+		_applying = null;
+		await AfterSaveAsync($"Recorded {count} {(count == 1 ? "trade" : "trades")}; the holdings are up to date.");
+	}
+
+	private async Task AfterSaveAsync(string message)
+	{
+		await _session!.ReloadAsync(refresh: false);
+		_plan = null;
+		_cash = string.Empty;
+		RebuildPlan();
+		_done = message;
+	}
+
+	/// <summary>One planned trade in the apply form, as typed.</summary>
+	private sealed class ApplyRow
+	{
+		public ApplyRow(StockTrade trade)
+		{
+			Trade = trade;
+			Shares = Money.Input(trade.Shares);
+			Total = Money.Input(Math.Round(trade.Shares * trade.Price, 2), 2);
+		}
+
+		public StockTrade Trade { get; }
+		public string Shares { get; set; }
+		public string Total { get; set; }
+		public string Fees { get; set; } = string.Empty;
+
+		public decimal? Price() =>
+			Money.Parse(Shares) is decimal shares && shares > 0 && Money.Parse(Total) is decimal total && total > 0 ? Math.Round(total / shares, 6) : null;
+
+		public string? Problem(string name)
+		{
+			if (Money.Parse(Shares) is not decimal shares || shares <= 0)
+			{
+				return $"{name}: enter the shares, more than 0.";
+			}
+			if (Price() == null)
+			{
+				return $"{name}: enter the total amount.";
+			}
+			if (!string.IsNullOrWhiteSpace(Fees) && (Money.Parse(Fees) is not decimal fees || fees < 0))
+			{
+				return $"{name}: fees are a number, 0 or more.";
+			}
+			return null;
+		}
+	}
+}

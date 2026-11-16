@@ -1,0 +1,71 @@
+@* Planned trades that have not gone through yet. Record one once the broker confirms it. *@
+@if (Session.Portfolio is StockPortfolio portfolio && portfolio.Pending.Count > 0)
+{
+	<div class="card mb-3 border-warning" data-pending>
+		<div class="card-header">
+			<h3 class="card-title">Pending trades</h3>
+			<div class="card-subtitle ms-2 text-secondary small">Not counted in the holdings until recorded.</div>
+		</div>
+		<div class="list-group list-group-flush">
+			@foreach (StockTrade trade in portfolio.Pending)
+			{
+				<div class="list-group-item" data-pending-trade="@trade.Id">
+					<div class="d-flex flex-wrap align-items-center gap-2">
+						<span class="badge @FinanceText.SideClass(trade.Side)">@FinanceText.Side(trade.Side)</span>
+						<span class="fw-medium">@Session.Name(trade.Isin)</span>
+						<span class="text-secondary">@Money.Shares(trade.PlannedShares) × ~@Money.Format(trade.PlannedPrice, Account.Currency) ≈ @Money.Format(trade.PlannedShares * trade.PlannedPrice, Account.Currency)</span>
+						<span class="text-secondary small">planned @FinanceText.When(trade.CreatedAt)</span>
+						<div class="ms-auto d-flex gap-1">
+							<button type="button" class="btn btn-sm btn-primary" data-record="@trade.Id" @onclick="() => _recording = trade">Record</button>
+							@if (_confirm == trade)
+							{
+								<button type="button" class="btn btn-sm btn-warning" data-cancel-yes @onclick="() => CancelAsync(trade)">Cancel trade</button>
+								<button type="button" class="btn btn-sm btn-ghost-secondary" @onclick="() => _confirm = null">Keep</button>
+							}
+							else
+							{
+								<button type="button" class="btn btn-sm btn-ghost-secondary" data-cancel="@trade.Id" @onclick="() => _confirm = trade">Cancel</button>
+							}
+						</div>
+					</div>
+					@if (_recording == trade)
+					{
+						<div class="mt-3">
+							<TradeForm Account="Account" Portfolio="portfolio" Trade="trade" Mode="TradeFormMode.Record"
+									   OnSave="RecordAsync" OnCancel="() => _recording = null" />
+						</div>
+					}
+				</div>
+			}
+		</div>
+	</div>
+}
+
+@code {
+	[Parameter, EditorRequired]
+	public StockSession Session { get; set; } = default!;
+
+	[Parameter]
+	public EventCallback OnChanged { get; set; }
+
+	private StockAccount Account => Session.Account!;
+
+	private StockTrade? _recording;
+	private StockTrade? _confirm;
+
+	private async Task RecordAsync(StockTrade trade)
+	{
+		await Session.SaveTradeAsync(trade);
+		_recording = null;
+		await OnChanged.InvokeAsync();
+	}
+
+	private async Task CancelAsync(StockTrade trade)
+	{
+		StockTrade cancelled = trade.Copy();
+		cancelled.Status = TradeStatus.Cancelled;
+		await Session.SaveTradeAsync(cancelled);
+		_confirm = null;
+		await OnChanged.InvokeAsync();
+	}
+}

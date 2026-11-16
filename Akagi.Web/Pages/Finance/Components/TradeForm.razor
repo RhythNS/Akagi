@@ -1,0 +1,297 @@
+@* Enters a trade: a past buy or sale, a pending order, what a pending order went through with, or a fix to a
+   recorded trade. Price per share and total amount follow each other; type whichever the broker shows. *@
+<div class="card mb-3" data-trade-form="@Mode.ToString().ToLowerInvariant()">
+	<div class="card-header">
+		<h3 class="card-title">@Title</h3>
+	</div>
+	<div class="card-body">
+		<div class="row g-3">
+			<div class="col-md-6">
+				<label class="form-label required" for="trade-security-@_key">Security</label>
+				@if (Mode == TradeFormMode.Record)
+				{
+					<div class="form-control-plaintext" data-field="security">@Account.DisplayName(_isin) <span class="text-secondary small">@_isin</span></div>
+				}
+				else
+				{
+					<select id="trade-security-@_key" class="form-select" value="@_isin" data-field="security" @onchange="e => { _isin = e.Value?.ToString() ?? string.Empty; _price = string.Empty; SuggestPrice(); }">
+						<option value="">Choose…</option>
+						@foreach (StockSecurity security in Account.Securities)
+						{
+							<option value="@security.Isin">@security.DisplayName (@security.Isin)</option>
+						}
+					</select>
+				}
+			</div>
+			<div class="col-6 col-md-3">
+				<label class="form-label" for="trade-side-@_key">Side</label>
+				<select id="trade-side-@_key" class="form-select" value="@_side" data-field="side" disabled="@(Mode == TradeFormMode.Record)"
+						@onchange="e => _side = Enum.Parse<TradeSide>(e.Value?.ToString() ?? nameof(TradeSide.Buy))">
+					<option value="@TradeSide.Buy">Buy</option>
+					<option value="@TradeSide.Sell">Sell</option>
+				</select>
+			</div>
+			<div class="col-6 col-md-3">
+				<label class="form-label" for="trade-status-@_key">Status</label>
+				@if (Mode == TradeFormMode.Record)
+				{
+					<div class="form-control-plaintext">Went through</div>
+				}
+				else
+				{
+					<select id="trade-status-@_key" class="form-select" value="@_status" data-field="status"
+							@onchange="e => _status = Enum.Parse<TradeStatus>(e.Value?.ToString() ?? nameof(TradeStatus.Done))">
+						<option value="@TradeStatus.Done">Went through</option>
+						<option value="@TradeStatus.Pending">Pending</option>
+						@if (Mode == TradeFormMode.Edit)
+						{
+							<option value="@TradeStatus.Cancelled">Cancelled</option>
+						}
+					</select>
+				}
+			</div>
+			@if (_status == TradeStatus.Done)
+			{
+				<div class="col-md-4">
+					<label class="form-label required" for="trade-time-@_key">When it went through</label>
+					<input id="trade-time-@_key" type="datetime-local" class="form-control" value="@_time" data-field="time"
+						   @onchange="e => _time = e.Value?.ToString() ?? string.Empty" />
+				</div>
+			}
+			<div class="col-6 col-md-2">
+				<label class="form-label required" for="trade-shares-@_key">Shares</label>
+				<input id="trade-shares-@_key" class="form-control" inputmode="decimal" value="@_shares" data-field="shares"
+					   @onchange="e => { _shares = e.Value?.ToString() ?? string.Empty; FromPrice(); }" />
+				@if (Mode == TradeFormMode.Record && Trade != null)
+				{
+					<div class="form-hint">Planned @Money.Shares(Trade.PlannedShares)</div>
+				}
+			</div>
+			<div class="col-6 col-md-3">
+				<label class="form-label @(_status == TradeStatus.Done ? "required" : "")" for="trade-price-@_key">Price per share</label>
+				<input id="trade-price-@_key" class="form-control" inputmode="decimal" value="@_price" data-field="price"
+					   @onchange="e => { _price = e.Value?.ToString() ?? string.Empty; FromPrice(); }" />
+				@if (Mode == TradeFormMode.Record && Trade != null)
+				{
+					<div class="form-hint">Planned at @Money.Format(Trade.PlannedPrice, Account.Currency, 4)</div>
+				}
+			</div>
+			<div class="col-6 col-md-3">
+				<label class="form-label" for="trade-total-@_key">Total amount</label>
+				<input id="trade-total-@_key" class="form-control" inputmode="decimal" value="@_total" data-field="total"
+					   @onchange="e => { _total = e.Value?.ToString() ?? string.Empty; FromTotal(); }" />
+				<div class="form-hint">Shares × price, without fees.</div>
+			</div>
+			<div class="col-6 col-md-2">
+				<label class="form-label" for="trade-fees-@_key">Fees</label>
+				<input id="trade-fees-@_key" class="form-control" inputmode="decimal" value="@_fees" data-field="fees"
+					   @onchange="e => _fees = e.Value?.ToString() ?? string.Empty" />
+			</div>
+			<div class="col-12">
+				<label class="form-label" for="trade-note-@_key">Note</label>
+				<input id="trade-note-@_key" class="form-control" maxlength="300" value="@_note" data-field="note"
+					   @onchange="e => _note = e.Value?.ToString() ?? string.Empty" />
+			</div>
+		</div>
+		@if (_error != null)
+		{
+			<div class="alert alert-danger mt-3 mb-0" data-trade-error>@_error</div>
+		}
+	</div>
+	<div class="card-footer d-flex gap-2">
+		<button type="button" class="btn btn-primary" data-trade-save @onclick="SaveAsync">@SaveLabel</button>
+		<button type="button" class="btn btn-ghost-secondary" data-trade-cancel @onclick="OnCancel">Cancel</button>
+	</div>
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public StockAccount Account { get; set; } = default!;
+
+	[Parameter]
+	public StockPortfolio? Portfolio { get; set; }
+
+	/// <summary>The trade to record or edit; null for a new one.</summary>
+	[Parameter]
+	public StockTrade? Trade { get; set; }
+
+	[Parameter]
+	public TradeFormMode Mode { get; set; } = TradeFormMode.New;
+
+	/// <summary>Preselects a security for a new trade.</summary>
+	[Parameter]
+	public string? Isin { get; set; }
+
+	[Parameter]
+	public EventCallback<StockTrade> OnSave { get; set; }
+
+	[Parameter]
+	public EventCallback OnCancel { get; set; }
+
+	[Inject]
+	private TimeProvider Clock { get; set; } = default!;
+
+	private readonly string _key = Guid.NewGuid().ToString("N")[..8];
+	private string _isin = string.Empty;
+	private TradeSide _side = TradeSide.Buy;
+	private TradeStatus _status = TradeStatus.Done;
+	private string _time = string.Empty;
+	private string _shares = string.Empty;
+	private string _price = string.Empty;
+	private string _total = string.Empty;
+	private string _fees = string.Empty;
+	private string _note = string.Empty;
+	private string? _error;
+	private object? _loadedFor;
+
+	private string Title => Mode switch
+	{
+		TradeFormMode.Record => $"Record what went through: {FinanceText.Side(_side).ToLowerInvariant()} {Account.DisplayName(_isin)}",
+		TradeFormMode.Edit => "Change trade",
+		_ => "Record a trade"
+	};
+
+	private string SaveLabel => Mode == TradeFormMode.Record ? "Record" : "Save trade";
+
+	protected override void OnParametersSet()
+	{
+		object key = (object?)Trade ?? Isin ?? string.Empty;
+		if (ReferenceEquals(_loadedFor, key) || Equals(_loadedFor, key))
+		{
+			return;
+		}
+		_loadedFor = key;
+		_error = null;
+		DateTime now = Clock.GetUtcNow().UtcDateTime;
+		if (Trade == null)
+		{
+			_isin = Isin ?? Account.Securities.FirstOrDefault()?.Isin ?? string.Empty;
+			_side = TradeSide.Buy;
+			_status = TradeStatus.Done;
+			_time = FinanceText.InputTime(now);
+			_shares = _price = _total = _fees = _note = string.Empty;
+			SuggestPrice();
+			return;
+		}
+		_isin = Trade.Isin;
+		_side = Trade.Side;
+		_status = Mode == TradeFormMode.Record ? TradeStatus.Done : Trade.Status;
+		_time = FinanceText.InputTime(Trade.ExecutedAt ?? now);
+		_shares = Money.Input(Trade.Shares);
+		_price = Trade.Price > 0 ? Money.Input(Trade.Price, 4) : string.Empty;
+		_fees = Trade.Fees != 0 ? Money.Input(Trade.Fees, 2) : string.Empty;
+		_note = Trade.Note;
+		FromPrice();
+	}
+
+	private void SuggestPrice()
+	{
+		if (Portfolio?.Holding(_isin).Price is PriceAt price && string.IsNullOrEmpty(_price))
+		{
+			_price = Money.Input(price.Price, 4);
+			FromPrice();
+		}
+	}
+
+	private void FromPrice()
+	{
+		if (Money.Parse(_shares) is decimal shares && Money.Parse(_price) is decimal price)
+		{
+			_total = Money.Input(Math.Round(shares * price, 2), 2);
+		}
+	}
+
+	private void FromTotal()
+	{
+		if (Money.Parse(_shares) is decimal shares && shares > 0 && Money.Parse(_total) is decimal total)
+		{
+			_price = Money.Input(Math.Round(total / shares, 6), 6);
+		}
+	}
+
+	private async Task SaveAsync()
+	{
+		_error = Validate(out StockTrade? trade);
+		if (_error != null || trade == null)
+		{
+			return;
+		}
+		await OnSave.InvokeAsync(trade);
+	}
+
+	private string? Validate(out StockTrade? trade)
+	{
+		trade = null;
+		if (Account.Security(_isin) == null)
+		{
+			return "Choose a security.";
+		}
+		if (Money.Parse(_shares) is not decimal shares || shares <= 0)
+		{
+			return "Enter how many shares, more than 0.";
+		}
+		decimal? price = Money.Parse(_price);
+		if (Money.Parse(_total) is decimal total && total > 0 && (price == null || price <= 0))
+		{
+			price = total / shares;
+		}
+		if (_status == TradeStatus.Done && (price == null || price <= 0))
+		{
+			return "Enter the price per share or the total amount it went through with.";
+		}
+		decimal fees = 0;
+		if (!string.IsNullOrWhiteSpace(_fees))
+		{
+			if (Money.Parse(_fees) is not decimal parsed || parsed < 0)
+			{
+				return "Fees are a number, 0 or more.";
+			}
+			fees = parsed;
+		}
+		DateTime? executed = null;
+		if (_status == TradeStatus.Done)
+		{
+			executed = FinanceText.ParseInputTime(_time);
+			if (executed == null)
+			{
+				return "Enter when it went through.";
+			}
+			if (executed > Clock.GetUtcNow().UtcDateTime.AddMinutes(5))
+			{
+				return "That time is in the future; a trade that has not gone through yet is pending.";
+			}
+		}
+		if (_side == TradeSide.Sell && _status == TradeStatus.Done && Portfolio != null)
+		{
+			decimal held = Portfolio.Holding(_isin).Shares;
+			if (Trade is { Status: TradeStatus.Done } old && string.Equals(old.Isin, _isin, StringComparison.OrdinalIgnoreCase))
+			{
+				// Editing a recorded trade: take its own effect out first
+				held += old.Side == TradeSide.Sell ? old.Shares : -old.Shares;
+			}
+			if (shares > held + 0.000001m)
+			{
+				return $"Only {Money.Shares(Math.Max(0, held))} shares of {Account.DisplayName(_isin)} are held.";
+			}
+		}
+
+		trade = Trade?.Copy() ?? new StockTrade { CreatedAt = Clock.GetUtcNow().UtcDateTime, PlannedShares = shares, PlannedPrice = price ?? 0 };
+		trade.Isin = _isin;
+		trade.Side = _side;
+		trade.Status = _status;
+		trade.Shares = shares;
+		trade.Price = price ?? 0;
+		trade.Fees = fees;
+		trade.ExecutedAt = executed;
+		trade.Note = _note.Trim();
+		if (trade.PlannedShares == 0)
+		{
+			trade.PlannedShares = shares;
+		}
+		if (trade.PlannedPrice == 0)
+		{
+			trade.PlannedPrice = trade.Price;
+		}
+		return null;
+	}
+}

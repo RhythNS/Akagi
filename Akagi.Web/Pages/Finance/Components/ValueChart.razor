@@ -1,0 +1,150 @@
+@using System.Globalization
+
+@* Value over time as a line, the money put in as a dashed line under it; markers for trades on price charts. *@
+<div class="fin-viz" data-chart="@Title">
+	<div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2">
+		<div class="fw-medium">@Title</div>
+		<div class="d-flex gap-3 small text-secondary">
+			<span><span class="fin-key fin-value me-1"></span>@ValueLabel</span>
+			@if (ShowInvested)
+			{
+				<span><span class="fin-key fin-invested me-1"></span>Money put in</span>
+			}
+			@if (Markers.Count > 0)
+			{
+				<span><span class="fin-dot fin-buy me-1"></span>Buy</span>
+				<span><span class="fin-dot fin-sell me-1"></span>Sell</span>
+			}
+		</div>
+	</div>
+	@if (_points.Count < 2)
+	{
+		<div class="text-secondary small py-4" data-chart-empty>Not enough history to draw yet.</div>
+	}
+	else
+	{
+		<div class="small text-secondary my-1" data-readout>
+			@if (_hovered is ValuePoint point)
+			{
+				<span>
+					@FinanceText.Day(point.Day):
+					<span class="text-body fw-medium ms-1">@Money.Format(point.Value, Currency, Decimals)</span>
+					@if (ShowInvested)
+					{
+						<span class="ms-2">put in @Money.Format(point.Invested, Currency)</span>
+						<span class="ms-2 @FinanceText.GainClass(point.Gain)">@Money.Signed(point.Gain, Currency)</span>
+					}
+				</span>
+			}
+			else
+			{
+				<span>Point at the chart for the numbers.</span>
+			}
+		</div>
+		<div class="d-flex align-items-start gap-2">
+			<div class="d-flex flex-column justify-content-between text-secondary small text-end" style="height: 10rem; min-width: 4.5rem;">
+				<span>@Money.Format(_max, Currency, 0)</span>
+				<span>@Money.Format(_min, Currency, 0)</span>
+			</div>
+			<div class="flex-fill position-relative border-bottom" style="height: 10rem; border-top: 1px dashed var(--fin-grid);">
+				<svg class="position-absolute top-0 start-0 w-100 h-100" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+					@if (ShowInvested)
+					{
+						<polyline points="@Line(p => p.Invested)" fill="none" class="fin-invested-stroke" stroke-width="1.5" stroke-dasharray="4 3" vector-effect="non-scaling-stroke" />
+					}
+					<polyline points="@Line(p => p.Value)" fill="none" class="fin-value-stroke" stroke-width="2" vector-effect="non-scaling-stroke" stroke-linejoin="round" />
+					@if (_hovered is ValuePoint hovered)
+					{
+						<line x1="@Css(X(hovered.Day))" x2="@Css(X(hovered.Day))" y1="0" y2="100" class="fin-grid-stroke" vector-effect="non-scaling-stroke" />
+					}
+				</svg>
+				<div class="position-absolute top-0 start-0 w-100 h-100 d-flex" @onmouseleave="() => _hovered = null">
+					@foreach (ValuePoint hit in _hits)
+					{
+						<div class="h-100 flex-fill" @onmouseenter="() => _hovered = hit"></div>
+					}
+				</div>
+				@foreach (ChartMarker marker in Markers.Where(m => m.Day >= _points[0].Day && m.Day <= _points[^1].Day))
+				{
+					<span class="fin-dot @(marker.Buy ? "fin-buy" : "fin-sell") position-absolute" title="@marker.Label" data-marker
+						  style="left: calc(@(Css(X(marker.Day)))% - 4px); top: calc(@(Css(Y(marker.Price)))% - 4px);"></span>
+				}
+			</div>
+		</div>
+		<div class="d-flex justify-content-between small text-secondary mt-1" style="margin-left: 5rem;">
+			<span>@FinanceText.Day(_points[0].Day)</span>
+			<span>@FinanceText.Day(_points[^1].Day)</span>
+		</div>
+	}
+</div>
+
+@code {
+	[Parameter, EditorRequired]
+	public IReadOnlyList<ValuePoint> Series { get; set; } = [];
+
+	[Parameter]
+	public string Title { get; set; } = "Value";
+
+	[Parameter]
+	public string ValueLabel { get; set; } = "Value";
+
+	[Parameter]
+	public string Currency { get; set; } = "EUR";
+
+	[Parameter]
+	public bool ShowInvested { get; set; } = true;
+
+	[Parameter]
+	public int Decimals { get; set; } = 2;
+
+	[Parameter]
+	public IReadOnlyList<ChartMarker> Markers { get; set; } = [];
+
+	private List<ValuePoint> _points = [];
+	private List<ValuePoint> _hits = [];
+	private ValuePoint? _hovered;
+	private decimal _min;
+	private decimal _max;
+
+	protected override void OnParametersSet()
+	{
+		_points = Performance.Thin(Series, 400);
+		_hits = Performance.Thin(Series, 120);
+		_hovered = null;
+		if (_points.Count == 0)
+		{
+			return;
+		}
+		IEnumerable<decimal> values = _points.Select(p => p.Value);
+		if (ShowInvested)
+		{
+			values = values.Concat(_points.Select(p => p.Invested));
+		}
+		values = values.Concat(Markers.Select(m => m.Price));
+		_min = Math.Min(0, values.Min());
+		_max = values.Max();
+		// Prices sit far from 0; start the axis near the lowest one so their moves show
+		if (!ShowInvested && _min == 0)
+		{
+			decimal low = values.Min();
+			_min = Math.Max(0, low - (_max - low) * 0.1m);
+		}
+		if (_max <= _min)
+		{
+			_max = _min + 1;
+		}
+	}
+
+	private string Line(Func<ValuePoint, decimal> value) =>
+		string.Join(' ', _points.Select(p => $"{Css(X(p.Day))},{Css(Y(value(p)))}"));
+
+	private double X(DateOnly day)
+	{
+		double span = _points[^1].Day.DayNumber - _points[0].Day.DayNumber;
+		return span <= 0 ? 0 : (day.DayNumber - _points[0].Day.DayNumber) / span * 100;
+	}
+
+	private double Y(decimal value) => (double)(100 - (value - _min) / (_max - _min) * 100);
+
+	private static string Css(double value) => value.ToString("0.###", CultureInfo.InvariantCulture);
+}

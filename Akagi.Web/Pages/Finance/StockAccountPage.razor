@@ -1,0 +1,393 @@
+@page "/Finance/Stocks/{Id}"
+
+@inject IFinanceStore Store
+@inject IQuoteService Quotes
+@inject TimeProvider Clock
+@inject NavigationManager Navigation
+
+<PageTitle>@(_session?.Account?.Name ?? "Stock portfolio") - Akagi</PageTitle>
+
+<StockHeader Account="_session?.Account" Active="holdings">
+	<Actions>
+		@if (_session?.Account != null)
+		{
+			<button type="button" class="btn btn-outline-secondary d-inline-flex align-items-center gap-2" disabled="@_refreshing" data-refresh @onclick="() => RefreshAsync(force: true)">
+				<Icon IconType="@Icons.Refresh" Size="16" /><span>@(_refreshing ? "Updating…" : "Update prices")</span>
+			</button>
+			<button type="button" class="btn btn-outline-primary d-inline-flex align-items-center gap-2" data-new-trade @onclick="() => _newTrade = !_newTrade">
+				<Icon IconType="@Icons.Plus" Size="16" /><span>Record trade</span>
+			</button>
+			<a href="Finance/Stocks/@Id/Plan" class="btn btn-primary d-inline-flex align-items-center gap-2" data-plan>
+				<Icon IconType="@Icons.Target" Size="16" /><span>Plan investment</span>
+			</a>
+		}
+	</Actions>
+</StockHeader>
+
+@if (_session == null)
+{
+	<div class="card"><div class="card-body py-5 text-center"><div class="spinner-border text-primary"></div></div></div>
+}
+else if (_session.Account is not StockAccount account || _session.Portfolio is not StockPortfolio portfolio)
+{
+	<div class="card"><div class="card-body text-secondary" data-missing>This account does not exist any more. <a href="Finance">Back to the overview</a></div></div>
+}
+else
+{
+	<div class="row row-cards mb-3">
+		<div class="col-sm-6 col-lg-3">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Worth now</div>
+				<div class="h1 mb-0" data-value>@Money.Format(portfolio.Value, account.Currency)</div>
+				<div class="text-secondary small">@PriceAge()</div>
+			</div></div>
+		</div>
+		<div class="col-sm-6 col-lg-3">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Money put in</div>
+				<div class="h1 mb-0" data-invested>@Money.Format(portfolio.Invested, account.Currency)</div>
+				<div class="text-secondary small">Buys minus sales, fees included</div>
+			</div></div>
+		</div>
+		<div class="col-sm-6 col-lg-3">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Made in total</div>
+				<div class="h1 mb-0 @FinanceText.GainClass(portfolio.Value - portfolio.Invested)" data-gain>@Money.Signed(portfolio.Value - portfolio.Invested, account.Currency)</div>
+				<div class="text-secondary small">Not sold yet @Money.Signed(portfolio.UnrealizedGain, account.Currency), sold @Money.Signed(portfolio.RealizedGain, account.Currency)</div>
+			</div></div>
+		</div>
+		<div class="col-sm-6 col-lg-3">
+			<div class="card card-sm"><div class="card-body">
+				<div class="subheader">Fees paid</div>
+				<div class="h1 mb-0">@Money.Format(portfolio.Fees, account.Currency)</div>
+				<div class="text-secondary small">@portfolio.Done.Count trades recorded</div>
+			</div></div>
+		</div>
+	</div>
+
+	@if (_session.Prices.Warnings.Count > 0)
+	{
+		<div class="alert alert-warning" data-warnings>
+			<ul class="mb-0">
+				@foreach (string warning in _session.Prices.Warnings.Distinct())
+				{
+					<li>@warning</li>
+				}
+			</ul>
+		</div>
+	}
+
+	@if (_newTrade)
+	{
+		<TradeForm Account="account" Portfolio="portfolio" Mode="TradeFormMode.New" OnSave="SaveNewTradeAsync" OnCancel="() => _newTrade = false" />
+	}
+
+	<PendingTrades Session="_session" OnChanged="StateHasChanged" />
+
+	<div class="card mb-3">
+		<div class="card-header">
+			<h3 class="card-title">Holdings</h3>
+		</div>
+		@if (account.Securities.Count == 0)
+		{
+			<div class="card-body text-secondary" data-no-securities>No securities yet. Add their ISINs below.</div>
+		}
+		else
+		{
+			<div class="table-responsive">
+				<table class="table table-vcenter card-table" data-holdings>
+					<thead>
+						<tr>
+							<th>Security</th>
+							<th class="fin-num">Shares</th>
+							<th class="fin-num">Bought at (avg)</th>
+							<th class="fin-num">Price</th>
+							<th class="fin-num">Worth</th>
+							<th class="fin-num">Not sold yet</th>
+							<th class="fin-num">Share now</th>
+							<th class="fin-num">Target</th>
+							<th></th>
+						</tr>
+					</thead>
+					<tbody>
+						@foreach (StockSecurity security in account.Securities)
+						{
+							Holding holding = portfolio.Holding(security.Isin);
+							decimal weight = portfolio.Value > 0 ? holding.Value / portfolio.Value * 100 : 0;
+							decimal target = account.TargetPercent(security.Isin);
+							<tr data-holding="@security.Isin">
+								<td>
+									<a href="Finance/Stocks/@Id/Trades?isin=@security.Isin" class="fw-medium">@security.DisplayName</a>
+									<div class="text-secondary small">@security.Isin@(string.IsNullOrEmpty(security.Symbol) ? "" : " · " + security.Symbol)</div>
+								</td>
+								<td class="fin-num" data-shares>@Money.Shares(holding.Shares)</td>
+								<td class="fin-num">@(holding.Shares > 0 ? Money.Format(holding.AverageCost, account.Currency) : "–")</td>
+								<td class="fin-num">
+									@if (holding.Price is PriceAt price)
+									{
+										<div data-price>@Money.Format(price.Price, account.Currency)</div>
+										<div class="text-secondary small">@FinanceText.Source(price.Source), @FinanceText.ShortDay(price.Day)</div>
+									}
+									else
+									{
+										<span class="text-warning">no price</span>
+									}
+								</td>
+								<td class="fin-num" data-worth>@Money.Format(holding.Value, account.Currency)</td>
+								<td class="fin-num @FinanceText.GainClass(holding.UnrealizedGain)">
+									@if (holding.Shares > 0)
+									{
+										<div>@Money.Signed(holding.UnrealizedGain, account.Currency)</div>
+										<div class="small">@Money.SignedPercent(holding.UnrealizedPercent)</div>
+									}
+									else
+									{
+										<span>–</span>
+									}
+								</td>
+								<td class="fin-num">@Money.Percent(weight)</td>
+								<td class="fin-num @(target > 0 && Math.Abs(weight - target) >= 5 ? "text-warning" : "")">@Money.Percent(target)</td>
+								<td class="text-end">
+									<button type="button" class="btn btn-sm btn-ghost-secondary" title="Name, symbol, price" data-edit-security="@security.Isin"
+											@onclick="() => _editing = _editing == security.Isin ? null : security.Isin">
+										<Icon IconType="@Icons.Edit" Size="14" />
+									</button>
+								</td>
+							</tr>
+							@if (_editing == security.Isin)
+							{
+								<tr>
+									<td colspan="9">
+										<SecurityEditor Security="security" Currency="@account.Currency" CanRemove="@(!_session.Trades.Any(t => t.Isin == security.Isin))"
+														OnSaved="SaveSecurityAsync" OnClose="() => _editing = null" OnRemove="() => RemoveSecurityAsync(security)" />
+									</td>
+								</tr>
+							}
+						}
+					</tbody>
+				</table>
+			</div>
+		}
+		<div class="card-footer">
+			<label class="form-label" for="add-isins">Add securities by ISIN</label>
+			<div class="d-flex flex-wrap gap-2 align-items-start">
+				<textarea id="add-isins" class="form-control" rows="2" style="max-width: 36rem;" placeholder="IE00B4ND3602, LU0908500753 … (several at once: commas, spaces or lines)"
+						  value="@_isins" data-field="isins" @onchange="e => _isins = e.Value?.ToString() ?? string.Empty"></textarea>
+				<button type="button" class="btn btn-primary" disabled="@_adding" data-add-isins @onclick="AddSecuritiesAsync">@(_adding ? "Adding…" : "Add")</button>
+			</div>
+			<div class="form-hint">
+				@if (Quotes.Enabled)
+				{
+					<span>Each ISIN is looked up on Yahoo Finance for its name and a quote symbol; change the listing with the edit button.</span>
+				}
+				else
+				{
+					<span>Fetching prices is off; prices come from your trades and the ones you type in.</span>
+				}
+			</div>
+			@if (_addMessage != null)
+			{
+				<div class="alert @(_addOk ? "alert-success" : "alert-warning") mt-2 mb-0 py-2" data-add-result>@_addMessage</div>
+			}
+		</div>
+	</div>
+
+	@if (portfolio.Start is DateOnly start)
+	{
+		<div class="card mb-3">
+			<div class="card-body">
+				<ValueChart Series="portfolio.Series(start.AddDays(-1), StockAccountSystem.Today(Clock))" Title="Worth since the first trade" ValueLabel="Worth" Currency="@account.Currency" />
+			</div>
+		</div>
+	}
+
+	<div class="card mb-3">
+		<div class="card-header"><h3 class="card-title">Account</h3></div>
+		<div class="card-body">
+			<div class="row g-3 align-items-end">
+				<div class="col-md-6">
+					<label class="form-label" for="account-rename">Name</label>
+					<div class="input-group">
+						<input id="account-rename" class="form-control" maxlength="80" value="@_rename" data-field="rename" @onchange="e => _rename = e.Value?.ToString() ?? string.Empty" />
+						<button type="button" class="btn btn-outline-secondary" data-rename @onclick="RenameAsync">Rename</button>
+					</div>
+				</div>
+				<div class="col-md-6 text-md-end">
+					@if (_confirmDelete)
+					{
+						<span class="me-2">Delete the account and all @_session.Trades.Count trades?</span>
+						<button type="button" class="btn btn-danger" data-delete-yes @onclick="DeleteAsync">Delete for good</button>
+						<button type="button" class="btn btn-ghost-secondary" @onclick="() => _confirmDelete = false">Keep</button>
+					}
+					else
+					{
+						<button type="button" class="btn btn-ghost-danger" data-delete @onclick="() => _confirmDelete = true">Delete account</button>
+					}
+				</div>
+			</div>
+		</div>
+	</div>
+}
+
+@code {
+	[Parameter]
+	public string Id { get; set; } = string.Empty;
+
+	[CascadingParameter(Name = "CurrentUser")]
+	public User? CurrentUser { get; set; }
+
+	private StockSession? _session;
+	private bool _refreshing;
+	private bool _newTrade;
+	private string? _editing;
+	private string _isins = string.Empty;
+	private bool _adding;
+	private string? _addMessage;
+	private bool _addOk;
+	private string _rename = string.Empty;
+	private bool _confirmDelete;
+
+	protected override async Task OnParametersSetAsync()
+	{
+		if (CurrentUser?.Id is not string userId)
+		{
+			return;
+		}
+		if (_session?.AccountId != Id)
+		{
+			_session = await StockSession.LoadAsync(Store, Quotes, userId, Id);
+			_rename = _session.Account?.Name ?? string.Empty;
+		}
+	}
+
+	protected override async Task OnAfterRenderAsync(bool firstRender)
+	{
+		if (firstRender && _session is { Missing: false, Refreshed: false })
+		{
+			await RefreshAsync(force: false);
+		}
+	}
+
+	private async Task RefreshAsync(bool force)
+	{
+		if (_session == null)
+		{
+			return;
+		}
+		_refreshing = true;
+		StateHasChanged();
+		await _session.ReloadAsync(refresh: true, force: force);
+		_refreshing = false;
+		StateHasChanged();
+	}
+
+	private string PriceAge() => _session?.Prices.FetchedAt is DateTime fetched
+		? $"Prices fetched {FinanceText.When(fetched)}"
+		: Quotes.Enabled ? "No prices fetched yet" : "Prices from trades and by hand";
+
+	private async Task SaveNewTradeAsync(StockTrade trade)
+	{
+		await _session!.SaveTradeAsync(trade);
+		_newTrade = false;
+	}
+
+	private async Task SaveSecurityAsync()
+	{
+		await _session!.SaveAccountAsync();
+		_editing = null;
+		await RefreshAsync(force: false);
+	}
+
+	private async Task RemoveSecurityAsync(StockSecurity security)
+	{
+		StockAccount account = _session!.Account!;
+		account.Securities.Remove(security);
+		account.SetTarget(security.Isin, 0);
+		_editing = null;
+		await _session.SaveAccountAsync();
+	}
+
+	private async Task AddSecuritiesAsync()
+	{
+		if (_session?.Account is not StockAccount account)
+		{
+			return;
+		}
+		_adding = true;
+		_addMessage = null;
+		StateHasChanged();
+		List<string> added = [];
+		List<string> problems = [];
+		List<string> unknown = [];
+		foreach (string raw in _isins.Split([',', ';', ' ', '\n', '\r', '\t'], StringSplitOptions.RemoveEmptyEntries))
+		{
+			string isin = Isin.Normalize(raw);
+			if (Isin.Problem(isin) is string problem)
+			{
+				problems.Add($"{raw}: {problem}");
+				continue;
+			}
+			if (account.Security(isin) != null || added.Contains(isin))
+			{
+				problems.Add($"{isin} is already in the account.");
+				continue;
+			}
+			StockSecurity security = new() { Isin = isin, AddedAt = Clock.GetUtcNow().UtcDateTime };
+			if (Quotes.Enabled)
+			{
+				List<QuoteCandidate> candidates = await Quotes.SearchAsync(isin);
+				if (candidates.FirstOrDefault() is QuoteCandidate first)
+				{
+					security.Symbol = first.Symbol;
+					security.Name = first.Name;
+				}
+				else
+				{
+					unknown.Add(isin);
+				}
+			}
+			account.Securities.Add(security);
+			added.Add(isin);
+		}
+		if (added.Count > 0)
+		{
+			await _session.SaveAccountAsync();
+			await _session.ReloadAsync(refresh: true);
+		}
+		List<string> lines = [];
+		if (added.Count > 0)
+		{
+			lines.Add($"Added {added.Count}: {string.Join(", ", added)}.");
+		}
+		if (unknown.Count > 0)
+		{
+			lines.Add($"No listing found for {string.Join(", ", unknown)}; give them a symbol or a price with the edit button.");
+		}
+		lines.AddRange(problems);
+		_addMessage = lines.Count > 0 ? string.Join(" ", lines) : "Nothing to add.";
+		_addOk = problems.Count == 0 && unknown.Count == 0 && added.Count > 0;
+		if (problems.Count == 0)
+		{
+			_isins = string.Empty;
+		}
+		_adding = false;
+	}
+
+	private async Task RenameAsync()
+	{
+		if (_session?.Account is StockAccount account && !string.IsNullOrWhiteSpace(_rename))
+		{
+			account.Name = _rename.Trim();
+			await _session.SaveAccountAsync();
+		}
+	}
+
+	private async Task DeleteAsync()
+	{
+		if (CurrentUser?.Id is string userId)
+		{
+			await Store.DeleteAccountAsync(userId, Id);
+			Navigation.NavigateTo("Finance");
+		}
+	}
+}

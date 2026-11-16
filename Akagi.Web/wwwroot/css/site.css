@@ -159,3 +159,52 @@
 .line-mine {
     background: rgba(var(--tblr-primary-rgb, 32, 107, 196), 0.10);
 }
+
+/* Finance charts (Finance overview, stock pages): value (blue) over the money put in (grey, dashed);
+   buys green, sells orange. */
+.fin-viz {
+    --fin-value: #2a78d6;
+    --fin-invested: #8a94a6;
+    --fin-buy: #2f9e44;
+    --fin-sell: #eb6834;
+    --fin-grid: rgba(127, 127, 127, 0.18);
+}
+
+[data-bs-theme="dark"] .fin-viz {
+    --fin-value: #3987e5;
+    --fin-invested: #9aa4b5;
+    --fin-buy: #40c057;
+    --fin-sell: #d95926;
+}
+
+.fin-viz .fin-key {
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.2rem;
+    border-radius: 1px;
+    vertical-align: middle;
+}
+
+.fin-viz .fin-value { background: var(--fin-value); }
+.fin-viz .fin-invested { background: repeating-linear-gradient(90deg, var(--fin-invested) 0 4px, transparent 4px 7px); }
+.fin-viz svg .fin-value-stroke { stroke: var(--fin-value); }
+.fin-viz svg .fin-invested-stroke { stroke: var(--fin-invested); }
+.fin-viz svg .fin-grid-stroke { stroke: var(--fin-grid); stroke-width: 1; }
+
+.fin-viz .fin-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    border: 1px solid var(--tblr-bg-surface, #fff);
+    pointer-events: auto;
+}
+
+.fin-viz .fin-buy { background: var(--fin-buy); }
+.fin-viz .fin-sell { background: var(--fin-sell); }
+
+.fin-viz [data-readout] { min-height: 1.25rem; }
+
+/* Number columns line up */
+.fin-num { text-align: end; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.fin-input-sm { max-width: 8rem; }

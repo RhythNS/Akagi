@@ -1,5 +1,6 @@
 using Akagi.Utils;
 using Akagi.Web.Services.Circuits;
+using Akagi.Web.Services.Finance;
 using Akagi.Web.Services.Sockets;
 using Akagi.Web.Services.Users;
 using Akagi.Web.Services.Workouts;
@@ -16,6 +17,13 @@ static class DependencyInjection
         services.AddScoped<IUserState, UserState>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddSingleton<IWorkoutService, WorkoutService>();
+
+        services.Configure<FinanceOptions>(configuration.GetSection("Finance"));
+        services.AddSingleton<IFinanceStore, FinanceStore>();
+        services.AddHttpClient<IQuoteSource, YahooQuoteSource>();
+        services.AddScoped<IQuoteService, QuoteService>();
+        services.AddScoped<IAccountSystem, StockAccountSystem>();
+        services.AddScoped<IAccountSystems, AccountSystems>();
         services.AddSingleton(TimeProvider.System);
 
         Type[] transmissionTypes = TypeUtils.GetNonAbstractTypesExtendingFrom<SocketTransmissionHandler>();
