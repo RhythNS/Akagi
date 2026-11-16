@@ -110,6 +110,18 @@ public sealed class StockPortfolio
 
     public Holding Holding(string isin) => Get(isin);
 
+    /// <summary>Traded before, nothing left and no target: kept for the history, left out of planning.</summary>
+    public bool IsSoldOut(string isin)
+    {
+        Holding holding = Get(isin);
+        return holding.Buys + holding.Sells > 0 && holding.Shares <= 0 && Account.TargetPercent(isin) == 0;
+    }
+
+    /// <summary>The account's securities without the sold out ones.</summary>
+    public List<StockSecurity> Current => [.. Account.Securities.Where(s => !IsSoldOut(s.Isin))];
+
+    public List<StockSecurity> SoldOut => [.. Account.Securities.Where(s => IsSoldOut(s.Isin))];
+
     public decimal Value => _holdings.Values.Sum(h => h.Value);
 
     /// <summary>Net money put in: buys minus what sales paid out.</summary>

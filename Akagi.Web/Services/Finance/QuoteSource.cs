@@ -5,7 +5,12 @@ using System.Text.Json;
 namespace Akagi.Web.Services.Finance;
 
 /// <summary>A listing a search found for an ISIN or name.</summary>
-public sealed record QuoteCandidate(string Symbol, string Name, string Exchange, string Type);
+public sealed record QuoteCandidate(string Symbol, string Name, string Exchange, string Type)
+{
+    /// <summary>The listing to use by default: Xetra (EUR) when there is one, else the search's first.</summary>
+    public static QuoteCandidate? Best(IReadOnlyList<QuoteCandidate> candidates) =>
+        candidates.FirstOrDefault(c => c.Symbol.EndsWith(".DE", StringComparison.OrdinalIgnoreCase)) ?? candidates.FirstOrDefault();
+}
 
 /// <summary>Daily closes of a symbol in its own currency.</summary>
 public sealed record QuoteSeries(string Symbol, string Name, string Currency, string Exchange, List<PricePoint> Points);

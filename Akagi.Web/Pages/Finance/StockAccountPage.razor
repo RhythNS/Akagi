@@ -110,7 +110,7 @@ else
 						</tr>
 					</thead>
 					<tbody>
-						@foreach (StockSecurity security in account.Securities)
+						@foreach (StockSecurity security in _showSoldOut ? account.Securities : portfolio.Current)
 						{
 							Holding holding = portfolio.Holding(security.Isin);
 							decimal weight = portfolio.Value > 0 ? holding.Value / portfolio.Value * 100 : 0;
@@ -167,6 +167,14 @@ else
 					</tbody>
 				</table>
 			</div>
+			@if (portfolio.SoldOut.Count > 0)
+			{
+				<div class="card-body border-top py-2">
+					<button type="button" class="btn btn-sm btn-ghost-secondary" data-show-sold-out @onclick="() => _showSoldOut = !_showSoldOut">
+						@(_showSoldOut ? "Hide" : "Show") @portfolio.SoldOut.Count sold out (@string.Join(", ", portfolio.SoldOut.Select(s => s.DisplayName).Take(3))@(portfolio.SoldOut.Count > 3 ? " …" : ""))
+					</button>
+				</div>
+			}
 		}
 		<div class="card-footer">
 			<label class="form-label" for="add-isins">Add securities by ISIN</label>
@@ -238,6 +246,7 @@ else
 
 	private StockSession? _session;
 	private bool _refreshing;
+	private bool _showSoldOut;
 	private bool _newTrade;
 	private string? _editing;
 	private string _isins = string.Empty;
@@ -336,7 +345,7 @@ else
 			if (Quotes.Enabled)
 			{
 				List<QuoteCandidate> candidates = await Quotes.SearchAsync(isin);
-				if (candidates.FirstOrDefault() is QuoteCandidate first)
+				if (QuoteCandidate.Best(candidates) is QuoteCandidate first)
 				{
 					security.Symbol = first.Symbol;
 					security.Name = first.Name;

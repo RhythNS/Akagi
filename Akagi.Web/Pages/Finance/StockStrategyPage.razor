@@ -38,7 +38,7 @@ else
 					</tr>
 				</thead>
 				<tbody>
-					@foreach (StockSecurity security in account.Securities)
+					@foreach (StockSecurity security in Shown)
 					{
 						decimal weight = portfolio.Value > 0 ? portfolio.Holding(security.Isin).Value / portfolio.Value * 100 : 0;
 						<tr data-target-row="@security.Isin">
@@ -75,6 +75,12 @@ else
 				<button type="button" class="btn btn-sm btn-outline-secondary" data-even @onclick="Even">Split evenly</button>
 				<button type="button" class="btn btn-sm btn-outline-secondary" data-from-current @onclick="FromCurrent" disabled="@(portfolio.Value <= 0)">Use the shares now</button>
 				<button type="button" class="btn btn-sm btn-ghost-secondary" data-clear-targets @onclick="Clear">Clear</button>
+				@if (portfolio.SoldOut.Count > 0)
+				{
+					<button type="button" class="btn btn-sm btn-ghost-secondary ms-auto" data-show-sold-out @onclick="() => _showSoldOut = !_showSoldOut">
+						@(_showSoldOut ? "Hide" : "Show") @portfolio.SoldOut.Count sold out
+					</button>
+				}
 			</div>
 			<label class="form-check form-switch">
 				<input class="form-check-input" type="checkbox" checked="@_wholeShares" data-field="whole-shares" @onchange="e => _wholeShares = (bool)e.Value!" />
@@ -126,15 +132,22 @@ else
 
 	private bool SumOk => Math.Abs(Sum - 100) < 0.01m;
 
+	private bool _showSoldOut;
+
+	/// <summary>Securities sold completely (and without a target) only show when asked for.</summary>
+	private List<StockSecurity> Shown => _showSoldOut || _session?.Portfolio is not StockPortfolio portfolio
+		? _session?.Account?.Securities ?? []
+		: portfolio.Current;
+
 	private void Even()
 	{
-		int count = _targets.Count;
+		List<string> keys = [.. Shown.Select(s => s.Isin)];
+		int count = keys.Count;
 		if (count == 0)
 		{
 			return;
 		}
 		decimal each = Math.Floor(100m / count * 100) / 100;
-		List<string> keys = [.. _targets.Keys];
 		foreach (string key in keys)
 		{
 			_targets[key] = Money.Input(each, 2);
@@ -147,7 +160,7 @@ else
 	private void FromCurrent()
 	{
 		StockPortfolio portfolio = _session!.Portfolio!;
-		foreach (string key in _targets.Keys.ToList())
+		foreach (string key in Shown.Select(s => s.Isin))
 		{
 			_targets[key] = Money.Input(Math.Round(portfolio.Holding(key).Value / portfolio.Value * 100, 2), 2);
 		}

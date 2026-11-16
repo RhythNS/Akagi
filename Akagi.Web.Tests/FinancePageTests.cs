@@ -336,4 +336,28 @@ public class FinancePageTests : BunitContext
         await Change(cut.Find("[data-filter='side']"), "Sell");
         Assert.Single(cut.FindAll("[data-trade]"));
     }
+
+    [Fact]
+    public async Task Securities_sold_completely_are_hidden_until_asked_for()
+    {
+        StockAccount account = Seed();
+        const string old = "IE00B52SF786";
+        account.Securities.Add(new StockSecurity { Isin = old, Name = "Old fund" });
+        _store.Trades.Add(Done(old, TradeSide.Buy, 2, 50, new DateTime(2026, 9, 2, 9, 0, 0, DateTimeKind.Utc)));
+        _store.Trades.Add(Done(old, TradeSide.Sell, 2, 60, new DateTime(2026, 9, 9, 9, 0, 0, DateTimeKind.Utc)));
+
+        IRenderedComponent<StockAccountPage> holdings = RenderAccountPage<StockAccountPage>();
+        Assert.Empty(holdings.FindAll($"[data-holding='{old}']"));
+        Assert.Contains("Show 1 sold out (Old fund)", holdings.Find("[data-show-sold-out]").TextContent);
+        await holdings.Find("[data-show-sold-out]").ClickAsync();
+        Assert.Single(holdings.FindAll($"[data-holding='{old}']"));
+
+        IRenderedComponent<StockPlanPage> plan = RenderAccountPage<StockPlanPage>();
+        Assert.Empty(plan.FindAll($"[data-plan-row='{old}']"));
+
+        IRenderedComponent<StockStrategyPage> strategy = RenderAccountPage<StockStrategyPage>();
+        Assert.Empty(strategy.FindAll($"[data-target-row='{old}']"));
+        await strategy.Find("[data-even]").ClickAsync();
+        Assert.Equal("50", strategy.Find($"[data-target='{A}']").GetAttribute("value"));
+    }
 }

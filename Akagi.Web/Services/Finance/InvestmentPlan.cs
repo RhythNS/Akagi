@@ -230,7 +230,7 @@ public sealed class InvestmentPlan
 
     /// <summary>A plan over every security of the account with the given holdings and prices.</summary>
     public static InvestmentPlan For(StockPortfolio portfolio, decimal cash) =>
-        new(portfolio.Account.Securities.Select(s => new PlanRow
+        new(portfolio.Current.Select(s => new PlanRow
         {
             Isin = s.Isin,
             Name = s.DisplayName,
